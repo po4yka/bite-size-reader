@@ -231,7 +231,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
+                $ref: '#/components/schemas/SummaryAudioResponseEnvelope'
         '401':
           $ref: '#/components/responses/UnauthorizedError'
         '404':
@@ -2915,7 +2915,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
+                $ref: '#/components/schemas/ChannelSubscriptionListResponseEnvelope'
         '401':
           $ref: '#/components/responses/UnauthorizedError'
         '403':
@@ -2950,7 +2950,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
+                $ref: '#/components/schemas/SubscribeActionResponseEnvelope'
         '401':
           $ref: '#/components/responses/UnauthorizedError'
         '403':
@@ -2987,7 +2987,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
+                $ref: '#/components/schemas/SubscribeActionResponseEnvelope'
         '401':
           $ref: '#/components/responses/UnauthorizedError'
         '403':
@@ -3011,7 +3011,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
+                $ref: '#/components/schemas/DigestPreferencesResponseEnvelope'
         '401':
           $ref: '#/components/responses/UnauthorizedError'
         '403':
@@ -3057,7 +3057,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
+                $ref: '#/components/schemas/DigestPreferencesResponseEnvelope'
         '401':
           $ref: '#/components/responses/UnauthorizedError'
         '403':
@@ -3097,7 +3097,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
+                $ref: '#/components/schemas/DigestHistoryResponseEnvelope'
         '401':
           $ref: '#/components/responses/UnauthorizedError'
         '403':
@@ -3121,7 +3121,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
+                $ref: '#/components/schemas/TriggerDigestResponseEnvelope'
         '401':
           $ref: '#/components/responses/UnauthorizedError'
         '403':
@@ -3156,7 +3156,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
+                $ref: '#/components/schemas/TriggerChannelDigestResponseEnvelope'
         '401':
           $ref: '#/components/responses/UnauthorizedError'
         '403':
@@ -3203,7 +3203,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
+                $ref: '#/components/schemas/ChannelPostListResponseEnvelope'
         '401':
           $ref: '#/components/responses/UnauthorizedError'
         '403':
@@ -3238,7 +3238,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
+                $ref: '#/components/schemas/ResolveChannelResponseEnvelope'
         '401':
           $ref: '#/components/responses/UnauthorizedError'
         '403':
@@ -3276,7 +3276,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
+                $ref: '#/components/schemas/BulkOperationResponseEnvelope'
         '401':
           $ref: '#/components/responses/UnauthorizedError'
         '403':
@@ -3319,7 +3319,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
+                $ref: '#/components/schemas/BulkOperationResponseEnvelope'
         '401':
           $ref: '#/components/responses/UnauthorizedError'
         '403':
@@ -3360,7 +3360,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
+                $ref: '#/components/schemas/StatusOnlyResponseEnvelope'
         '401':
           $ref: '#/components/responses/UnauthorizedError'
         '403':
@@ -3384,12 +3384,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  categories:
-                    type: array
-                    items:
-                      type: object
+                $ref: '#/components/schemas/ChannelCategoryListResponseEnvelope'
         '401':
           $ref: '#/components/responses/UnauthorizedError'
         '403':
@@ -3423,7 +3418,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
+                $ref: '#/components/schemas/ChannelCategoryResponseEnvelope'
         '401':
           $ref: '#/components/responses/UnauthorizedError'
         '403':
@@ -3466,7 +3461,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
+                $ref: '#/components/schemas/ChannelCategoryResponseEnvelope'
         '401':
           $ref: '#/components/responses/UnauthorizedError'
         '403':
@@ -3497,7 +3492,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
+                $ref: '#/components/schemas/StatusOnlyResponseEnvelope'
         '401':
           $ref: '#/components/responses/UnauthorizedError'
         '403':
@@ -3921,7 +3916,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
+                $ref: '#/components/schemas/RssFeedSubscriptionListResponseEnvelope'
         '401':
           $ref: '#/components/responses/UnauthorizedError'
         '500':
@@ -3954,7 +3949,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
+                $ref: '#/components/schemas/RssSubscribeResponseEnvelope'
         '401':
           $ref: '#/components/responses/UnauthorizedError'
         '422':
@@ -3982,7 +3977,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
+                $ref: '#/components/schemas/DeletedByIdResponseEnvelope'
         '401':
           $ref: '#/components/responses/UnauthorizedError'
         '404':
@@ -4025,7 +4020,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
+                $ref: '#/components/schemas/RssFeedItemListResponseEnvelope'
         '401':
           $ref: '#/components/responses/UnauthorizedError'
         '404':
@@ -4053,7 +4048,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
+                $ref: '#/components/schemas/RssFeedRefreshResponseEnvelope'
         '401':
           $ref: '#/components/responses/UnauthorizedError'
         '404':
@@ -4107,7 +4102,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
+                $ref: '#/components/schemas/OPMLImportResponseEnvelope'
         '401':
           $ref: '#/components/responses/UnauthorizedError'
         '422':
@@ -4132,7 +4127,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
+                $ref: '#/components/schemas/TagListResponseEnvelope'
         '401':
           $ref: '#/components/responses/UnauthorizedError'
         '500':
@@ -4164,7 +4159,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
+                $ref: '#/components/schemas/TagResponseEnvelope'
         '401':
           $ref: '#/components/responses/UnauthorizedError'
         '422':
@@ -4192,7 +4187,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
+                $ref: '#/components/schemas/TagResponseEnvelope'
         '401':
           $ref: '#/components/responses/UnauthorizedError'
         '404':
@@ -4230,7 +4225,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
+                $ref: '#/components/schemas/TagResponseEnvelope'
         '401':
           $ref: '#/components/responses/UnauthorizedError'
         '404':
@@ -4259,7 +4254,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
+                $ref: '#/components/schemas/TagDeleteResponseEnvelope'
         '401':
           $ref: '#/components/responses/UnauthorizedError'
         '404':
@@ -4297,7 +4292,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
+                $ref: '#/components/schemas/MergeTagsResponseEnvelope'
         '401':
           $ref: '#/components/responses/UnauthorizedError'
         '422':
@@ -4340,7 +4335,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
+                $ref: '#/components/schemas/TagListResponseEnvelope'
         '401':
           $ref: '#/components/responses/UnauthorizedError'
         '404':
@@ -4375,7 +4370,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
+                $ref: '#/components/schemas/TagDetachResponseEnvelope'
         '401':
           $ref: '#/components/responses/UnauthorizedError'
         '404':
@@ -4662,7 +4657,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
+                $ref: '#/components/schemas/RuleListResponseEnvelope'
         '401':
           $ref: '#/components/responses/UnauthorizedError'
         '500':
@@ -4718,7 +4713,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
+                $ref: '#/components/schemas/RuleResponseEnvelope'
         '401':
           $ref: '#/components/responses/UnauthorizedError'
         '422':
@@ -4746,7 +4741,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
+                $ref: '#/components/schemas/RuleResponseEnvelope'
         '401':
           $ref: '#/components/responses/UnauthorizedError'
         '404':
@@ -4805,7 +4800,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
+                $ref: '#/components/schemas/RuleResponseEnvelope'
         '401':
           $ref: '#/components/responses/UnauthorizedError'
         '404':
@@ -4834,7 +4829,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
+                $ref: '#/components/schemas/DeletedByIdResponseEnvelope'
         '401':
           $ref: '#/components/responses/UnauthorizedError'
         '404':
@@ -4877,7 +4872,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
+                $ref: '#/components/schemas/RuleLogListResponseEnvelope'
         '401':
           $ref: '#/components/responses/UnauthorizedError'
         '404':
@@ -4916,7 +4911,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
+                $ref: '#/components/schemas/RuleTestResponseEnvelope'
         '401':
           $ref: '#/components/responses/UnauthorizedError'
         '404':
@@ -4943,7 +4938,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
+                $ref: '#/components/schemas/BackupListResponseEnvelope'
         '401':
           $ref: '#/components/responses/UnauthorizedError'
         '500':
@@ -4962,7 +4957,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
+                $ref: '#/components/schemas/BackupResponseEnvelope'
         '401':
           $ref: '#/components/responses/UnauthorizedError'
         '500':
@@ -4982,7 +4977,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
+                $ref: '#/components/schemas/BackupScheduleResponseEnvelope'
         '401':
           $ref: '#/components/responses/UnauthorizedError'
         '500':
@@ -5014,7 +5009,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
+                $ref: '#/components/schemas/BackupScheduleResponseEnvelope'
         '401':
           $ref: '#/components/responses/UnauthorizedError'
         '422':
@@ -5042,7 +5037,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
+                $ref: '#/components/schemas/BackupResponseEnvelope'
         '401':
           $ref: '#/components/responses/UnauthorizedError'
         '404':
@@ -5069,7 +5064,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
+                $ref: '#/components/schemas/BackupDeleteResponseEnvelope'
         '401':
           $ref: '#/components/responses/UnauthorizedError'
         '404':
@@ -5132,7 +5127,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
+                $ref: '#/components/schemas/BackupRestoreResponseEnvelope'
         '401':
           $ref: '#/components/responses/UnauthorizedError'
         '422':
@@ -5217,7 +5212,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
+                $ref: '#/components/schemas/ImportJobResponseEnvelope'
         '401':
           $ref: '#/components/responses/UnauthorizedError'
         '422':
@@ -5238,7 +5233,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
+                $ref: '#/components/schemas/ImportJobListResponseEnvelope'
         '401':
           $ref: '#/components/responses/UnauthorizedError'
         '500':
@@ -5264,7 +5259,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
+                $ref: '#/components/schemas/ImportJobResponseEnvelope'
         '401':
           $ref: '#/components/responses/UnauthorizedError'
         '404':
@@ -5291,7 +5286,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
+                $ref: '#/components/schemas/DeletedByIdResponseEnvelope'
         '401':
           $ref: '#/components/responses/UnauthorizedError'
         '404':
@@ -5316,7 +5311,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
+                $ref: '#/components/schemas/UserGoalListResponseEnvelope'
         '401':
           $ref: '#/components/responses/UnauthorizedError'
         '500':
@@ -5358,7 +5353,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
+                $ref: '#/components/schemas/UserGoalResponseEnvelope'
         '401':
           $ref: '#/components/responses/UnauthorizedError'
         '422':
@@ -5386,7 +5381,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
+                $ref: '#/components/schemas/DeletedFlagResponseEnvelope'
         '401':
           $ref: '#/components/responses/UnauthorizedError'
         '404':
@@ -5414,7 +5409,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
+                $ref: '#/components/schemas/DeletedFlagResponseEnvelope'
         '401':
           $ref: '#/components/responses/UnauthorizedError'
         '404':
@@ -5436,7 +5431,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
+                $ref: '#/components/schemas/UserGoalProgressListResponseEnvelope'
         '401':
           $ref: '#/components/responses/UnauthorizedError'
         '500':
@@ -5456,7 +5451,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
+                $ref: '#/components/schemas/StreakResponseEnvelope'
         '401':
           $ref: '#/components/responses/UnauthorizedError'
         '500':
@@ -5485,7 +5480,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
+                $ref: '#/components/schemas/HighlightListResponseEnvelope'
         '401':
           $ref: '#/components/responses/UnauthorizedError'
         '404':
@@ -5532,7 +5527,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
+                $ref: '#/components/schemas/HighlightResponseEnvelope'
         '401':
           $ref: '#/components/responses/UnauthorizedError'
         '404':
@@ -5578,7 +5573,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
+                $ref: '#/components/schemas/HighlightResponseEnvelope'
         '401':
           $ref: '#/components/responses/UnauthorizedError'
         '404':
@@ -5612,7 +5607,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
+                $ref: '#/components/schemas/HighlightDeleteResponseEnvelope'
         '401':
           $ref: '#/components/responses/UnauthorizedError'
         '404':
@@ -5966,7 +5961,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
+                $ref: '#/components/schemas/CustomDigestListResponseEnvelope'
         '401':
           $ref: '#/components/responses/UnauthorizedError'
         '500':
@@ -6004,7 +5999,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
+                $ref: '#/components/schemas/CustomDigestResponseEnvelope'
         '401':
           $ref: '#/components/responses/UnauthorizedError'
         '422':
@@ -6032,7 +6027,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
+                $ref: '#/components/schemas/CustomDigestResponseEnvelope'
         '401':
           $ref: '#/components/responses/UnauthorizedError'
         '404':
@@ -6291,7 +6286,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
+                $ref: '#/components/schemas/QuickSaveResponseEnvelope'
         '401':
           $ref: '#/components/responses/UnauthorizedError'
         '422':
@@ -9468,10 +9463,14 @@ components:
           - stat
           - crawl_result
           - llm_call
+          - highlight
+          - tag
+          - summary_tag
         id:
-          oneOf:
-          - type: integer
-          - type: string
+          type: string
+          description: |
+            Entity identifier. Always serialized as a string for KMP / mobile
+            client compatibility (numeric IDs are JSON-encoded as strings).
         server_version:
           type: integer
         updated_at:
@@ -9574,9 +9573,10 @@ components:
       - status
       properties:
         id:
-          oneOf:
-          - type: integer
-          - type: string
+          type: string
+          description: |
+            Entity identifier. Always serialized as a string for KMP / mobile
+            client compatibility (numeric IDs are JSON-encoded as strings).
         entity_type:
           type: string
         status:
@@ -9624,6 +9624,1408 @@ components:
               has_more:
                 type: boolean
                 nullable: true
+
+    # ------------------------------------------------------------------
+    # Channel Digest (Mini-App)
+    # ------------------------------------------------------------------
+    ChannelSubscription:
+      type: object
+      required:
+      - id
+      - username
+      - is_active
+      - fetch_error_count
+      - created_at
+      properties:
+        id:
+          type: integer
+        username:
+          type: string
+        title:
+          type: string
+          nullable: true
+        is_active:
+          type: boolean
+        fetch_error_count:
+          type: integer
+        last_error:
+          type: string
+          nullable: true
+        category_id:
+          type: integer
+          nullable: true
+        category_name:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+    ChannelSubscriptionListData:
+      type: object
+      required:
+      - channels
+      - active_count
+      - unlimited_channels
+      properties:
+        channels:
+          type: array
+          items:
+            $ref: '#/components/schemas/ChannelSubscription'
+        active_count:
+          type: integer
+        max_channels:
+          type: integer
+          nullable: true
+        unlimited_channels:
+          type: boolean
+    ChannelSubscriptionListResponseEnvelope:
+      allOf:
+      - $ref: '#/components/schemas/BaseSuccessResponse'
+      - type: object
+        required:
+        - data
+        properties:
+          data:
+            $ref: '#/components/schemas/ChannelSubscriptionListData'
+    SubscribeActionData:
+      type: object
+      required:
+      - status
+      - username
+      properties:
+        status:
+          type: string
+        username:
+          type: string
+    SubscribeActionResponseEnvelope:
+      allOf:
+      - $ref: '#/components/schemas/BaseSuccessResponse'
+      - type: object
+        required:
+        - data
+        properties:
+          data:
+            $ref: '#/components/schemas/SubscribeActionData'
+    ResolveChannelData:
+      type: object
+      required:
+      - username
+      - is_subscribed
+      properties:
+        username:
+          type: string
+        title:
+          type: string
+          nullable: true
+        description:
+          type: string
+          nullable: true
+        member_count:
+          type: integer
+          nullable: true
+        is_subscribed:
+          type: boolean
+    ResolveChannelResponseEnvelope:
+      allOf:
+      - $ref: '#/components/schemas/BaseSuccessResponse'
+      - type: object
+        required:
+        - data
+        properties:
+          data:
+            $ref: '#/components/schemas/ResolveChannelData'
+    DigestPreferencesData:
+      type: object
+      required:
+      - delivery_time
+      - delivery_time_source
+      - timezone
+      - timezone_source
+      - hours_lookback
+      - hours_lookback_source
+      - max_posts_per_digest
+      - max_posts_per_digest_source
+      - min_relevance_score
+      - min_relevance_score_source
+      properties:
+        delivery_time:
+          type: string
+        delivery_time_source:
+          type: string
+          description: '"user" if overridden, "global" if inherited from defaults'
+        timezone:
+          type: string
+        timezone_source:
+          type: string
+        hours_lookback:
+          type: integer
+        hours_lookback_source:
+          type: string
+        max_posts_per_digest:
+          type: integer
+        max_posts_per_digest_source:
+          type: string
+        min_relevance_score:
+          type: number
+        min_relevance_score_source:
+          type: string
+    DigestPreferencesResponseEnvelope:
+      allOf:
+      - $ref: '#/components/schemas/BaseSuccessResponse'
+      - type: object
+        required:
+        - data
+        properties:
+          data:
+            $ref: '#/components/schemas/DigestPreferencesData'
+    DigestDelivery:
+      type: object
+      required:
+      - id
+      - delivered_at
+      - post_count
+      - channel_count
+      - digest_type
+      properties:
+        id:
+          type: integer
+        delivered_at:
+          type: string
+          format: date-time
+        post_count:
+          type: integer
+        channel_count:
+          type: integer
+        digest_type:
+          type: string
+    DigestHistoryData:
+      type: object
+      required:
+      - deliveries
+      - total
+      - limit
+      - offset
+      properties:
+        deliveries:
+          type: array
+          items:
+            $ref: '#/components/schemas/DigestDelivery'
+        total:
+          type: integer
+        limit:
+          type: integer
+        offset:
+          type: integer
+    DigestHistoryResponseEnvelope:
+      allOf:
+      - $ref: '#/components/schemas/BaseSuccessResponse'
+      - type: object
+        required:
+        - data
+        properties:
+          data:
+            $ref: '#/components/schemas/DigestHistoryData'
+    TriggerDigestData:
+      type: object
+      required:
+      - status
+      - correlation_id
+      properties:
+        status:
+          type: string
+        correlation_id:
+          type: string
+    TriggerDigestResponseEnvelope:
+      allOf:
+      - $ref: '#/components/schemas/BaseSuccessResponse'
+      - type: object
+        required:
+        - data
+        properties:
+          data:
+            $ref: '#/components/schemas/TriggerDigestData'
+    TriggerChannelDigestData:
+      type: object
+      required:
+      - status
+      - channel
+      - correlation_id
+      properties:
+        status:
+          type: string
+        channel:
+          type: string
+        correlation_id:
+          type: string
+    TriggerChannelDigestResponseEnvelope:
+      allOf:
+      - $ref: '#/components/schemas/BaseSuccessResponse'
+      - type: object
+        required:
+        - data
+        properties:
+          data:
+            $ref: '#/components/schemas/TriggerChannelDigestData'
+    ChannelCategory:
+      type: object
+      required:
+      - id
+      - name
+      - position
+      - subscription_count
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        position:
+          type: integer
+        subscription_count:
+          type: integer
+    ChannelCategoryListData:
+      type: object
+      required:
+      - categories
+      properties:
+        categories:
+          type: array
+          items:
+            $ref: '#/components/schemas/ChannelCategory'
+    ChannelCategoryListResponseEnvelope:
+      allOf:
+      - $ref: '#/components/schemas/BaseSuccessResponse'
+      - type: object
+        required:
+        - data
+        properties:
+          data:
+            $ref: '#/components/schemas/ChannelCategoryListData'
+    ChannelCategoryResponseEnvelope:
+      allOf:
+      - $ref: '#/components/schemas/BaseSuccessResponse'
+      - type: object
+        required:
+        - data
+        properties:
+          data:
+            $ref: '#/components/schemas/ChannelCategory'
+    StatusOnlyData:
+      type: object
+      required:
+      - status
+      properties:
+        status:
+          type: string
+    StatusOnlyResponseEnvelope:
+      allOf:
+      - $ref: '#/components/schemas/BaseSuccessResponse'
+      - type: object
+        required:
+        - data
+        properties:
+          data:
+            $ref: '#/components/schemas/StatusOnlyData'
+    BulkOperationItem:
+      type: object
+      required:
+      - status
+      properties:
+        username:
+          type: string
+        id:
+          type: string
+        status:
+          type: string
+        detail:
+          type: string
+    BulkOperationData:
+      type: object
+      required:
+      - results
+      - success_count
+      - error_count
+      properties:
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/BulkOperationItem'
+        success_count:
+          type: integer
+        error_count:
+          type: integer
+    BulkOperationResponseEnvelope:
+      allOf:
+      - $ref: '#/components/schemas/BaseSuccessResponse'
+      - type: object
+        required:
+        - data
+        properties:
+          data:
+            $ref: '#/components/schemas/BulkOperationData'
+    ChannelPostAnalysis:
+      type: object
+      properties:
+        real_topic:
+          type: string
+          nullable: true
+        tldr:
+          type: string
+          nullable: true
+        relevance_score:
+          type: number
+          nullable: true
+        content_type:
+          type: string
+          nullable: true
+    ChannelPost:
+      type: object
+      required:
+      - message_id
+      - text
+      - date
+      properties:
+        message_id:
+          type: integer
+        text:
+          type: string
+        date:
+          type: string
+          format: date-time
+        views:
+          type: integer
+          nullable: true
+        forwards:
+          type: integer
+          nullable: true
+        media_type:
+          type: string
+          nullable: true
+        url:
+          type: string
+          nullable: true
+        analysis:
+          $ref: '#/components/schemas/ChannelPostAnalysis'
+          nullable: true
+    ChannelPostListData:
+      type: object
+      required:
+      - posts
+      - total
+      - channel_username
+      properties:
+        posts:
+          type: array
+          items:
+            $ref: '#/components/schemas/ChannelPost'
+        total:
+          type: integer
+        channel_username:
+          type: string
+    ChannelPostListResponseEnvelope:
+      allOf:
+      - $ref: '#/components/schemas/BaseSuccessResponse'
+      - type: object
+        required:
+        - data
+        properties:
+          data:
+            $ref: '#/components/schemas/ChannelPostListData'
+
+    # ------------------------------------------------------------------
+    # Custom Digests
+    # ------------------------------------------------------------------
+    CustomDigest:
+      type: object
+      required:
+      - id
+      - status
+      - createdAt
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+          nullable: true
+        content:
+          type: string
+          nullable: true
+        status:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+    CustomDigestResponseEnvelope:
+      allOf:
+      - $ref: '#/components/schemas/BaseSuccessResponse'
+      - type: object
+        required:
+        - data
+        properties:
+          data:
+            $ref: '#/components/schemas/CustomDigest'
+    CustomDigestListData:
+      type: object
+      required:
+      - digests
+      properties:
+        digests:
+          type: array
+          items:
+            $ref: '#/components/schemas/CustomDigest'
+    CustomDigestListResponseEnvelope:
+      allOf:
+      - $ref: '#/components/schemas/BaseSuccessResponse'
+      - type: object
+        required:
+        - data
+        properties:
+          data:
+            $ref: '#/components/schemas/CustomDigestListData'
+
+    # ------------------------------------------------------------------
+    # Backups
+    # ------------------------------------------------------------------
+    Backup:
+      type: object
+      required:
+      - id
+      - type
+      - status
+      - createdAt
+      - updatedAt
+      properties:
+        id:
+          type: integer
+        type:
+          type: string
+        status:
+          type: string
+        filePath:
+          type: string
+          nullable: true
+        fileSizeBytes:
+          type: integer
+          nullable: true
+        itemsCount:
+          type: integer
+          nullable: true
+        error:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    BackupResponseEnvelope:
+      allOf:
+      - $ref: '#/components/schemas/BaseSuccessResponse'
+      - type: object
+        required:
+        - data
+        properties:
+          data:
+            $ref: '#/components/schemas/Backup'
+    BackupListData:
+      type: object
+      required:
+      - backups
+      properties:
+        backups:
+          type: array
+          items:
+            $ref: '#/components/schemas/Backup'
+    BackupListResponseEnvelope:
+      allOf:
+      - $ref: '#/components/schemas/BaseSuccessResponse'
+      - type: object
+        required:
+        - data
+        properties:
+          data:
+            $ref: '#/components/schemas/BackupListData'
+    BackupSchedule:
+      type: object
+      properties:
+        backup_enabled:
+          type: boolean
+          nullable: true
+        backup_frequency:
+          type: string
+          nullable: true
+        backup_retention_count:
+          type: integer
+          nullable: true
+    BackupScheduleData:
+      type: object
+      required:
+      - schedule
+      properties:
+        schedule:
+          $ref: '#/components/schemas/BackupSchedule'
+    BackupScheduleResponseEnvelope:
+      allOf:
+      - $ref: '#/components/schemas/BaseSuccessResponse'
+      - type: object
+        required:
+        - data
+        properties:
+          data:
+            $ref: '#/components/schemas/BackupScheduleData'
+    BackupDeleteData:
+      type: object
+      required:
+      - deleted
+      - id
+      properties:
+        deleted:
+          type: boolean
+        id:
+          type: integer
+    BackupDeleteResponseEnvelope:
+      allOf:
+      - $ref: '#/components/schemas/BaseSuccessResponse'
+      - type: object
+        required:
+        - data
+        properties:
+          data:
+            $ref: '#/components/schemas/BackupDeleteData'
+    BackupRestoreData:
+      type: object
+      description: |
+        Summary of items restored from an uploaded backup archive. Extra fields
+        may be present depending on which entity types the archive contained.
+      additionalProperties: true
+    BackupRestoreResponseEnvelope:
+      allOf:
+      - $ref: '#/components/schemas/BaseSuccessResponse'
+      - type: object
+        required:
+        - data
+        properties:
+          data:
+            $ref: '#/components/schemas/BackupRestoreData'
+
+    # ------------------------------------------------------------------
+    # Import / Export
+    # ------------------------------------------------------------------
+    ImportJob:
+      type: object
+      description: |
+        Asynchronous import job tracking record. Snake_case keys match the
+        backend Pydantic ImportJobResponse model serialization.
+      additionalProperties: true
+    ImportJobResponseEnvelope:
+      allOf:
+      - $ref: '#/components/schemas/BaseSuccessResponse'
+      - type: object
+        required:
+        - data
+        properties:
+          data:
+            $ref: '#/components/schemas/ImportJob'
+    ImportJobListData:
+      type: object
+      required:
+      - jobs
+      properties:
+        jobs:
+          type: array
+          items:
+            $ref: '#/components/schemas/ImportJob'
+    ImportJobListResponseEnvelope:
+      allOf:
+      - $ref: '#/components/schemas/BaseSuccessResponse'
+      - type: object
+        required:
+        - data
+        properties:
+          data:
+            $ref: '#/components/schemas/ImportJobListData'
+    DeletedByIdData:
+      type: object
+      required:
+      - deleted
+      - id
+      properties:
+        deleted:
+          type: boolean
+        id:
+          type: integer
+    DeletedByIdResponseEnvelope:
+      allOf:
+      - $ref: '#/components/schemas/BaseSuccessResponse'
+      - type: object
+        required:
+        - data
+        properties:
+          data:
+            $ref: '#/components/schemas/DeletedByIdData'
+
+    # ------------------------------------------------------------------
+    # User Goals & Streak
+    # ------------------------------------------------------------------
+    UserGoal:
+      type: object
+      required:
+      - id
+      - goalType
+      - targetCount
+      - scopeType
+      - createdAt
+      - updatedAt
+      properties:
+        id:
+          type: string
+        goalType:
+          type: string
+        targetCount:
+          type: integer
+        scopeType:
+          type: string
+        scopeId:
+          type: integer
+          nullable: true
+        scopeName:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    UserGoalResponseEnvelope:
+      allOf:
+      - $ref: '#/components/schemas/BaseSuccessResponse'
+      - type: object
+        required:
+        - data
+        properties:
+          data:
+            $ref: '#/components/schemas/UserGoal'
+    UserGoalListData:
+      type: object
+      required:
+      - goals
+      properties:
+        goals:
+          type: array
+          items:
+            $ref: '#/components/schemas/UserGoal'
+    UserGoalListResponseEnvelope:
+      allOf:
+      - $ref: '#/components/schemas/BaseSuccessResponse'
+      - type: object
+        required:
+        - data
+        properties:
+          data:
+            $ref: '#/components/schemas/UserGoalListData'
+    UserGoalProgress:
+      type: object
+      required:
+      - goalType
+      - targetCount
+      - currentCount
+      - achieved
+      - scopeType
+      properties:
+        goalType:
+          type: string
+        targetCount:
+          type: integer
+        currentCount:
+          type: integer
+        achieved:
+          type: boolean
+        scopeType:
+          type: string
+        scopeId:
+          type: integer
+          nullable: true
+        scopeName:
+          type: string
+          nullable: true
+    UserGoalProgressListData:
+      type: object
+      required:
+      - progress
+      properties:
+        progress:
+          type: array
+          items:
+            $ref: '#/components/schemas/UserGoalProgress'
+    UserGoalProgressListResponseEnvelope:
+      allOf:
+      - $ref: '#/components/schemas/BaseSuccessResponse'
+      - type: object
+        required:
+        - data
+        properties:
+          data:
+            $ref: '#/components/schemas/UserGoalProgressListData'
+    Streak:
+      type: object
+      required:
+      - currentStreak
+      - longestStreak
+      - todayCount
+      - weekCount
+      - monthCount
+      properties:
+        currentStreak:
+          type: integer
+        longestStreak:
+          type: integer
+        lastActivityDate:
+          type: string
+          nullable: true
+        todayCount:
+          type: integer
+        weekCount:
+          type: integer
+        monthCount:
+          type: integer
+    StreakResponseEnvelope:
+      allOf:
+      - $ref: '#/components/schemas/BaseSuccessResponse'
+      - type: object
+        required:
+        - data
+        properties:
+          data:
+            $ref: '#/components/schemas/Streak'
+    DeletedFlagData:
+      type: object
+      required:
+      - deleted
+      properties:
+        deleted:
+          type: boolean
+    DeletedFlagResponseEnvelope:
+      allOf:
+      - $ref: '#/components/schemas/BaseSuccessResponse'
+      - type: object
+        required:
+        - data
+        properties:
+          data:
+            $ref: '#/components/schemas/DeletedFlagData'
+
+    # ------------------------------------------------------------------
+    # Tags
+    # ------------------------------------------------------------------
+    Tag:
+      type: object
+      required:
+      - id
+      - name
+      - summaryCount
+      - createdAt
+      - updatedAt
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        color:
+          type: string
+          nullable: true
+        summaryCount:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    TagResponseEnvelope:
+      allOf:
+      - $ref: '#/components/schemas/BaseSuccessResponse'
+      - type: object
+        required:
+        - data
+        properties:
+          data:
+            $ref: '#/components/schemas/Tag'
+    TagListData:
+      type: object
+      required:
+      - tags
+      properties:
+        tags:
+          type: array
+          items:
+            $ref: '#/components/schemas/Tag'
+    TagListResponseEnvelope:
+      allOf:
+      - $ref: '#/components/schemas/BaseSuccessResponse'
+      - type: object
+        required:
+        - data
+        properties:
+          data:
+            $ref: '#/components/schemas/TagListData'
+    TagDeleteData:
+      type: object
+      required:
+      - deleted
+      - id
+      properties:
+        deleted:
+          type: boolean
+        id:
+          type: integer
+    TagDeleteResponseEnvelope:
+      allOf:
+      - $ref: '#/components/schemas/BaseSuccessResponse'
+      - type: object
+        required:
+        - data
+        properties:
+          data:
+            $ref: '#/components/schemas/TagDeleteData'
+    TagDetachData:
+      type: object
+      required:
+      - detached
+      - summary_id
+      - tag_id
+      properties:
+        detached:
+          type: boolean
+        summary_id:
+          type: integer
+        tag_id:
+          type: integer
+    TagDetachResponseEnvelope:
+      allOf:
+      - $ref: '#/components/schemas/BaseSuccessResponse'
+      - type: object
+        required:
+        - data
+        properties:
+          data:
+            $ref: '#/components/schemas/TagDetachData'
+    MergeTagsData:
+      type: object
+      required:
+      - merged
+      - target_tag_id
+      properties:
+        merged:
+          type: boolean
+        target_tag_id:
+          type: integer
+    MergeTagsResponseEnvelope:
+      allOf:
+      - $ref: '#/components/schemas/BaseSuccessResponse'
+      - type: object
+        required:
+        - data
+        properties:
+          data:
+            $ref: '#/components/schemas/MergeTagsData'
+
+    # ------------------------------------------------------------------
+    # Rules
+    # ------------------------------------------------------------------
+    Rule:
+      type: object
+      required:
+      - id
+      - name
+      - enabled
+      - eventType
+      - matchMode
+      - conditions
+      - actions
+      - priority
+      - runCount
+      - createdAt
+      - updatedAt
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        description:
+          type: string
+          nullable: true
+        enabled:
+          type: boolean
+        eventType:
+          type: string
+        matchMode:
+          type: string
+        conditions:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        actions:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        priority:
+          type: integer
+        runCount:
+          type: integer
+        lastTriggeredAt:
+          type: string
+          nullable: true
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    RuleResponseEnvelope:
+      allOf:
+      - $ref: '#/components/schemas/BaseSuccessResponse'
+      - type: object
+        required:
+        - data
+        properties:
+          data:
+            $ref: '#/components/schemas/Rule'
+    RuleListData:
+      type: object
+      required:
+      - rules
+      properties:
+        rules:
+          type: array
+          items:
+            $ref: '#/components/schemas/Rule'
+    RuleListResponseEnvelope:
+      allOf:
+      - $ref: '#/components/schemas/BaseSuccessResponse'
+      - type: object
+        required:
+        - data
+        properties:
+          data:
+            $ref: '#/components/schemas/RuleListData'
+    RuleExecutionLog:
+      type: object
+      required:
+      - id
+      - ruleId
+      - eventType
+      - matched
+      - createdAt
+      properties:
+        id:
+          type: integer
+        ruleId:
+          type: integer
+        summaryId:
+          type: integer
+          nullable: true
+        eventType:
+          type: string
+        matched:
+          type: boolean
+        conditionsResult:
+          type: array
+          nullable: true
+          items:
+            type: object
+            additionalProperties: true
+        actionsTaken:
+          type: array
+          nullable: true
+          items:
+            type: object
+            additionalProperties: true
+        error:
+          type: string
+          nullable: true
+        durationMs:
+          type: integer
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+    RuleLogListData:
+      type: object
+      required:
+      - logs
+      properties:
+        logs:
+          type: array
+          items:
+            $ref: '#/components/schemas/RuleExecutionLog'
+    RuleLogListResponseEnvelope:
+      allOf:
+      - $ref: '#/components/schemas/BaseSuccessResponse'
+      - type: object
+        required:
+        - data
+        properties:
+          data:
+            $ref: '#/components/schemas/RuleLogListData'
+    RuleTestData:
+      type: object
+      required:
+      - matched
+      - conditions_result
+      - would_execute_actions
+      properties:
+        matched:
+          type: boolean
+        conditions_result:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        would_execute_actions:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+    RuleTestResponseEnvelope:
+      allOf:
+      - $ref: '#/components/schemas/BaseSuccessResponse'
+      - type: object
+        required:
+        - data
+        properties:
+          data:
+            $ref: '#/components/schemas/RuleTestData'
+
+    # ------------------------------------------------------------------
+    # RSS
+    # ------------------------------------------------------------------
+    RssFeedSubscription:
+      type: object
+      required:
+      - subscription_id
+      - feed_id
+      - is_active
+      - created_at
+      properties:
+        subscription_id:
+          type: integer
+        feed_id:
+          type: integer
+        feed_title:
+          type: string
+          nullable: true
+        feed_url:
+          type: string
+          nullable: true
+        site_url:
+          type: string
+          nullable: true
+        category_name:
+          type: string
+          nullable: true
+        is_active:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+    RssFeedSubscriptionListData:
+      type: object
+      required:
+      - feeds
+      properties:
+        feeds:
+          type: array
+          items:
+            $ref: '#/components/schemas/RssFeedSubscription'
+    RssFeedSubscriptionListResponseEnvelope:
+      allOf:
+      - $ref: '#/components/schemas/BaseSuccessResponse'
+      - type: object
+        required:
+        - data
+        properties:
+          data:
+            $ref: '#/components/schemas/RssFeedSubscriptionListData'
+    RssSubscribeData:
+      type: object
+      required:
+      - subscription_id
+      - feed_id
+      properties:
+        subscription_id:
+          type: integer
+        feed_id:
+          type: integer
+        feed_title:
+          type: string
+          nullable: true
+        feed_url:
+          type: string
+          nullable: true
+    RssSubscribeResponseEnvelope:
+      allOf:
+      - $ref: '#/components/schemas/BaseSuccessResponse'
+      - type: object
+        required:
+        - data
+        properties:
+          data:
+            $ref: '#/components/schemas/RssSubscribeData'
+    RssFeedItem:
+      type: object
+      required:
+      - id
+      - created_at
+      properties:
+        id:
+          type: integer
+        guid:
+          type: string
+          nullable: true
+        title:
+          type: string
+          nullable: true
+        url:
+          type: string
+          nullable: true
+        author:
+          type: string
+          nullable: true
+        published_at:
+          type: string
+          nullable: true
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+    RssFeedItemListData:
+      type: object
+      required:
+      - feed_id
+      - items
+      properties:
+        feed_id:
+          type: integer
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/RssFeedItem'
+    RssFeedItemListResponseEnvelope:
+      allOf:
+      - $ref: '#/components/schemas/BaseSuccessResponse'
+      - type: object
+        required:
+        - data
+        properties:
+          data:
+            $ref: '#/components/schemas/RssFeedItemListData'
+    RssFeedRefreshData:
+      type: object
+      required:
+      - feed_id
+      - new_items
+      properties:
+        feed_id:
+          type: integer
+        new_items:
+          type: integer
+        not_modified:
+          type: boolean
+    RssFeedRefreshResponseEnvelope:
+      allOf:
+      - $ref: '#/components/schemas/BaseSuccessResponse'
+      - type: object
+        required:
+        - data
+        properties:
+          data:
+            $ref: '#/components/schemas/RssFeedRefreshData'
+    OPMLImportData:
+      type: object
+      required:
+      - imported
+      - errors
+      - total
+      properties:
+        imported:
+          type: integer
+        errors:
+          type: integer
+        total:
+          type: integer
+    OPMLImportResponseEnvelope:
+      allOf:
+      - $ref: '#/components/schemas/BaseSuccessResponse'
+      - type: object
+        required:
+        - data
+        properties:
+          data:
+            $ref: '#/components/schemas/OPMLImportData'
+
+    # ------------------------------------------------------------------
+    # Highlights
+    # ------------------------------------------------------------------
+    Highlight:
+      type: object
+      required:
+      - id
+      - summaryId
+      - text
+      - createdAt
+      - updatedAt
+      properties:
+        id:
+          type: string
+        summaryId:
+          type: string
+        text:
+          type: string
+        startOffset:
+          type: integer
+          nullable: true
+        endOffset:
+          type: integer
+          nullable: true
+        color:
+          type: string
+          nullable: true
+        note:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    HighlightResponseEnvelope:
+      allOf:
+      - $ref: '#/components/schemas/BaseSuccessResponse'
+      - type: object
+        required:
+        - data
+        properties:
+          data:
+            $ref: '#/components/schemas/Highlight'
+    HighlightListData:
+      type: object
+      required:
+      - highlights
+      properties:
+        highlights:
+          type: array
+          items:
+            $ref: '#/components/schemas/Highlight'
+    HighlightListResponseEnvelope:
+      allOf:
+      - $ref: '#/components/schemas/BaseSuccessResponse'
+      - type: object
+        required:
+        - data
+        properties:
+          data:
+            $ref: '#/components/schemas/HighlightListData'
+    HighlightDeleteData:
+      type: object
+      required:
+      - deleted
+      - id
+      properties:
+        deleted:
+          type: boolean
+        id:
+          type: string
+    HighlightDeleteResponseEnvelope:
+      allOf:
+      - $ref: '#/components/schemas/BaseSuccessResponse'
+      - type: object
+        required:
+        - data
+        properties:
+          data:
+            $ref: '#/components/schemas/HighlightDeleteData'
+
+    # ------------------------------------------------------------------
+    # Audio (TTS)
+    # ------------------------------------------------------------------
+    SummaryAudio:
+      type: object
+      required:
+      - summaryId
+      - status
+      properties:
+        summaryId:
+          type: integer
+        status:
+          type: string
+        charCount:
+          type: integer
+          nullable: true
+        fileSizeBytes:
+          type: integer
+          nullable: true
+        latencyMs:
+          type: integer
+          nullable: true
+        error:
+          type: string
+          nullable: true
+    SummaryAudioResponseEnvelope:
+      allOf:
+      - $ref: '#/components/schemas/BaseSuccessResponse'
+      - type: object
+        required:
+        - data
+        properties:
+          data:
+            $ref: '#/components/schemas/SummaryAudio'
+
+    # ------------------------------------------------------------------
+    # Quick Save
+    # ------------------------------------------------------------------
+    QuickSaveData:
+      type: object
+      required:
+      - status
+      - url
+      - duplicate
+      properties:
+        request_id:
+          type: integer
+          nullable: true
+        status:
+          type: string
+          description: '"pending" for new submissions, "duplicate" for already-saved URLs.'
+        title:
+          type: string
+          nullable: true
+        url:
+          type: string
+        duplicate:
+          type: boolean
+        summary_id:
+          type: integer
+          nullable: true
+        tags_attached:
+          type: array
+          nullable: true
+          items:
+            type: string
+    QuickSaveResponseEnvelope:
+      allOf:
+      - $ref: '#/components/schemas/BaseSuccessResponse'
+      - type: object
+        required:
+        - data
+        properties:
+          data:
+            $ref: '#/components/schemas/QuickSaveData'
+
     RootResponseEnvelope:
       allOf:
       - $ref: '#/components/schemas/BaseSuccessResponse'
