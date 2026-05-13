@@ -48,6 +48,12 @@ Field descriptions:
 
 - source_type: Exactly one of: news, blog, research, opinion, tutorial, reference.
 
+ACADEMIC PAPERS (input starts with `# <title>` followed by `## Abstract` and optionally `## Body`):
+  - Set source_type to "research".
+  - Structure key_ideas around the paper's central claims, evidence, methods, and acknowledged limitations -- not surface-level topics.
+  - When discussing specific results, cite the paper's own figure/table numbers ("Table 3", "Figure 2") when they appear in the body text.
+  - If the input contains "[PDF unavailable: ...]", base the summary on the abstract alone and add a note in insights.caution that body coverage is partial.
+
 - temporal_freshness: Exactly one of: breaking, recent, evergreen.
 
 - estimated_reading_time_min: Integer >= 0. Approximate minutes to read the full source.
