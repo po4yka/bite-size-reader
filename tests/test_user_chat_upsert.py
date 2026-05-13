@@ -103,6 +103,57 @@ async def test_persist_message_snapshot_populates_user_and_chat(
     assert chat.username == "chatuser"
 
 
+async def test_persist_message_snapshot_with_missing_chat_type(
+    session: AsyncSession, persistence: MessagePersistence
+) -> None:
+    """Regression: raw Telethon events surface a chat object without `.type`,
+    which previously triggered a NOT NULL violation on `chats.type`. The
+    repository must coerce None to a placeholder so the row still lands.
+    """
+    req_id = await _create_request(session)
+    await session.commit()
+
+    message = _DummyMessage(
+        chat=_DummyChat(id=505, type=None, title=None, username="po4yka"),
+        user=_DummyUser(id=606, username="po4yka"),
+    )
+
+    await persistence.persist_message_snapshot(req_id, message)
+
+    chat = await session.scalar(select(Chat).where(Chat.chat_id == 505))
+    assert chat is not None
+    assert chat.type == "unknown"
+    assert chat.username == "po4yka"
+
+
+async def test_chat_upsert_does_not_overwrite_known_type_with_none(
+    session: AsyncSession, persistence: MessagePersistence
+) -> None:
+    """A second message with no `.type` must not blank out the type that an
+    earlier message established for the same chat.
+    """
+    first_req = await _create_request(session)
+    await session.commit()
+    first_message = _DummyMessage(
+        chat=_DummyChat(id=707, type="private", title="First", username="u"),
+        user=_DummyUser(id=808, username="u"),
+    )
+    await persistence.persist_message_snapshot(first_req, first_message)
+
+    second_req = await _create_request(session)
+    await session.commit()
+    second_message = _DummyMessage(
+        chat=_DummyChat(id=707, type=None, title="Second", username="u"),
+        user=_DummyUser(id=808, username="u"),
+    )
+    await persistence.persist_message_snapshot(second_req, second_message)
+
+    chat = await session.scalar(select(Chat).where(Chat.chat_id == 707))
+    assert chat is not None
+    assert chat.type == "private"
+    assert chat.title == "Second"
+
+
 async def test_persist_message_snapshot_refreshes_user_and_chat(
     session: AsyncSession, persistence: MessagePersistence
 ) -> None:

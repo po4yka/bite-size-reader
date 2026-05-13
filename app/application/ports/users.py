@@ -53,11 +53,16 @@ class UserRepositoryPort(Protocol):
         self,
         *,
         chat_id: int,
-        type_: str,
+        type_: str | None,
         title: str | None = None,
         username: str | None = None,
     ) -> None:
-        """Upsert a chat row."""
+        """Upsert a chat row.
+
+        `type_` is optional because some Telethon code paths surface a chat
+        object without a `.type` attribute; the implementation must coerce
+        None to a placeholder ("unknown") to satisfy the NOT NULL column.
+        """
 
     async def async_get_user_by_telegram_id(self, telegram_user_id: int) -> dict[str, Any] | None:
         """Return user by Telegram identifier."""

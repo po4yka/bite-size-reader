@@ -156,28 +156,39 @@ class UserRepositoryAdapter:
         self,
         *,
         chat_id: int,
-        type_: str,
+        type_: str | None,
         title: str | None = None,
         username: str | None = None,
     ) -> None:
-        """Upsert a chat record."""
+        """Upsert a chat record.
+
+        `type_` may be None when the caller cannot determine the chat type
+        (e.g. raw Telethon events that do not expose `.type`). The column is
+        NOT NULL, so a missing value is persisted as `"unknown"` on first
+        insert and is *not* overwritten on conflict — that way a later
+        message with a real type sticks, but a None from a degraded code
+        path does not blank out a previously-known type.
+        """
+        insert_type = type_ if type_ else "unknown"
+        update_fields: dict[str, Any] = {
+            "title": title,
+            "username": username,
+            "updated_at": _utcnow(),
+        }
+        if type_:
+            update_fields["type"] = type_
         async with self._database.transaction() as session:
             stmt = (
                 insert(Chat)
                 .values(
                     chat_id=chat_id,
-                    type=type_,
+                    type=insert_type,
                     title=title,
                     username=username,
                 )
                 .on_conflict_do_update(
                     index_elements=[Chat.chat_id],
-                    set_={
-                        "type": type_,
-                        "title": title,
-                        "username": username,
-                        "updated_at": _utcnow(),
-                    },
+                    set_=update_fields,
                 )
             )
             await session.execute(stmt)
