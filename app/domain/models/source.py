@@ -21,6 +21,7 @@ _URL_BACKED_KINDS = frozenset(
         "instagram_reel",
         "web_article",
         "youtube_video",
+        "academic_paper",
     }
 )
 
@@ -37,6 +38,7 @@ class SourceKind(StrEnum):
     INSTAGRAM_CAROUSEL = "instagram_carousel"
     INSTAGRAM_REEL = "instagram_reel"
     GITHUB_REPOSITORY = "github_repository"
+    ACADEMIC_PAPER = "academic_paper"
     WEB_ARTICLE = "web_article"
     TELEGRAM_POST = "telegram_post"
     TELEGRAM_POST_WITH_IMAGES = "telegram_post_with_images"

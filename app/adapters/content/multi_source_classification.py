@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from app.adapters.academic.url_patterns import is_academic_paper_url
 from app.adapters.telegram.multimodal_extractor import (
     build_source_item_from_telegram_payload,
     classify_telegram_messages_source_kind,
@@ -43,6 +44,9 @@ def classify_url_source_kind(url: str, *, hint: str | None = None) -> SourceKind
         return SourceKind.INSTAGRAM_REEL
     if is_instagram_post_url(normalized_url):
         return SourceKind.INSTAGRAM_POST
+
+    if is_academic_paper_url(normalized_url):
+        return SourceKind.ACADEMIC_PAPER
 
     return SourceKind.WEB_ARTICLE
 

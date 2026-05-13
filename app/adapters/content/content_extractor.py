@@ -127,6 +127,7 @@ class ContentExtractor(
         if self._platform_router is not None:
             return self._platform_router
 
+        from app.adapters.academic.url_patterns import is_academic_paper_url
         from app.adapters.github.url_patterns import is_github_repo_url
         from app.core.urls.meta import is_instagram_url, is_threads_url
         from app.core.urls.twitter import is_twitter_url
@@ -138,6 +139,14 @@ class ContentExtractor(
         router.register(
             predicate=is_github_repo_url,
             factory=self._build_github_platform_extractor,
+        )
+        # Academic paper hosts (arXiv, SSRN, NBER, OSF, ResearchGate, RePEc)
+        # are domain-specific and disjoint from the other platform predicates,
+        # so ordering relative to youtube/twitter/meta is not load-bearing —
+        # they're grouped with github here for readability.
+        router.register(
+            predicate=is_academic_paper_url,
+            factory=self._build_academic_platform_extractor,
         )
         router.register(
             predicate=is_youtube_url,
@@ -193,6 +202,16 @@ class ContentExtractor(
         from app.adapters.meta.platform_extractor import MetaPlatformExtractor
 
         return MetaPlatformExtractor(
+            cfg=self.cfg,
+            scraper=self.scraper,
+            firecrawl_sem=self._sem,
+            lifecycle=self._platform_request_lifecycle,
+        )
+
+    def _build_academic_platform_extractor(self) -> Any:
+        from app.adapters.academic.platform_extractor import AcademicPlatformExtractor
+
+        return AcademicPlatformExtractor(
             cfg=self.cfg,
             scraper=self.scraper,
             firecrawl_sem=self._sem,
