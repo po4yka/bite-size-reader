@@ -86,6 +86,26 @@ class PDFDownloadError(Exception):
         self.reason = reason
 
 
+class AcademicPaperUnavailableError(Exception):
+    """Neither the abstract nor the PDF body could be reached.
+
+    Distinct from a generic ``ValueError`` so the URL-flow's catch-all
+    error handler can render a meaningful 'paywalled paper' diagnostic
+    instead of the generic 'AI models returned data that couldn't be
+    parsed' message that fires for actual LLM failures.
+
+    ``reason`` is a short tag (``paywall``, ``network_error``,
+    ``pdf_not_found``, etc.) suitable for telemetry and template
+    selection; ``host`` is the host enum value (e.g. ``ssrn``).
+    """
+
+    def __init__(self, *, reason: str, host: str, url: str) -> None:
+        super().__init__(f"Academic paper unavailable (host={host}, reason={reason}): {url}")
+        self.reason = reason
+        self.host = host
+        self.url = url
+
+
 class AcademicPlatformExtractor(PlatformExtractor):
     """First-class extractor for SSRN / arXiv / NBER / OSF / RePEc / ResearchGate."""
 
@@ -206,16 +226,17 @@ class AcademicPlatformExtractor(PlatformExtractor):
             )
         content_text = "\n\n".join(content_parts)
 
-        # If we have neither abstract nor body, the chain can't produce
-        # a usable summary — let the generic extraction-failure path
-        # surface it.
+        # If we have neither abstract nor body, the paper is fully
+        # gated (typical for SSRN papers whose abstract isn't public).
+        # Raise the typed exception so the URL-flow handler can show a
+        # paywall diagnostic instead of the generic LLM-parse-error
+        # template.
         if not abstract and not pdf_text:
-            msg = (
-                f"Academic extraction returned no usable content for "
-                f"{canonical_landing} (host={ref.host.value}, "
-                f"pdf_failure={pdf_failure_reason or 'unknown'})"
+            raise AcademicPaperUnavailableError(
+                reason=pdf_failure_reason or "no_content",
+                host=ref.host.value,
+                url=canonical_landing,
             )
-            raise ValueError(msg)
 
         detected_lang = detect_language(content_text)
         content_source = (
@@ -439,4 +460,8 @@ def _extract_pdf_text_from_bytes(pdf_bytes: bytes) -> tuple[str, int]:
             doc.close()
 
 
-__all__ = ["AcademicPlatformExtractor", "PDFDownloadError"]
+__all__ = [
+    "AcademicPaperUnavailableError",
+    "AcademicPlatformExtractor",
+    "PDFDownloadError",
+]

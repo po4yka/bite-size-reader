@@ -413,9 +413,33 @@ class URLProcessor:
                         extra={"cid": request.correlation_id, "req_id": req_id},
                     )
             if not request.silent and not request.batch_mode:
-                await self.response_formatter.send_error_notification(
-                    request.message,
-                    "processing_failed",
-                    request.correlation_id or "unknown",
+                # Render a paper-specific paywall diagnostic when the
+                # academic adapter signals 'neither abstract nor PDF
+                # reachable' — the generic 'AI models returned data
+                # that couldn't be parsed' template is misleading for
+                # papers that never reached an LLM.
+                from app.adapters.academic.platform_extractor import (
+                    AcademicPaperUnavailableError,
                 )
+
+                if isinstance(exc, AcademicPaperUnavailableError):
+                    paper_details = (
+                        f"{exc.host.upper()} paper unavailable "
+                        f"({exc.reason}). Neither the abstract nor the PDF "
+                        f"could be reached — this paper is likely behind a "
+                        f"login or paywall, or the host's anti-bot is "
+                        f"blocking this request."
+                    )
+                    await self.response_formatter.send_error_notification(
+                        request.message,
+                        "processing_failed",
+                        request.correlation_id or "unknown",
+                        details=paper_details,
+                    )
+                else:
+                    await self.response_formatter.send_error_notification(
+                        request.message,
+                        "processing_failed",
+                        request.correlation_id or "unknown",
+                    )
             return URLProcessingFlowResult(success=False)
