@@ -220,6 +220,64 @@ async def test_empty_string_text_uses_caption_fallback(database: Database) -> No
 
 
 # ===========================================================================
+# ForwardContentProcessor: embedded-link enrichment
+# ===========================================================================
+
+
+async def test_link_enricher_enriches_persisted_content_text(
+    database: Database, session: AsyncSession
+) -> None:
+    from app.adapters.external.response_formatter import ResponseFormatter
+    from app.adapters.telegram.forward_content_processor import ForwardContentProcessor
+
+    cfg = make_test_app_config(db_path="/tmp/forward-test.db", allowed_user_ids=(1,))
+    formatter = MagicMock(spec=ResponseFormatter)
+    formatter.send_forward_accepted_notification = AsyncMock()
+    formatter.send_forward_language_notification = AsyncMock()
+    formatter.safe_reply = AsyncMock()
+
+    enriched_text = (
+        "Channel: Test Channel\n\nForward body\n\n"
+        "## Referenced article: WSJ\nhttps://wsj.com/x\n\nfull article body"
+    )
+    enricher = AsyncMock()
+    enricher.enrich = AsyncMock(return_value=enriched_text)
+
+    processor = ForwardContentProcessor(
+        cfg=cfg,
+        db=database,
+        response_formatter=formatter,
+        audit_func=lambda *_a, **_kw: None,
+        forward_link_enricher=enricher,
+    )
+    msg = _make_forward_message(text="Forward body", fwd_chat_title="Test Channel")
+
+    req_id, prompt, _lang, _sys = await processor.process_forward_content(msg, "cid")
+
+    # enricher invoked with the un-enriched prompt + post text
+    enricher.enrich.assert_awaited_once()
+    call = enricher.enrich.await_args
+    assert call.kwargs["base_prompt"] == "Channel: Test Channel\n\nForward body"
+    assert call.kwargs["post_text"] == "Forward body"
+    assert call.kwargs["message"] is msg
+    assert call.kwargs["correlation_id"] == "cid"
+
+    # the enriched text is what flows downstream AND what gets persisted
+    assert prompt == enriched_text
+    row = await session.scalar(select(Request).where(Request.id == req_id))
+    assert row is not None
+    assert row.content_text == enriched_text
+
+
+async def test_no_link_enricher_leaves_prompt_unenriched(database: Database) -> None:
+    processor, _fmt = _make_processor(database)  # built without an enricher
+    msg = _make_forward_message(text="Forward body", fwd_chat_title="Test Channel")
+    _req_id, prompt, _lang, _sys = await processor.process_forward_content(msg, "cid")
+    assert prompt == "Channel: Test Channel\n\nForward body"
+    assert "## Referenced article" not in prompt
+
+
+# ===========================================================================
 # ForwardContentProcessor: dedup
 # ===========================================================================
 

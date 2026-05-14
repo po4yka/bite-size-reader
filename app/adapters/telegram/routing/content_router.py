@@ -43,6 +43,7 @@ class MessageContentRouter:
         aggregation_handler: MultiSourceAggregationHandler | None = None,
         lang: str = "en",
         aggregation_default_mode: str = "per_url",
+        forward_link_bundle_prose_threshold: int = 200,
     ) -> None:
         self.command_dispatcher = command_dispatcher
         self.url_handler = url_handler
@@ -54,6 +55,7 @@ class MessageContentRouter:
         self.aggregation_handler = aggregation_handler
         self._lang = lang
         self._aggregation_default_mode = aggregation_default_mode
+        self._forward_link_bundle_prose_threshold = forward_link_bundle_prose_threshold
 
     async def route(
         self,
@@ -209,6 +211,22 @@ class MessageContentRouter:
         )
         return outcome.handled
 
+    def _is_link_bundle(self, fwd_text: str, forwarded_urls: list[str]) -> bool:
+        """True when a forward is essentially a bare bundle of links.
+
+        A bundle has 2+ literal URLs and little prose once the URLs are
+        stripped out -- those go to the multi-source comparison. A forward with
+        substantive text (including one that merely hyperlinks words) is a post
+        to be summarized and link-enriched, not a bundle.
+        """
+        if len(forwarded_urls) < 2:
+            return False
+        prose = fwd_text
+        for url in forwarded_urls:
+            prose = prose.replace(url, " ")
+        prose = " ".join(prose.split())
+        return len(prose) < self._forward_link_bundle_prose_threshold
+
     async def _route_forward_message(
         self,
         context: PreparedRouteContext,
@@ -224,12 +242,16 @@ class MessageContentRouter:
             getattr(message, "text", None) or getattr(message, "caption", None) or ""
         ).strip()
         forwarded_urls = extract_all_urls(fwd_text)
+        # A forward that is essentially a bare bundle of links goes to the
+        # multi-source comparison; a forward with substantive prose (incl. the
+        # hyperlinked-word case) goes to the enriched-summary path instead.
+        is_link_bundle = self._is_link_bundle(fwd_text, forwarded_urls)
         has_supported_attachment = self.attachment_processor and self._should_handle_attachment(
             message
         )
 
         if fwd_chat is not None and fwd_msg_id is not None:
-            if self.aggregation_handler is not None and forwarded_urls:
+            if self.aggregation_handler is not None and is_link_bundle:
                 handled = await self.aggregation_handler.handle_message_bundle(
                     message=message,
                     text=fwd_text,
@@ -254,7 +276,7 @@ class MessageContentRouter:
             return
 
         if fwd_from_user is not None or fwd_sender_name:
-            if self.aggregation_handler is not None and forwarded_urls:
+            if self.aggregation_handler is not None and is_link_bundle:
                 handled = await self.aggregation_handler.handle_message_bundle(
                     message=message,
                     text=fwd_text,
@@ -281,7 +303,7 @@ class MessageContentRouter:
             await self._reply_forward_no_text(context, interaction_id, start_time)
             return
 
-        if self.aggregation_handler is not None and forwarded_urls:
+        if self.aggregation_handler is not None and is_link_bundle:
             handled = await self.aggregation_handler.handle_message_bundle(
                 message=message,
                 text=fwd_text,

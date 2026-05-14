@@ -79,7 +79,10 @@ def _base_message(**overrides: Any) -> SimpleNamespace:
     return SimpleNamespace(**payload)
 
 
-async def test_forward_message_with_url_prefers_aggregation_flow(database: Database) -> None:
+async def test_forward_with_single_url_routes_to_forward_flow(database: Database) -> None:
+    """A single-link forward is not a bare 'bundle' -- it goes to the forward
+    flow (which link-enriches it), not the multi-source aggregation comparison.
+    """
     (
         router,
         forward_processor,
@@ -98,8 +101,8 @@ async def test_forward_message_with_url_prefers_aggregation_flow(database: Datab
 
     await router.route_message(message)
 
-    aggregation_handler.handle_message_bundle.assert_awaited_once()
-    forward_processor.handle_forward_flow.assert_not_awaited()
+    forward_processor.handle_forward_flow.assert_awaited_once()
+    aggregation_handler.handle_message_bundle.assert_not_awaited()
     url_handler.handle_direct_url.assert_not_awaited()
     url_handler.handle_awaited_url.assert_not_awaited()
 
@@ -252,3 +255,33 @@ async def test_forward_message_with_multiple_urls_routes_via_aggregation_flow(
     forward_processor.handle_forward_flow.assert_not_awaited()
     attachment_processor.handle_attachment_flow.assert_not_awaited()
     url_handler.handle_direct_url.assert_not_awaited()
+
+
+async def test_forward_substantive_post_with_links_routes_to_forward_flow(
+    database: Database,
+) -> None:
+    """A forwarded post with substantive prose plus embedded links is summarized
+    and link-enriched via the forward flow -- it is not a bare link bundle, so
+    the multi-source aggregation comparison must not fire.
+    """
+    (
+        router,
+        forward_processor,
+        _attachment_processor,
+        aggregation_handler,
+        _response_formatter,
+        _url_handler,
+    ) = _make_router(database)
+
+    prose = "This is a substantive channel post with real analysis and context. " * 6
+    message = _base_message(
+        text=f"{prose} https://example.com/a https://example.com/b",
+        forward_from_chat=SimpleNamespace(id=-100200300, title="Forwarded Channel"),
+        forward_from_message_id=123,
+        forward_date=1700000000,
+    )
+
+    await router.route_message(message)
+
+    forward_processor.handle_forward_flow.assert_awaited_once()
+    aggregation_handler.handle_message_bundle.assert_not_awaited()

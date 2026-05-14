@@ -329,6 +329,9 @@ def _build_processing_stack(
         llm_repo=repositories.llm_repository,
         user_repo=repositories.user_repository,
         related_reads_service=related_reads_service,
+        # Share the URL flow's content extractor so forwarded posts can scrape
+        # the full content of their embedded links into the summary prompt.
+        content_extractor=url_processor.content_extractor,
     )
     attachment_processor = AttachmentProcessor(
         cfg=cfg,

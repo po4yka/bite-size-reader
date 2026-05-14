@@ -15,6 +15,7 @@ from app.prompts.manager import get_prompt_manager
 if TYPE_CHECKING:
     from collections.abc import Callable
 
+    from app.adapters.content.forward_link_enricher import ForwardLinkEnricher
     from app.adapters.external.formatting.protocols import (
         ResponseFormatterFacade as ResponseFormatter,
     )
@@ -45,12 +46,14 @@ class ForwardContentProcessor:
         db: Database,
         response_formatter: ResponseFormatter,
         audit_func: Callable[[str, str, dict], None],
+        forward_link_enricher: ForwardLinkEnricher | None = None,
     ) -> None:
         self.cfg = cfg
         self.db = db
         self.response_formatter = response_formatter
         self._audit = audit_func
         self.message_persistence = MessagePersistence(db)
+        self._link_enricher = forward_link_enricher
 
     async def process_forward_content(
         self, message: Any, correlation_id: str | None = None
@@ -95,6 +98,19 @@ class ForwardContentProcessor:
         except Exception as exc:
             raise_if_cancelled(exc)
             logger.debug("forward_text_normalize_failed", exc_info=True)
+
+        # Fetch the content of links embedded in the post and fold it into the
+        # prompt so the summary reflects the full referenced articles. Runs
+        # before persistence so the enriched text is what gets stored, cached,
+        # and reused by the insights/article background tasks. Fails soft --
+        # returns the un-enriched prompt unchanged on any error.
+        if self._link_enricher is not None:
+            prompt = await self._link_enricher.enrich(
+                message=message,
+                base_prompt=prompt,
+                post_text=text,
+                correlation_id=correlation_id,
+            )
 
         # Create request with content text
         req_id = await self._create_forward_request(message, correlation_id, prompt)

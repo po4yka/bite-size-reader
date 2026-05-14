@@ -15,6 +15,7 @@ from app.db.user_interactions import async_safe_update_user_interaction
 from app.domain.models.request import RequestStatus
 
 if TYPE_CHECKING:
+    from app.adapters.content.content_extractor import ContentExtractor
     from app.adapters.external.formatting.protocols import (
         ResponseFormatterFacade as ResponseFormatter,
     )
@@ -57,6 +58,7 @@ class ForwardProcessor:
         llm_repo: LLMRepositoryPort,
         user_repo: UserRepositoryPort,
         related_reads_service: RelatedReadsService | None = None,
+        content_extractor: ContentExtractor | None = None,
     ) -> None:
         self.cfg = cfg
         self.db = db
@@ -72,12 +74,21 @@ class ForwardProcessor:
         self._related_reads_service = related_reads_service
         self._summarization_runtime: SummarizationRuntime | None = None
 
+        # Enrich forwarded-post summaries with the content of embedded links,
+        # when a content extractor is available to scrape them.
+        link_enricher = None
+        if content_extractor is not None:
+            from app.adapters.content.forward_link_enricher import ForwardLinkEnricher
+
+            link_enricher = ForwardLinkEnricher(cfg=cfg, content_extractor=content_extractor)
+
         # Initialize components
         self.content_processor = ForwardContentProcessor(
             cfg=cfg,
             db=db,
             response_formatter=response_formatter,
             audit_func=audit_func,
+            forward_link_enricher=link_enricher,
         )
 
         self.summarizer = ForwardSummarizer(

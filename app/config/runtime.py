@@ -28,18 +28,10 @@ class RuntimeConfig(BaseModel):
     enable_textacy: bool = Field(default=False, validation_alias="TEXTACY_ENABLED")
     enable_chunking: bool = Field(default=True, validation_alias="CHUNKING_ENABLED")
     chunk_max_chars: int = Field(default=200000, validation_alias="CHUNK_MAX_CHARS")
-    log_truncate_length: int = Field(
-        default=1000, validation_alias="LOG_TRUNCATE_LENGTH"
-    )
-    topic_search_max_results: int = Field(
-        default=5, validation_alias="TOPIC_SEARCH_MAX_RESULTS"
-    )
-    max_concurrent_calls: int = Field(
-        default=4, validation_alias="MAX_CONCURRENT_CALLS"
-    )
-    summary_prompt_version: str = Field(
-        default="v1", validation_alias="SUMMARY_PROMPT_VERSION"
-    )
+    log_truncate_length: int = Field(default=1000, validation_alias="LOG_TRUNCATE_LENGTH")
+    topic_search_max_results: int = Field(default=5, validation_alias="TOPIC_SEARCH_MAX_RESULTS")
+    max_concurrent_calls: int = Field(default=4, validation_alias="MAX_CONCURRENT_CALLS")
+    summary_prompt_version: str = Field(default="v1", validation_alias="SUMMARY_PROMPT_VERSION")
     summary_streaming_enabled: bool = Field(
         default=True, validation_alias="SUMMARY_STREAMING_ENABLED"
     )
@@ -65,9 +57,7 @@ class RuntimeConfig(BaseModel):
     semaphore_acquire_timeout_sec: float = Field(
         default=30.0, validation_alias="SEMAPHORE_ACQUIRE_TIMEOUT_SEC"
     )
-    llm_call_timeout_sec: float = Field(
-        default=420.0, validation_alias="LLM_CALL_TIMEOUT_SEC"
-    )
+    llm_call_timeout_sec: float = Field(default=420.0, validation_alias="LLM_CALL_TIMEOUT_SEC")
     llm_per_model_timeout_min_sec: float = Field(
         default=90.0, validation_alias="LLM_PER_MODEL_TIMEOUT_MIN_SEC"
     )
@@ -77,12 +67,8 @@ class RuntimeConfig(BaseModel):
     dedupe_retry_grace_sec: float = Field(
         default=60.0, validation_alias="RUNTIME_DEDUPE_RETRY_GRACE_SEC"
     )
-    llm_call_max_retries: int = Field(
-        default=2, validation_alias="LLM_CALL_MAX_RETRIES"
-    )
-    json_parse_timeout_sec: float = Field(
-        default=60.0, validation_alias="JSON_PARSE_TIMEOUT_SEC"
-    )
+    llm_call_max_retries: int = Field(default=2, validation_alias="LLM_CALL_MAX_RETRIES")
+    json_parse_timeout_sec: float = Field(default=60.0, validation_alias="JSON_PARSE_TIMEOUT_SEC")
     summary_two_pass_enabled: bool = Field(
         default=False, validation_alias="SUMMARY_TWO_PASS_ENABLED"
     )
@@ -104,23 +90,27 @@ class RuntimeConfig(BaseModel):
     aggregation_default_mode: str = Field(
         default="per_url", validation_alias="AGGREGATION_DEFAULT_MODE"
     )
-    rate_limit_max_requests: int = Field(
-        default=10, validation_alias="RATE_LIMIT_MAX_REQUESTS"
-    )
-    rate_limit_window_seconds: int = Field(
-        default=60, validation_alias="RATE_LIMIT_WINDOW_SECONDS"
-    )
-    rate_limit_max_concurrent: int = Field(
-        default=3, validation_alias="RATE_LIMIT_MAX_CONCURRENT"
-    )
-    related_reads_enabled: bool = Field(
-        default=True, validation_alias="RELATED_READS_ENABLED"
-    )
+    rate_limit_max_requests: int = Field(default=10, validation_alias="RATE_LIMIT_MAX_REQUESTS")
+    rate_limit_window_seconds: int = Field(default=60, validation_alias="RATE_LIMIT_WINDOW_SECONDS")
+    rate_limit_max_concurrent: int = Field(default=3, validation_alias="RATE_LIMIT_MAX_CONCURRENT")
+    related_reads_enabled: bool = Field(default=True, validation_alias="RELATED_READS_ENABLED")
     related_reads_min_similarity: float = Field(
         default=0.75, validation_alias="RELATED_READS_MIN_SIMILARITY"
     )
     url_flow_streaming_enabled: bool = Field(
         default=True, validation_alias="URL_FLOW_STREAMING_ENABLED"
+    )
+    # Forwarded-post link enrichment: fetch the full content of links embedded
+    # in a forwarded channel post and fold it into the post's summary.
+    forward_link_max_links: int = Field(default=5, validation_alias="FORWARD_LINK_MAX_LINKS")
+    forward_link_per_article_chars: int = Field(
+        default=8000, validation_alias="FORWARD_LINK_PER_ARTICLE_CHARS"
+    )
+    forward_link_per_url_timeout_sec: float = Field(
+        default=25.0, validation_alias="FORWARD_LINK_PER_URL_TIMEOUT_SEC"
+    )
+    forward_link_bundle_prose_threshold: int = Field(
+        default=200, validation_alias="FORWARD_LINK_BUNDLE_PROSE_THRESHOLD"
     )
 
     @field_validator("llm_provider", mode="before")
@@ -175,11 +165,34 @@ class RuntimeConfig(BaseModel):
         return parse_positive_int(value, field_name=info.field_name, default=default)
 
     @field_validator(
+        "forward_link_max_links",
+        "forward_link_per_article_chars",
+        "forward_link_bundle_prose_threshold",
+        mode="before",
+    )
+    @classmethod
+    def _validate_forward_link_ints(cls, value: Any, info: ValidationInfo) -> int:
+        bounds: dict[str, tuple[int, int]] = {
+            "forward_link_max_links": (1, 10),
+            "forward_link_per_article_chars": (500, 40000),
+            "forward_link_bundle_prose_threshold": (0, 10000),
+        }
+        low, high = bounds[info.field_name]
+        default = cls.model_fields[info.field_name].default
+        try:
+            parsed = int(str(value if value not in (None, "") else default))
+        except (ValueError, TypeError) as exc:
+            msg = f"{info.field_name} must be a valid integer"
+            raise ValueError(msg) from exc
+        return max(low, min(high, parsed))
+
+    @field_validator(
         "telegram_reply_timeout_sec",
         "semaphore_acquire_timeout_sec",
         "llm_call_timeout_sec",
         "json_parse_timeout_sec",
         "dedupe_retry_grace_sec",
+        "forward_link_per_url_timeout_sec",
         mode="before",
     )
     @classmethod
@@ -191,9 +204,7 @@ class RuntimeConfig(BaseModel):
             msg = f"{info.field_name} must be a valid number"
             raise ValueError(msg) from exc
         if parsed < 0.1 or parsed > 3600.0:
-            msg = (
-                f"{info.field_name} must be between 0.1 and 3600 seconds, got {parsed}"
-            )
+            msg = f"{info.field_name} must be between 0.1 and 3600 seconds, got {parsed}"
             raise ValueError(msg)
         return parsed
 
