@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import hashlib
-import logging
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -177,32 +176,34 @@ async def test_generate_embedding_for_summary_handles_embedding_errors(generator
 
 
 @pytest.mark.asyncio
-async def test_dependency_error_is_logged_without_traceback(
-    generator_fixture, caplog: pytest.LogCaptureFixture
-) -> None:
+async def test_dependency_error_is_logged_without_traceback(generator_fixture) -> None:
     """A missing torch/CUDA backend must not spew a traceback per summary --
     callers degrade quietly with a single concise warning, no exc_info.
+
+    The module logger is patched directly (rather than asserting via caplog)
+    because the bot test suite reconfigures loguru's root handler, which makes
+    caplog capture order-dependent.
     """
     generator, embedding_service, _, _, _ = generator_fixture
     embedding_service.generate_embedding.side_effect = EmbeddingDependencyUnavailableError(
         "libcudart.so.13: cannot open shared object file"
     )
 
-    with caplog.at_level(logging.WARNING):
+    with patch(
+        "app.application.services.summary_embedding_generator.logger"
+    ) as mock_logger:
         first = await generator.generate_embedding_for_summary(12, {"summary_250": "text"})
         second = await generator.generate_embedding_for_summary(13, {"summary_250": "text"})
 
     assert first is False
     assert second is False
-    # No record carries a traceback (logger.exception sets exc_info).
-    assert all(record.exc_info is None for record in caplog.records)
+    # No traceback dumped: logger.exception (which carries exc_info) is never
+    # used for the dependency-unavailable path.
+    mock_logger.exception.assert_not_called()
     # The dependency outage is surfaced at most once, not once per summary.
-    dependency_warnings = [
-        record
-        for record in caplog.records
-        if record.levelno >= logging.WARNING and "dependency" in record.getMessage().lower()
-    ]
-    assert len(dependency_warnings) == 1
+    assert mock_logger.warning.call_count == 1
+    warning_event = mock_logger.warning.call_args[0][0]
+    assert "dependency" in warning_event.lower()
 
 
 @pytest.mark.asyncio
