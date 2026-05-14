@@ -98,6 +98,30 @@ DOCKER_BUILDKIT=1 docker buildx build "${BUILD_FLAGS[@]}" .
 LOCAL_SHA=$(docker image inspect "$IMAGE_TAG" --format '{{.Id}}')
 echo "==> Streaming ${IMAGE_TAG} to ${RASPI_HOST} (gzip in transit)"
 echo "    local image SHA: $LOCAL_SHA"
+
+# Read the streamed image's SHA back from the Pi, retrying on transient
+# failures. The verifying `ssh ... docker image inspect` call occasionally
+# exits 255 (connection dropped) even though the image loaded fine, and a
+# slow `docker load` may not have registered the image by the first probe.
+# Retry a few times before treating an empty result as a real failure --
+# otherwise a successful deploy aborts before the restart step.
+remote_image_sha() {
+  local attempt sha="" max_attempts=5
+  for ((attempt = 1; attempt <= max_attempts; attempt++)); do
+    sha=$(ssh -o BatchMode=yes "$RASPI_HOST" \
+      "docker image inspect ${IMAGE_TAG} --format '{{.Id}}'" 2>/dev/null || true)
+    if [[ -n "$sha" ]]; then
+      printf '%s\n' "$sha"
+      return 0
+    fi
+    if [[ $attempt -lt $max_attempts ]]; then
+      echo "    image SHA probe ${attempt}/${max_attempts} empty; retrying in 3s..." >&2
+      sleep 3
+    fi
+  done
+  return 1
+}
+
 # `ssh 'gunzip | docker load'` occasionally exits 255 after the remote `docker
 # load` completes (SSH disconnects before flushing the channel). Treat exit
 # code as advisory: verify success by inspecting the image SHA on the Pi.
@@ -105,12 +129,14 @@ set +e
 docker save "$IMAGE_TAG" | gzip | ssh "$RASPI_HOST" 'gunzip | docker load'
 STREAM_EXIT=$?
 set -e
-REMOTE_SHA=$(ssh "$RASPI_HOST" "docker image inspect ${IMAGE_TAG} --format '{{.Id}}'" 2>/dev/null || true)
+REMOTE_SHA=$(remote_image_sha || true)
 if [[ -z "$REMOTE_SHA" || "$LOCAL_SHA" != "$REMOTE_SHA" ]]; then
   echo "ERROR: image stream verification failed" >&2
   echo "  local SHA:  $LOCAL_SHA" >&2
   echo "  remote SHA: ${REMOTE_SHA:-<not found>}" >&2
   echo "  ssh exit:   $STREAM_EXIT" >&2
+  echo "  hint: the image may have loaded despite this -- verify with:" >&2
+  echo "    ssh ${RASPI_HOST} \"docker image inspect ${IMAGE_TAG} --format '{{.Id}}'\"" >&2
   exit 1
 fi
 if [[ $STREAM_EXIT -ne 0 ]]; then
