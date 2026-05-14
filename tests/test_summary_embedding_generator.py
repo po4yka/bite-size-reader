@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import hashlib
+import logging
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from app.application.ports.search import EmbeddingDependencyUnavailableError
 from app.application.services.summary_embedding_generator import SummaryEmbeddingGenerator
 from app.core.embedding_text import prepare_text_for_embedding
 
@@ -172,6 +174,35 @@ async def test_generate_embedding_for_summary_handles_embedding_errors(generator
     )
 
     assert created is False
+
+
+@pytest.mark.asyncio
+async def test_dependency_error_is_logged_without_traceback(
+    generator_fixture, caplog: pytest.LogCaptureFixture
+) -> None:
+    """A missing torch/CUDA backend must not spew a traceback per summary --
+    callers degrade quietly with a single concise warning, no exc_info.
+    """
+    generator, embedding_service, _, _, _ = generator_fixture
+    embedding_service.generate_embedding.side_effect = EmbeddingDependencyUnavailableError(
+        "libcudart.so.13: cannot open shared object file"
+    )
+
+    with caplog.at_level(logging.WARNING):
+        first = await generator.generate_embedding_for_summary(12, {"summary_250": "text"})
+        second = await generator.generate_embedding_for_summary(13, {"summary_250": "text"})
+
+    assert first is False
+    assert second is False
+    # No record carries a traceback (logger.exception sets exc_info).
+    assert all(record.exc_info is None for record in caplog.records)
+    # The dependency outage is surfaced at most once, not once per summary.
+    dependency_warnings = [
+        record
+        for record in caplog.records
+        if record.levelno >= logging.WARNING and "dependency" in record.getMessage().lower()
+    ]
+    assert len(dependency_warnings) == 1
 
 
 @pytest.mark.asyncio

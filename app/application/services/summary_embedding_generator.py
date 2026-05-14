@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 from typing import TYPE_CHECKING, Any
 
+from app.application.ports.search import EmbeddingDependencyUnavailableError
 from app.core.embedding_text import prepare_text_for_embedding
 from app.core.logging_utils import get_logger
 
@@ -35,6 +36,10 @@ class SummaryEmbeddingGenerator:
         self._embedding_service = embedding_service
         self._model_version = model_version
         self._max_token_length = max_token_length
+        # The embedding backend being unavailable (torch/CUDA libs missing) is a
+        # process-wide condition, not a per-summary one -- warn once, then stay
+        # quiet so a reconcile batch does not emit one record per row.
+        self._dependency_warning_logged = False
 
     @property
     def embedding_service(self) -> EmbeddingProviderPort:
@@ -110,6 +115,21 @@ class SummaryEmbeddingGenerator:
                 },
             )
             return True
+        except EmbeddingDependencyUnavailableError as exc:
+            # Hard environment outage (e.g. torch/CUDA libs missing): no
+            # traceback, and only one warning for the whole process lifetime.
+            if not self._dependency_warning_logged:
+                logger.warning(
+                    "embedding_skipped_dependency_unavailable",
+                    extra={"summary_id": summary_id, "detail": str(exc)},
+                )
+                self._dependency_warning_logged = True
+            else:
+                logger.debug(
+                    "embedding_skipped_dependency_unavailable",
+                    extra={"summary_id": summary_id},
+                )
+            return False
         except (RuntimeError, ValueError, OSError, TypeError):
             logger.exception(
                 "embedding_generation_failed",

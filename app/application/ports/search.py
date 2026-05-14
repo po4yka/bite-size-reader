@@ -10,6 +10,16 @@ if TYPE_CHECKING:
     from app.application.dto.vector_search import VectorSearchHitDTO
 
 
+class EmbeddingDependencyUnavailableError(RuntimeError):
+    """Raised when the embedding backend's native dependencies are unavailable.
+
+    Distinct from a transient embedding failure: this signals a hard
+    environment problem (e.g. ``torch``/CUDA shared libraries missing on the
+    host) that will not resolve on retry. Callers should degrade quietly --
+    one concise warning -- rather than log a traceback for every summary.
+    """
+
+
 @runtime_checkable
 class TopicSearchResultItemPort(Protocol):
     """Normalized topic-search item returned by an external search provider."""

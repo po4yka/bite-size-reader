@@ -6,6 +6,7 @@ import asyncio
 from collections.abc import Sequence
 from typing import TYPE_CHECKING, Any
 
+from app.application.ports.search import EmbeddingDependencyUnavailableError
 from app.core.logging_utils import get_logger
 from app.infrastructure.embedding.embedding_protocol import EmbeddingSerializationMixin
 
@@ -43,6 +44,10 @@ class EmbeddingService(EmbeddingSerializationMixin):
         self._model_registry = model_registry or DEFAULT_MODELS.copy()
         self._models: dict[str, SentenceTransformer] = {}  # Model cache per language
         self._dimensions: dict[str, int] = {}  # Dimensions per model
+        # Cached hard-dependency failure (e.g. torch/CUDA libs missing). Once
+        # the sentence-transformers import fails, re-attempting it per call is
+        # both pointless and slow, so the failure is remembered and re-raised.
+        self._dependency_error: EmbeddingDependencyUnavailableError | None = None
 
     def _get_model_name_for_language(self, language: str | None) -> str:
         """Get the appropriate model name for a language."""
@@ -53,9 +58,27 @@ class EmbeddingService(EmbeddingSerializationMixin):
         return self._model_registry.get(language, self._default_model)
 
     def _ensure_model(self, model_name: str) -> SentenceTransformer:
-        """Lazy load the embedding model (cached per model name)."""
+        """Lazy load the embedding model (cached per model name).
+
+        Raises:
+            EmbeddingDependencyUnavailableError: when the sentence-transformers
+                / torch backend cannot be imported on this host. The failure is
+                cached so subsequent calls fail fast instead of retrying the
+                expensive (and doomed) import.
+        """
+        if self._dependency_error is not None:
+            raise self._dependency_error
+
         if model_name not in self._models:
-            from sentence_transformers import SentenceTransformer
+            try:
+                from sentence_transformers import SentenceTransformer
+            except (ImportError, OSError, ValueError) as exc:
+                # torch surfaces missing CUDA libs as OSError/ValueError during
+                # import; treat any of these as a hard, non-transient outage.
+                self._dependency_error = EmbeddingDependencyUnavailableError(
+                    f"sentence-transformers backend unavailable: {exc}"
+                )
+                raise self._dependency_error from exc
 
             self._models[model_name] = SentenceTransformer(model_name)
             # Get embedding dimensions
