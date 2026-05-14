@@ -164,12 +164,19 @@ docker run --env-file .env -v $(pwd)/data:/data --name ratatoskr ratatoskr:lates
 # restart via the Pi compose overlay. The Pi never runs `docker build`,
 # avoiding the heavy CPU/memory load. Requires `ssh raspi` to work and
 # `~/ratatoskr` to exist on the Pi (override with RASPI_REMOTE_PATH).
+# The shipped IMAGE is the single source of truth for app code -- the base
+# compose file no longer bind-mounts ../../app, so `make pi-deploy` actually
+# takes effect. Do NOT re-add an app bind mount to docker-compose.yml.
 make pi-deploy                                # build + ship + restart `ratatoskr`
 make pi-deploy SERVICE=mobile-api             # ship the mobile-api image instead
 make pi-deploy-no-cache                       # full rebuild before shipping
 make pi-build-only                            # ship without restarting on the Pi
 # Or call the script directly for full flag/env coverage:
 bash tools/scripts/build-and-deploy-pi.sh --help
+
+# Local hot-reload (opt-in): bind-mount app/ + bot.py over the image so edits
+# apply on `restart` without a rebuild. Never use this overlay on the Pi.
+docker compose -f ops/docker/docker-compose.yml -f ops/docker/docker-compose.dev.yml up -d ratatoskr
 
 # CLI Summary Runner
 python -m app.cli.summary --url https://example.com/article

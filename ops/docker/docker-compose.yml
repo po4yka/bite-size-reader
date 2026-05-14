@@ -11,9 +11,12 @@ services:
       - path: ../../.env
         required: false
     volumes:
+      # App code is baked into the image (Dockerfile `COPY app ./app`). Do NOT
+      # bind-mount ../../app or ../../bot.py here: a bind mount silently shadows
+      # the shipped image, so `make pi-deploy` would build/ship a new image that
+      # never actually runs. For local hot-reload, opt in explicitly with
+      # `-f ops/docker/docker-compose.dev.yml`.
       - ../../data:/data
-      - ../../app:/app/app:ro
-      - ../../bot.py:/app/bot.py:ro
       - ../../config:/app/config:ro
       - ../../alembic.ini:/app/alembic.ini:ro
       - /etc/localtime:/etc/localtime:ro
@@ -123,9 +126,9 @@ services:
       - OTEL_ENABLED=${OTEL_ENABLED:-false}
       - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT:-http://tempo:4317}
     volumes:
+      # App code ships in the image -- see the note on the ratatoskr service
+      # above. Bind-mounting ../../app here would shadow the deployed image.
       - ../../data:/data
-      - ../../app:/app/app:ro
-      - ../../bot.py:/app/bot.py:ro
       - ../../config:/app/config:ro
       - ../../alembic.ini:/app/alembic.ini:ro
       - /etc/localtime:/etc/localtime:ro

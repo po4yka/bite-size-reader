@@ -1,0 +1,27 @@
+# Local-development compose overlay -- OPT-IN, never used on the Pi.
+#
+# The base docker-compose.yml deliberately does NOT bind-mount the app code:
+# a bind mount shadows the code baked into the image, which made `make
+# pi-deploy` ship images that never actually ran (see the volumes note in
+# docker-compose.yml). For the Pi the image is the single source of truth.
+#
+# This overlay re-adds the source bind mounts so local development gets
+# edit-and-restart hot-reload without an image rebuild. Use it explicitly:
+#
+#   docker compose \
+#     -f ops/docker/docker-compose.yml \
+#     -f ops/docker/docker-compose.dev.yml \
+#     up -d ratatoskr
+#
+# Do NOT combine this with docker-compose.pi.yml.
+
+services:
+  ratatoskr:
+    volumes:
+      - ../../app:/app/app:ro
+      - ../../bot.py:/app/bot.py:ro
+
+  mobile-api:
+    volumes:
+      - ../../app:/app/app:ro
+      - ../../bot.py:/app/bot.py:ro
