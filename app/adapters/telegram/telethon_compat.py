@@ -13,7 +13,7 @@ logger = get_logger(__name__)
 
 TELETHON_AVAILABLE = True
 try:  # pragma: no cover - exercised when dependency is installed
-    from telethon import Button, TelegramClient, events, functions, types
+    from telethon import Button, TelegramClient, events, functions, types, utils
     from telethon.errors import SessionPasswordNeededError as _SessionPasswordNeededError
 except Exception:  # pragma: no cover - allow import in minimal test envs
     Button = None
@@ -21,6 +21,7 @@ except Exception:  # pragma: no cover - allow import in minimal test envs
     events = None
     functions = None
     types = None
+    utils = None
 
     class _SessionPasswordNeededError(Exception):  # type: ignore[no-redef]
         """Fallback exception used when Telethon is unavailable."""
@@ -414,6 +415,106 @@ class TelethonMessageAdapter:
     def caption(self) -> str | None:
         return None
 
+    # -- Forward metadata -------------------------------------------------
+    # Telethon exposes forwards via the raw ``fwd_from`` (``MessageFwdHeader``)
+    # and the entity-enriched ``message.forward`` helper. The rest of the bot
+    # (router, ``TelegramMessage`` parser, forward processor) speaks the
+    # aiogram-style ``forward_*`` vocabulary, so translate it here. Without
+    # these properties ``__getattr__`` delegated the names to the raw Telethon
+    # message, which has no such attributes, so every forward was misread as
+    # plain text and answered with the generic fallback prompt.
+
+    @property
+    def _fwd_header(self) -> Any:
+        """Raw Telethon ``MessageFwdHeader`` for this message, or None."""
+        return getattr(self._message, "fwd_from", None)
+
+    @property
+    def _fwd(self) -> Any:
+        """Telethon's entity-enriched ``Forward`` helper, or None."""
+        try:
+            return getattr(self._message, "forward", None)
+        except Exception:  # pragma: no cover - defensive: never block routing
+            return None
+
+    @property
+    def forward_date(self) -> Any:
+        header = self._fwd_header
+        return getattr(header, "date", None) if header is not None else None
+
+    @property
+    def forward_sender_name(self) -> str | None:
+        """Origin name for forwards where the sender hid their account."""
+        header = self._fwd_header
+        return getattr(header, "from_name", None) if header is not None else None
+
+    @property
+    def forward_signature(self) -> str | None:
+        header = self._fwd_header
+        return getattr(header, "post_author", None) if header is not None else None
+
+    @property
+    def forward_from_message_id(self) -> int | None:
+        """Message id of the original post in the source channel/chat."""
+        header = self._fwd_header
+        if header is None:
+            return None
+        raw = getattr(header, "channel_post", None) or getattr(header, "saved_from_msg_id", None)
+        try:
+            return int(raw) if raw is not None else None
+        except (TypeError, ValueError):
+            return None
+
+    @property
+    def forward_from_chat(self) -> Any:
+        """Channel/group the message was forwarded from, aiogram-style."""
+        header = self._fwd_header
+        if header is None:
+            return None
+        from_id = getattr(header, "from_id", None)
+        if from_id is None:
+            return None
+        if types is not None and isinstance(from_id, types.PeerUser):
+            return None  # user forward -- see ``forward_from``
+        chat_id = _peer_to_id(from_id)
+        if chat_id is None:
+            return None
+        entity = getattr(self._fwd, "chat", None)
+        chat_type = "channel"
+        if entity is not None:
+            if getattr(entity, "megagroup", False):
+                chat_type = "supergroup"
+            elif getattr(entity, "broadcast", False):
+                chat_type = "channel"
+            else:
+                chat_type = "group"
+        return _Object(
+            id=chat_id,
+            username=getattr(entity, "username", None),
+            title=getattr(entity, "title", None),
+            type=chat_type,
+        )
+
+    @property
+    def forward_from(self) -> Any:
+        """User the message was forwarded from, aiogram-style."""
+        header = self._fwd_header
+        if header is None:
+            return None
+        from_id = getattr(header, "from_id", None)
+        if from_id is None or types is None or not isinstance(from_id, types.PeerUser):
+            return None
+        user_id = _peer_to_id(from_id)
+        if user_id is None:
+            return None
+        entity = getattr(self._fwd, "sender", None)
+        return _Object(
+            id=user_id,
+            first_name=getattr(entity, "first_name", None) or "",
+            username=getattr(entity, "username", None),
+            is_bot=bool(getattr(entity, "bot", False)),
+        )
+
     async def reply_text(self, text: str, **kwargs: Any) -> Any:
         return await self._event.reply(
             text,
@@ -459,6 +560,21 @@ class _Object:
     first_name: str | None = None
     username: str | None = None
     is_bot: bool = False
+    title: str | None = None
+    type: str | None = None
+
+
+def _peer_to_id(peer: Any) -> int | None:
+    """Return the canonical marked id for a Telethon peer (-100… for channels).
+
+    Returns None when the peer is missing or Telethon is unavailable.
+    """
+    if peer is None or utils is None:
+        return None
+    try:
+        return int(utils.get_peer_id(peer))
+    except (TypeError, ValueError, AttributeError):
+        return None
 
 
 def _filter_send_kwargs(kwargs: dict[str, Any]) -> dict[str, Any]:
