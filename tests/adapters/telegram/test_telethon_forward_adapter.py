@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 from types import SimpleNamespace
-from typing import Any
+from typing import Any, cast
 
 from telethon.tl.types import PeerChannel, PeerUser
 
@@ -23,7 +23,7 @@ from app.adapters.telegram.telethon_compat import TelethonMessageAdapter
 
 def _adapter(message: Any) -> TelethonMessageAdapter:
     event = SimpleNamespace(message=message, sender=None)
-    return TelethonMessageAdapter(event, SimpleNamespace())
+    return TelethonMessageAdapter(event, cast("Any", SimpleNamespace()))
 
 
 def _channel_forward_message() -> SimpleNamespace:

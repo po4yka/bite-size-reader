@@ -415,6 +415,23 @@ class TelethonMessageAdapter:
     def caption(self) -> str | None:
         return None
 
+    @property
+    def entities(self) -> list[Any]:
+        """Message entities translated to the aiogram-style shape.
+
+        Without this, ``__getattr__`` delegated ``.entities`` to the raw
+        Telethon message, whose entity objects carry no ``.type`` -- so every
+        entity (including hyperlinked ``text_link`` words) was parsed as a
+        ``mention`` and ``TelegramMessage.get_urls()`` always returned ``[]``.
+        """
+        return _translate_entities(getattr(self._message, "entities", None))
+
+    @property
+    def caption_entities(self) -> list[Any]:
+        """Telethon keeps caption text + entities on the message itself, so the
+        aiogram-style separate caption-entity list is always empty here."""
+        return []
+
     # -- Forward metadata -------------------------------------------------
     # Telethon exposes forwards via the raw ``fwd_from`` (``MessageFwdHeader``)
     # and the entity-enriched ``message.forward`` helper. The rest of the bot
@@ -562,6 +579,66 @@ class _Object:
     is_bot: bool = False
     title: str | None = None
     type: str | None = None
+
+
+@dataclass(slots=True)
+class _Entity:
+    """aiogram-shaped message entity translated from a raw Telethon entity."""
+
+    type: str
+    offset: int = 0
+    length: int = 0
+    url: str | None = None
+
+
+# Telethon encodes an entity's kind as the class name, not a ``.type`` field.
+# Map the classes that correspond to ``MessageEntityType`` so the downstream
+# parser (``_telegram_obj_to_dict`` -> ``MessageEntity.from_dict``) receives a
+# real type instead of silently defaulting every entity to ``mention``.
+_TELETHON_ENTITY_TYPES: dict[str, str] = {
+    "MessageEntityMention": "mention",
+    "MessageEntityHashtag": "hashtag",
+    "MessageEntityCashtag": "cashtag",
+    "MessageEntityBotCommand": "bot_command",
+    "MessageEntityUrl": "url",
+    "MessageEntityEmail": "email",
+    "MessageEntityPhone": "phone_number",
+    "MessageEntityBold": "bold",
+    "MessageEntityItalic": "italic",
+    "MessageEntityUnderline": "underline",
+    "MessageEntityStrike": "strikethrough",
+    "MessageEntitySpoiler": "spoiler",
+    "MessageEntityCode": "code",
+    "MessageEntityPre": "pre",
+    "MessageEntityTextUrl": "text_link",
+    "MessageEntityMentionName": "text_mention",
+    "InputMessageEntityMentionName": "text_mention",
+    "MessageEntityCustomEmoji": "custom_emoji",
+}
+
+
+def _translate_entities(raw: Any) -> list[_Entity]:
+    """Translate a raw Telethon entity list to aiogram-shaped ``_Entity`` objects.
+
+    Unrecognized entity classes (e.g. ``MessageEntityBlockquote``, which has no
+    ``MessageEntityType`` counterpart) are skipped rather than mislabeled.
+    """
+    if not raw:
+        return []
+    translated: list[_Entity] = []
+    for entity in raw:
+        mapped = _TELETHON_ENTITY_TYPES.get(type(entity).__name__)
+        if mapped is None:
+            continue
+        translated.append(
+            _Entity(
+                type=mapped,
+                offset=int(getattr(entity, "offset", 0) or 0),
+                length=int(getattr(entity, "length", 0) or 0),
+                url=getattr(entity, "url", None),
+            )
+        )
+    return translated
 
 
 def _peer_to_id(peer: Any) -> int | None:

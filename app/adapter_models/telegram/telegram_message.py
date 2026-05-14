@@ -538,16 +538,23 @@ class TelegramMessage(BaseModel):
         return result if isinstance(result, dict | list) else None
 
     def get_urls(self) -> list[str]:
-        """Extract URLs from text and entities."""
+        """Extract URLs from the effective text/caption and their entities.
+
+        Covers both ``url`` entities (literal URL in the text) and ``text_link``
+        entities (hyperlinked words, where the target lives in ``entity.url``).
+        Uses ``get_effective_entities()`` so URLs in a media caption are not
+        missed.
+        """
         urls: list[str] = []
 
-        if not self.text:
+        text = self.get_effective_text()
+        if not text:
             return urls
 
-        for entity in self.entities:
+        for entity in self.get_effective_entities():
             if entity.type in [MessageEntityType.URL, MessageEntityType.TEXT_LINK]:
                 if entity.type == MessageEntityType.URL:
-                    url = self.text[entity.offset : entity.offset + entity.length]
+                    url = text[entity.offset : entity.offset + entity.length]
                 else:
                     url = entity.url or ""
                 if url and url.strip():
