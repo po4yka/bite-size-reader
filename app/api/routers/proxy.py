@@ -15,7 +15,7 @@ from app.api.exceptions import (
 )
 from app.api.routers.auth import get_current_user
 from app.core.logging_utils import get_logger, log_exception
-from app.security.ssrf import is_url_safe
+from app.security.ssrf import is_url_safe, make_safe_async_client
 
 logger = get_logger(__name__)
 router = APIRouter()
@@ -60,7 +60,7 @@ async def proxy_image(
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
         }
 
-        async with httpx.AsyncClient(follow_redirects=False, timeout=10.0) as client:
+        async with make_safe_async_client(follow_redirects=False, timeout=10.0) as client:
             max_redirects = 5
             current_url = url
             for _ in range(max_redirects + 1):

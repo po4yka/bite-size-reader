@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING, Any
 import httpx
 
 from app.core.logging_utils import get_logger
+from app.security.ssrf import make_safe_async_client
 from app.domain.services.webhook_service import (
     build_webhook_payload,
     is_webhook_url_safe,
@@ -50,7 +51,7 @@ class WebhookDispatcher:
 
     async def _get_client(self) -> httpx.AsyncClient:
         if self._http_client is None:
-            self._http_client = httpx.AsyncClient(
+            self._http_client = make_safe_async_client(
                 timeout=httpx.Timeout(
                     connect=_CONNECT_TIMEOUT,
                     read=_READ_TIMEOUT,

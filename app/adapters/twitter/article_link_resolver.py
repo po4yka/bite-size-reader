@@ -7,9 +7,8 @@ from dataclasses import dataclass
 from typing import Literal
 from urllib.parse import urljoin, urlparse, urlunparse
 
-import httpx
-
 from app.core.urls.twitter import canonicalize_twitter_url, extract_twitter_article_id
+from app.security.ssrf import is_url_safe, make_safe_async_client
 
 ResolutionReason = Literal[
     "path_match",
@@ -129,21 +128,56 @@ async def resolve_twitter_article_link(
     if host not in _RESOLVABLE_HOSTS:
         return _build_result(input_url=url, reason="not_article")
 
+    # Preflight SSRF check before making any network request.
+    safe, _ = is_url_safe(normalized_input)
+    if not safe:
+        return _build_result(input_url=url, reason="resolve_failed")
+
     try:
         resolved_url: str | None = None
         canonical_hint: str | None = None
 
-        async with httpx.AsyncClient(follow_redirects=True, timeout=timeout_s) as client:
-            head_resp = await client.head(normalized_input)
-            resolved_url = _normalize_output_url(str(head_resp.url))
+        async with make_safe_async_client(follow_redirects=False, timeout=timeout_s) as client:
+            # HEAD with manual redirect following (5-hop cap, per-hop SSRF check).
+            current_url = normalized_input
+            head_resp = None
+            for _ in range(5):
+                safe, _ = is_url_safe(current_url)
+                if not safe:
+                    return _build_result(input_url=url, reason="resolve_failed")
+                head_resp = await client.head(current_url)
+                if head_resp.status_code in {301, 302, 303, 307, 308}:
+                    location = head_resp.headers.get("location")
+                    if not location:
+                        break
+                    current_url = urljoin(current_url, location)
+                    continue
+                break
+
+            if head_resp is None:
+                return _build_result(input_url=url, reason="resolve_failed")
+
+            resolved_url = _normalize_output_url(current_url)
             needs_get = head_resp.status_code in {403, 405, 406, 415, 429, 500, 501}
 
             if needs_get:
-                get_resp = await client.get(normalized_input)
-                resolved_url = _normalize_output_url(str(get_resp.url))
-                content_type = (get_resp.headers.get("content-type") or "").lower()
-                if "html" in content_type:
-                    canonical_hint = _extract_canonical_hint(str(get_resp.url), get_resp.text)
+                current_url = normalized_input
+                for _ in range(5):
+                    safe, _ = is_url_safe(current_url)
+                    if not safe:
+                        break
+                    get_resp = await client.get(current_url)
+                    if get_resp.status_code in {301, 302, 303, 307, 308}:
+                        location = get_resp.headers.get("location")
+                        if not location:
+                            break
+                        current_url = urljoin(current_url, location)
+                        continue
+                    resolved_url = _normalize_output_url(current_url)
+                    content_type = (get_resp.headers.get("content-type") or "").lower()
+                    if "html" in content_type:
+                        canonical_hint = _extract_canonical_hint(current_url, get_resp.text)
+                    break
 
         redirect_article_id = extract_twitter_article_id(resolved_url or "")
         if redirect_article_id:

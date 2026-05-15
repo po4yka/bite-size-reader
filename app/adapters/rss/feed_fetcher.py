@@ -6,10 +6,8 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from urllib.parse import urlparse
 
-import httpx
-
 from app.core.logging_utils import get_logger
-from app.security.ssrf import is_url_safe
+from app.security.ssrf import is_url_safe, make_safe_sync_client
 
 logger = get_logger(__name__)
 
@@ -67,7 +65,8 @@ def fetch_feed(
     if last_modified:
         headers["If-Modified-Since"] = last_modified
 
-    resp = httpx.get(url, headers=headers, timeout=timeout, follow_redirects=False)
+    with make_safe_sync_client(follow_redirects=False) as client:
+        resp = client.get(url, headers=headers, timeout=timeout)
 
     if resp.status_code == 304:
         return FeedResult(not_modified=True)

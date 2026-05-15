@@ -6,13 +6,11 @@ import asyncio
 import time
 from urllib.parse import urljoin
 
-import httpx
-
 from app.adapters.external.firecrawl.models import FirecrawlResult
 from app.core.call_status import CallStatus
 from app.core.html_utils import html_to_text
 from app.core.logging_utils import get_logger
-from app.security.ssrf import is_url_safe
+from app.security.ssrf import is_url_safe, make_safe_async_client
 
 logger = get_logger(__name__)
 
@@ -108,7 +106,7 @@ class DirectHTMLProvider:
         """Fetch raw HTML with streaming, size limits, and SSRF-safe redirect handling."""
         overall_timeout = self._timeout_sec + 5
         async with asyncio.timeout(overall_timeout):
-            async with httpx.AsyncClient(
+            async with make_safe_async_client(
                 follow_redirects=False, timeout=self._timeout_sec
             ) as client:
                 current_url = url

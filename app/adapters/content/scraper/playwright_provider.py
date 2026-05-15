@@ -17,6 +17,7 @@ from app.adapters.external.firecrawl.models import FirecrawlResult
 from app.core.call_status import CallStatus
 from app.core.html_utils import html_to_text
 from app.core.logging_utils import get_logger
+from app.security.ssrf import is_url_safe
 
 logger = get_logger(__name__)
 
@@ -221,6 +222,23 @@ class PlaywrightProvider:
                     viewport={"width": 1366, "height": 768},
                 )
             page = context.new_page()
+
+            def _block_ssrf_route(route: object) -> None:
+                # Best-effort URL-level SSRF filter for browser-initiated requests.
+                # Does not close the DNS-rebinding window (browser DNS is opaque).
+                req_url: str = route.request.url  # type: ignore[union-attr]
+                safe, reason = is_url_safe(req_url)
+                if not safe:
+                    logger.warning(
+                        "playwright_ssrf_blocked",
+                        extra={"url": req_url, "reason": reason},
+                    )
+                    route.abort("accessdenied")  # type: ignore[union-attr]
+                    return
+                route.continue_()  # type: ignore[union-attr]
+
+            page.route("**/*", _block_ssrf_route)
+
             try:
                 try:
                     page.goto(url, wait_until="domcontentloaded", timeout=timeout_ms)
