@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import io
+import zipfile
+
 import pytest
 from pydantic import ValidationError
 
@@ -96,3 +99,102 @@ class TestBackupCrypto:
         with zipfile.ZipFile(buf, "w") as zf:
             zf.writestr("dummy.txt", "hello")
         assert is_fernet_ciphertext(buf.getvalue()) is False
+
+
+# ---------------------------------------------------------------------------
+# ZIP safety
+# ---------------------------------------------------------------------------
+
+_LIMITS = {
+    "max_entries": 10,
+    "max_compressed_bytes": 10 * 1024 * 1024,
+    "max_decompressed_bytes": 1000,
+    "max_ratio": 50.0,
+}
+
+
+def _one_entry_zip(filename: str = "file.txt", content: bytes = b"hello") -> bytes:
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        zf.writestr(filename, content)
+    return buf.getvalue()
+
+
+class TestZipSafety:
+    def test_valid_archive_passes(self) -> None:
+        from app.infrastructure.persistence.backup_safety import validate_zip_safety
+
+        validate_zip_safety(_one_entry_zip(), **_LIMITS)  # should not raise
+
+    def test_empty_archive_rejected(self) -> None:
+        from app.infrastructure.persistence.backup_safety import (
+            ZipSafetyViolation,
+            validate_zip_safety,
+        )
+
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, "w") as zf:
+            pass
+        with pytest.raises(ZipSafetyViolation, match="no entries"):
+            validate_zip_safety(buf.getvalue(), **_LIMITS)
+
+    def test_too_many_entries_rejected(self) -> None:
+        from app.infrastructure.persistence.backup_safety import (
+            ZipSafetyViolation,
+            validate_zip_safety,
+        )
+
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, "w") as zf:
+            for i in range(11):
+                zf.writestr(f"f{i}.txt", "x")
+        with pytest.raises(ZipSafetyViolation, match="entries"):
+            validate_zip_safety(buf.getvalue(), **_LIMITS)
+
+    def test_oversized_decompressed_rejected(self) -> None:
+        from app.infrastructure.persistence.backup_safety import (
+            ZipSafetyViolation,
+            validate_zip_safety,
+        )
+
+        # 1001 bytes > max_decompressed_bytes=1000
+        with pytest.raises(ZipSafetyViolation, match="decompressed"):
+            validate_zip_safety(_one_entry_zip(content=b"x" * 1001), **_LIMITS)
+
+    def test_zip_bomb_ratio_rejected(self) -> None:
+        from app.infrastructure.persistence.backup_safety import (
+            ZipSafetyViolation,
+            validate_zip_safety,
+        )
+
+        # "a" * 5000 with DEFLATE compresses to ~15 bytes → ratio ≈ 333 > max_ratio=50
+        limits = {**_LIMITS, "max_decompressed_bytes": 10 * 1024 * 1024}
+        with pytest.raises(ZipSafetyViolation, match="ratio"):
+            validate_zip_safety(_one_entry_zip(content=b"a" * 5000), **limits)
+
+    def test_path_traversal_rejected(self) -> None:
+        from app.infrastructure.persistence.backup_safety import (
+            ZipSafetyViolation,
+            validate_zip_safety,
+        )
+
+        with pytest.raises(ZipSafetyViolation, match="traversal"):
+            validate_zip_safety(_one_entry_zip(filename="../../evil.txt"), **_LIMITS)
+
+    def test_absolute_path_rejected(self) -> None:
+        from app.infrastructure.persistence.backup_safety import (
+            ZipSafetyViolation,
+            validate_zip_safety,
+        )
+
+        with pytest.raises(ZipSafetyViolation, match="absolute"):
+            validate_zip_safety(_one_entry_zip(filename="/etc/passwd"), **_LIMITS)
+
+    def test_corrupt_zip_raises_violation(self) -> None:
+        from app.infrastructure.persistence.backup_safety import (
+            ZipSafetyViolation,
+            validate_zip_safety,
+        )
+
+        with pytest.raises(ZipSafetyViolation, match="corrupt"):
+            validate_zip_safety(b"not a zip", **_LIMITS)
