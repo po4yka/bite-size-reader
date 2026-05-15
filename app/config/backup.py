@@ -60,7 +60,7 @@ class BackupConfig(BaseModel):
     )
 
     @model_validator(mode="after")
-    def _key_required_when_explicitly_enabled(self) -> "BackupConfig":
+    def _key_required_when_explicitly_enabled(self) -> BackupConfig:
         if self.encryption_enabled is True and self.encryption_key is None:
             raise ValueError(
                 "BACKUP_ENCRYPTION_ENABLED=true requires BACKUP_ENCRYPTION_KEY to be set."

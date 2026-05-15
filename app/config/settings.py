@@ -16,6 +16,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from .adaptive_timeout import AdaptiveTimeoutConfig
 from .api import ApiLimitsConfig, AuthConfig, SyncConfig
+from .backup import BackupConfig
 from .background import BackgroundProcessorConfig
 from .circuit_breaker import CircuitBreakerConfig
 from .content import ContentLimitsConfig
@@ -37,7 +38,6 @@ from .media import AttachmentConfig, YouTubeConfig
 from .otel import OtelConfig, SentryConfig
 from .push import PushNotificationConfig
 from .redis import RedisConfig
-from .backup import BackupConfig
 from .retention import RetentionConfig
 from .rss import RSSConfig
 from .runtime import RuntimeConfig
