@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
+    from cryptography.fernet import Fernet
     from pydantic import SecretStr
 
 __all__ = [
@@ -24,15 +25,13 @@ class InvalidBackupCiphertextError(ValueError):
 
 
 class MissingBackupEncryptionKeyError(RuntimeError):
-    """Raised when encryption is requested but BACKUP_ENCRYPTION_KEY is not configured."""
+    """Raised by callers when BACKUP_ENCRYPTION_KEY is not configured and encryption is needed."""
 
 
-def _fernet(key: SecretStr):
+def _fernet(key: SecretStr) -> Fernet:
     from cryptography.fernet import Fernet
 
-    raw = key.get_secret_value()
-    raw_bytes = raw.encode() if isinstance(raw, str) else raw
-    return Fernet(raw_bytes)
+    return Fernet(key.get_secret_value().encode())
 
 
 def is_fernet_ciphertext(data: bytes) -> bool:
