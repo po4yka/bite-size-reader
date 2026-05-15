@@ -108,9 +108,8 @@ async def _null_columns(
     stmt: Any,
 ) -> int:
     """Execute a prebuilt UPDATE statement and return the affected rowcount."""
-    async with db.session() as session:
+    async with db.transaction() as session:
         result = await session.execute(stmt)
-        await session.commit()
         return result.rowcount or 0  # type: ignore[attr-defined]
 
 
@@ -139,6 +138,7 @@ async def _purge_telegram_raw(
                         | TelegramMessage.telegram_raw_json.is_not(None)
                     ),
                 )
+                .order_by(TelegramMessage.id)
                 .limit(batch)
             )
         )
@@ -178,6 +178,7 @@ async def _purge_crawl_content(
                         | CrawlResult.links_json.is_not(None)
                     ),
                 )
+                .order_by(CrawlResult.id)
                 .limit(batch)
             )
         )
@@ -222,6 +223,7 @@ async def _purge_llm_payload(
                         | LLMCall.openrouter_response_json.is_not(None)
                     ),
                 )
+                .order_by(LLMCall.id)
                 .limit(batch)
             )
         )
@@ -253,6 +255,7 @@ async def _purge_video_transcript(
                     VideoDownload.created_at < cutoff,
                     VideoDownload.transcript_text.is_not(None),
                 )
+                .order_by(VideoDownload.id)
                 .limit(batch)
             )
         )
@@ -277,6 +280,7 @@ async def _purge_interaction_text(
                     UserInteraction.created_at < cutoff,
                     UserInteraction.input_text.is_not(None),
                 )
+                .order_by(UserInteraction.id)
                 .limit(batch)
             )
         )
@@ -304,6 +308,7 @@ async def _purge_request_content(
                         | Request.error_context_json.is_not(None)
                     ),
                 )
+                .order_by(Request.id)
                 .limit(batch)
             )
         )

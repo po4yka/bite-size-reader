@@ -77,15 +77,14 @@ def _build_cfg(
 
 
 def _make_mock_db(rowcount=3):
-    """Return mock Database whose session yields rowcount on execute."""
+    """Return mock Database whose transaction context yields rowcount on execute."""
     mock_db = MagicMock()
     mock_session = AsyncMock()
     mock_result = MagicMock()
     mock_result.rowcount = rowcount
     mock_session.execute = AsyncMock(return_value=mock_result)
-    mock_session.commit = AsyncMock()
-    mock_db.session.return_value.__aenter__ = AsyncMock(return_value=mock_session)
-    mock_db.session.return_value.__aexit__ = AsyncMock(return_value=None)
+    mock_db.transaction.return_value.__aenter__ = AsyncMock(return_value=mock_session)
+    mock_db.transaction.return_value.__aexit__ = AsyncMock(return_value=None)
     return mock_db
 
 
@@ -106,7 +105,7 @@ async def test_purge_body_disabled_returns_zero_stats(monkeypatch):
     result = await _purge_body(_build_cfg(enabled=False), mock_db)
 
     assert result == PurgeStats()
-    mock_db.session.assert_not_called()
+    mock_db.transaction.assert_not_called()
 
 
 @pytest.mark.asyncio
@@ -123,7 +122,7 @@ async def test_null_columns_ttl_zero_skips_db(monkeypatch):
     result = await _purge_telegram_raw(mock_db, now, days=0, batch=100)
 
     assert result == 0
-    mock_db.session.assert_not_called()
+    mock_db.transaction.assert_not_called()
 
 
 @pytest.mark.asyncio
@@ -140,10 +139,9 @@ async def test_purge_telegram_raw_returns_rowcount(monkeypatch):
     result = await _purge_telegram_raw(mock_db, now, days=7, batch=100)
 
     assert result == 5
-    mock_db.session.return_value.__aenter__.assert_called_once()
-    session = await mock_db.session.return_value.__aenter__()
+    mock_db.transaction.return_value.__aenter__.assert_called_once()
+    session = await mock_db.transaction.return_value.__aenter__()
     session.execute.assert_called_once()
-    session.commit.assert_called_once()
 
 
 @pytest.mark.asyncio
@@ -160,9 +158,8 @@ async def test_purge_crawl_content_returns_rowcount(monkeypatch):
     result = await _purge_crawl_content(mock_db, now, days=7, batch=100)
 
     assert result == 3
-    session = await mock_db.session.return_value.__aenter__()
+    session = await mock_db.transaction.return_value.__aenter__()
     session.execute.assert_called()
-    session.commit.assert_called()
 
 
 @pytest.mark.asyncio
@@ -179,9 +176,8 @@ async def test_purge_llm_payload_returns_rowcount(monkeypatch):
     result = await _purge_llm_payload(mock_db, now, days=7, batch=100)
 
     assert result == 12
-    session = await mock_db.session.return_value.__aenter__()
+    session = await mock_db.transaction.return_value.__aenter__()
     session.execute.assert_called()
-    session.commit.assert_called()
 
 
 @pytest.mark.asyncio
@@ -198,9 +194,8 @@ async def test_purge_video_transcript_returns_rowcount(monkeypatch):
     result = await _purge_video_transcript(mock_db, now, days=7, batch=100)
 
     assert result == 2
-    session = await mock_db.session.return_value.__aenter__()
+    session = await mock_db.transaction.return_value.__aenter__()
     session.execute.assert_called()
-    session.commit.assert_called()
 
 
 @pytest.mark.asyncio
@@ -217,9 +212,8 @@ async def test_purge_interaction_text_returns_rowcount(monkeypatch):
     result = await _purge_interaction_text(mock_db, now, days=7, batch=100)
 
     assert result == 7
-    session = await mock_db.session.return_value.__aenter__()
+    session = await mock_db.transaction.return_value.__aenter__()
     session.execute.assert_called()
-    session.commit.assert_called()
 
 
 @pytest.mark.asyncio
@@ -236,9 +230,8 @@ async def test_purge_request_content_returns_rowcount(monkeypatch):
     result = await _purge_request_content(mock_db, now, days=7, batch=100)
 
     assert result == 4
-    session = await mock_db.session.return_value.__aenter__()
+    session = await mock_db.transaction.return_value.__aenter__()
     session.execute.assert_called()
-    session.commit.assert_called()
 
 
 @pytest.mark.asyncio
@@ -255,8 +248,8 @@ async def test_purge_idempotent_zero_rowcount(monkeypatch):
     result = await _purge_crawl_content(mock_db, now, days=7, batch=100)
 
     assert result == 0
-    session = await mock_db.session.return_value.__aenter__()
-    session.commit.assert_called_once()
+    session = await mock_db.transaction.return_value.__aenter__()
+    session.execute.assert_called_once()
 
 
 @pytest.mark.asyncio
