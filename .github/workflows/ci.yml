@@ -618,7 +618,8 @@ jobs:
             "python -m bot" \
             "python -m app.cli.migrate_db" \
             "taskiq worker" \
-            "taskiq scheduler"; do
+            "taskiq scheduler" \
+            "app.tasks.import_tasks"; do
             echo "$config" | grep -q "$svc_cmd" \
               || { echo "MISSING command: $svc_cmd"; exit 1; }
           done

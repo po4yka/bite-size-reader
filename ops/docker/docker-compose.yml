@@ -225,6 +225,7 @@ services:
       - "app.tasks.scheduler:scheduler"
       - "--skip-first-run"
     environment:
+      # DATABASE_URL intentionally absent: scheduler only enqueues to Redis; workers own DB access.
       - REDIS_ENABLED=1
       - REDIS_HOST=redis
       - REDIS_PORT=6379

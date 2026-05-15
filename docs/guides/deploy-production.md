@@ -138,7 +138,7 @@ services:
 
   ratatoskr:            # Telegram bot
     command: ["python", "-m", "bot"]
-    depends_on: [migrate, redis, qdrant (optional)]
+    depends_on: [migrate, postgres, redis, qdrant (optional)]
     healthcheck: DB ping (asyncpg) every 30s
 
   worker:               # Taskiq task executor (consumes jobs from Redis)
