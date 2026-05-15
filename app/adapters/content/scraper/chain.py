@@ -58,7 +58,7 @@ class ContentScraperChain:
         if not providers:
             msg = "ContentScraperChain requires at least one provider"
             raise ValueError(msg)
-        self._providers = providers
+        self._providers = list(providers)
         self._audit = audit
         self._min_content_length = min_content_length
         self._js_heavy_hosts = js_heavy_hosts
