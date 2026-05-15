@@ -400,12 +400,12 @@ jobs:
 
       - name: Check coverage threshold
         run: |
-          # TODO: remove || true once full-scope coverage reaches 80%
+          # Threshold is set in pyproject.toml [tool.coverage.report] fail_under.
+          # A below-threshold run fails this step and therefore fails CI.
+          # To raise the bar: bump fail_under in pyproject.toml in a separate commit.
           coverage report \
-            --source=app \
             --omit="app/db/alembic/*,app/static/*,app/cli/migrations/*" \
-            --fail-under=80 \
-            --show-missing || true
+            --show-missing
 
       - name: Surface lockfile drift status
         if: ${{ needs.prepare-environment.outputs.lock_drift == 'true' }}
