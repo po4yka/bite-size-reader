@@ -121,6 +121,96 @@ services:
     security_opt:
       - no-new-privileges:true
     stop_grace_period: 30s
+
+  worker:
+    build:
+      context: ../..
+      dockerfile: ops/docker/Dockerfile
+      args:
+        VITE_TELEGRAM_BOT_USERNAME: ${VITE_TELEGRAM_BOT_USERNAME:-}
+    container_name: ratatoskr-worker
+    init: true
+    command:
+      - taskiq
+      - worker
+      - "app.tasks.broker:broker"
+      - app.tasks.digest
+      - app.tasks.rss
+      - app.tasks.github_sync
+      - app.tasks.reconcile_vector_index
+      - app.tasks.import_tasks
+      - "--workers"
+      - "${TASKIQ_WORKER_CONCURRENCY:-4}"
+    env_file:
+      - path: ../../.env
+        required: false
+    environment:
+      - DATABASE_URL=${DATABASE_URL:-postgresql+asyncpg://ratatoskr_app:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/ratatoskr}
+      - QDRANT_URL=http://qdrant:6333
+      - REDIS_ENABLED=1
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - TEXTACY_ENABLED=1
+      - PYTHONUNBUFFERED=1
+      - PYTHONDONTWRITEBYTECODE=1
+      - MAX_CONCURRENT_CALLS=${MAX_CONCURRENT_CALLS:-4}
+      - REQUEST_TIMEOUT_SEC=${REQUEST_TIMEOUT_SEC:-60}
+      - FIRECRAWL_SELF_HOSTED_ENABLED=${FIRECRAWL_SELF_HOSTED_ENABLED:-0}
+      - FIRECRAWL_SELF_HOSTED_URL=${FIRECRAWL_SELF_HOSTED_URL:-http://firecrawl-api:3002}
+      - SCRAPER_DEFUDDLE_API_BASE_URL=${SCRAPER_DEFUDDLE_API_BASE_URL:-http://defuddle-api:3003}
+      - SCRAPER_CRAWL4AI_URL=${SCRAPER_CRAWL4AI_URL:-http://crawl4ai:11235}
+      - SCRAPER_DEFUDDLE_TOKEN=${DEFUDDLE_AUTH_TOKEN:-}
+      - LLM_PROVIDER=${LLM_PROVIDER:-openrouter}
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://localhost:11434/v1}
+      - OLLAMA_API_KEY=${OLLAMA_API_KEY:-ollama}
+      - OLLAMA_MODEL=${OLLAMA_MODEL:-llama3.3}
+      - OTEL_ENABLED=${OTEL_ENABLED:-false}
+      - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT:-http://tempo:4317}
+      - RATATOSKR_PROCESS_ROLE=worker
+    volumes:
+      - ../../data:/data
+      - /etc/localtime:/etc/localtime:ro
+    tmpfs:
+      - /tmp
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      qdrant:
+        condition: service_healthy
+      crawl4ai:
+        condition: service_healthy
+        required: false
+      defuddle-api:
+        condition: service_healthy
+        required: false
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import socket; s=socket.create_connection(('redis', 6379), 5); s.close()"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: "0.75"
+        reservations:
+          memory: 256M
+          cpus: "0.25"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    security_opt:
+      - no-new-privileges:true
+    stop_grace_period: 60s
+
   mobile-api:
     build:
       context: ../..
