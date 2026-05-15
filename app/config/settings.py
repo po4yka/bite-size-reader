@@ -37,6 +37,7 @@ from .media import AttachmentConfig, YouTubeConfig
 from .otel import OtelConfig, SentryConfig
 from .push import PushNotificationConfig
 from .redis import RedisConfig
+from .backup import BackupConfig
 from .retention import RetentionConfig
 from .rss import RSSConfig
 from .runtime import RuntimeConfig
@@ -249,6 +250,7 @@ class Settings(BaseSettings):
     cocoindex: CocoIndexConfig = Field(default_factory=CocoIndexConfig)
     vector_reconcile: VectorReconcileConfig = Field(default_factory=VectorReconcileConfig)
     retention: RetentionConfig = Field(default_factory=RetentionConfig)
+    backup: BackupConfig = Field(default_factory=BackupConfig)
 
     @model_validator(mode="before")
     @classmethod
