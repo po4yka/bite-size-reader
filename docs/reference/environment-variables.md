@@ -555,6 +555,24 @@ indexing semantics, drift detection, and rollback procedure.
 | `BACKGROUND_RETRY_MAX_DELAY_MS` | `5000` | Max retry delay (ms) |
 | `BACKGROUND_RETRY_JITTER_RATIO` | `0.2` | Jitter ratio (0-1) |
 
+## Data Retention
+
+Configures scheduled nulling of raw artifact columns (scraped HTML, LLM payloads,
+Telegram message JSON, video transcripts). The summary, cost, and status columns are
+never purged. A TTL of `0` disables purge for that subsystem.
+
+| Variable | Type | Default | Description |
+|---|---|---|---|
+| `RETENTION_ENABLED` | bool | `true` | Master switch. Set to `false` to disable all purge runs. |
+| `RETENTION_CRON` | str | `"0 3 * * *"` | UTC cron for the daily purge job (3 am UTC). |
+| `RETENTION_BATCH_SIZE` | int | `500` | Max rows updated per subsystem per run. Next run continues the backlog. |
+| `RETENTION_TELEGRAM_RAW_DAYS` | int | `30` | Days to keep `telegram_messages` raw columns (`text_full`, `entities_json`, `telegram_raw_json`). `0` = never purge. |
+| `RETENTION_CRAWL_CONTENT_DAYS` | int | `7` | Days to keep `crawl_results` content columns (`content_markdown`, `content_html`, `raw_response_json`, `firecrawl_details_json`, `structured_json`, `metadata_json`, `links_json`). `0` = never purge. |
+| `RETENTION_LLM_PAYLOAD_DAYS` | int | `90` | Days to keep `llm_calls` request/response columns. Cost, token, and latency fields are always preserved. `0` = never purge. |
+| `RETENTION_VIDEO_TRANSCRIPT_DAYS` | int | `30` | Days to keep `video_downloads.transcript_text`. `0` = never purge. |
+| `RETENTION_INTERACTION_TEXT_DAYS` | int | `30` | Days to keep `user_interactions.input_text`. `0` = never purge. |
+| `RETENTION_REQUEST_CONTENT_DAYS` | int | `30` | Days to keep `requests.content_text` and `requests.error_context_json`. `0` = never purge. |
+
 ## Mobile API Server
 
 | Variable | Default | Description |
