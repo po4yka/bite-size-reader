@@ -280,6 +280,7 @@ Three complementary layers enforce these rules:
 | **Ruff B006** | Mutable default arguments | `make lint`, pre-commit, CI |
 | **Ruff B023** | Late-binding closures in loops | `make lint`, pre-commit, CI |
 | **Semgrep** (`semgrep/python-mutability.yml`) | `[mutable]*N`, `dict.fromkeys(keys, mutable)` | `make static-checks`, pre-commit, CI |
+| **Semgrep** (`semgrep/python-bare-except.yml`) | Bare `except:`, `except BaseException` without justification | `make static-checks`, pre-commit, CI |
 | **Architecture tests** (`tests/architecture/`) | All patterns above (regression fixtures) | `make test`, CI |
 
 Run `make static-checks` locally before pushing to catch Semgrep findings early.

@@ -40,10 +40,12 @@ security:
 	uv run --frozen bandit -r app -ll
 	uv run --frozen pip-audit
 
-# Runs custom Semgrep rules that catch mutable-aliasing patterns not covered by
-# Ruff. Also enforced in the lint-and-format CI job and as a pre-commit hook.
+# Runs custom Semgrep rules that catch patterns complementary to Ruff:
+# mutable-aliasing hazards and bare/broad exception handlers.
+# Also enforced in the lint-and-format CI job and as pre-commit hooks.
 static-checks:
 	semgrep --config semgrep/python-mutability.yml --error app/ tests/
+	semgrep --config semgrep/python-bare-except.yml --error app/ tests/
 
 # Note: `all` deliberately omits `security`; run `make security` separately.
 all: format lint type test

@@ -1,0 +1,64 @@
+rules:
+  # ------------------------------------------------------------------
+  # bare except: clauses
+  # ------------------------------------------------------------------
+  # A bare `except:` catches BaseException — including KeyboardInterrupt,
+  # SystemExit, and asyncio.CancelledError — and can hide bugs or block
+  # graceful shutdown.  Replace with `except Exception` (boundary catch-all)
+  # or the narrowest practical exception type for expected failures.
+  # Ruff E722 catches this statically; this rule provides a second
+  # enforcement layer at the Semgrep pass.
+
+  - id: bare-except
+    languages: [python]
+    severity: ERROR
+    message: >
+      Bare `except:` catches `BaseException`, including `KeyboardInterrupt` and
+      `SystemExit`, which prevents graceful shutdown and hides bugs.
+      Fix: use `except Exception as exc:` at request/task boundaries, or the
+      narrowest practical exception type for expected failure modes.
+      If this is intentional (e.g. a regression fixture), suppress with
+      `# nosemgrep: bare-except` and a justification comment.
+    pattern: |
+      try:
+        ...
+      except:
+        ...
+    paths:
+      exclude:
+        - "**/tests/architecture/test_lint_rules.py"
+
+  # ------------------------------------------------------------------
+  # except BaseException: without justification
+  # ------------------------------------------------------------------
+  # Explicitly catching `BaseException` is almost never correct outside
+  # framework-level shutdown hooks.  If you must catch it — for example,
+  # an async handler that calls raise_if_cancelled() before falling back
+  # to ordinary error handling — add a `# nosemgrep: broad-except-base`
+  # comment with a justification explaining why swallowing BaseException
+  # is safe in this context.
+
+  - id: broad-except-base
+    languages: [python]
+    severity: ERROR
+    message: >
+      `except BaseException` catches signals and process-exit exceptions that
+      should propagate to the runtime.  Use `except Exception` instead, or
+      re-raise `BaseException` immediately after any required cleanup.
+      If this is intentional (e.g. an async cancellation handler that calls
+      raise_if_cancelled()), suppress with `# nosemgrep: broad-except-base`
+      and a justification comment.
+    pattern-either:
+      - pattern: |
+          try:
+            ...
+          except BaseException:
+            ...
+      - pattern: |
+          try:
+            ...
+          except BaseException as $E:
+            ...
+    paths:
+      exclude:
+        - "**/tests/architecture/test_lint_rules.py"

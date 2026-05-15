@@ -57,7 +57,7 @@ class SearchContextEnricher:
             )
             return ""
 
-        try:
+        try:  # nosemgrep: broad-except-base — except clause calls raise_if_cancelled() and re-raises non-Exception
             from app.agents.web_search_agent import WebSearchAgent, WebSearchAgentInput
 
             agent = WebSearchAgent(

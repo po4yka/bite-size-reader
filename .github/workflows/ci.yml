@@ -228,6 +228,9 @@ jobs:
           uv pip install --system semgrep --quiet
           semgrep --config semgrep/python-mutability.yml --error app/ tests/
 
+      - name: Semgrep (Python bare-except rules)
+        run: semgrep --config semgrep/python-bare-except.yml --error app/ tests/
+
   type-check:
     name: Type Check (mypy)
     needs: prepare-environment

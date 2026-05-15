@@ -63,3 +63,9 @@ repos:
         language: system
         types: [python]
         pass_filenames: false
+      - id: semgrep-bare-except
+        name: Semgrep Python bare-except rules
+        entry: semgrep --config semgrep/python-bare-except.yml --error
+        language: system
+        types: [python]
+        pass_filenames: false
