@@ -219,6 +219,27 @@ class TelethonBotClient:
     async def delete_messages(self, chat_id: int, message_ids: list[int]) -> None:
         await self._client.delete_messages(chat_id, message_ids)
 
+    async def send_chat_action(self, *, chat_id: int, action: str = "typing") -> None:
+        """Send a chat-action indicator via Telegram's ``messages.setTyping``.
+
+        Telethon does not expose aiogram's ``send_chat_action`` directly, so
+        the migration left the bot with a silently-no-op typing indicator
+        across every long-running flow (URL handling, forward summarization,
+        batch processing, ...). This wraps ``messages.SetTypingRequest`` and
+        accepts the same aiogram-style action strings the rest of the bot
+        speaks. Telegram auto-expires the indicator after ~5 s, so callers
+        (see ``app/utils/typing_indicator.py``) repeat the call.
+        """
+        if functions is None or types is None:
+            return
+        tl_action = _build_typing_tl_action(action)
+        if tl_action is None:
+            return
+        # Resolve the chat id to an InputPeer via Telethon's entity cache so
+        # raw TL requests work for any chat the bot has seen.
+        peer = await self._client.get_input_entity(chat_id)
+        await self._client(functions.messages.SetTypingRequest(peer=peer, action=tl_action))
+
     async def edit_message_text(
         self,
         *,
@@ -639,6 +660,47 @@ def _translate_entities(raw: Any) -> list[_Entity]:
             )
         )
     return translated
+
+
+def _build_typing_tl_action(action: str | None) -> Any:
+    """Map an aiogram-style chat-action string to a Telethon TL action object.
+
+    Telegram's ``messages.setTyping`` takes a typed action; aiogram exposes it
+    as a string ("typing", "upload_photo", ...). Unknown / future strings fall
+    back to a generic typing action so the indicator still appears.
+    Returns ``None`` only when Telethon itself is unavailable.
+    """
+    if types is None:  # pragma: no cover - telethon missing
+        return None
+    name = (action or "typing").strip().lower()
+    # Upload-style actions take a ``progress`` field in modern Telethon.
+    if name == "typing":
+        return types.SendMessageTypingAction()
+    if name == "cancel":
+        return types.SendMessageCancelAction()
+    if name == "upload_photo":
+        return types.SendMessageUploadPhotoAction(progress=0)
+    if name == "record_video":
+        return types.SendMessageRecordVideoAction()
+    if name == "upload_video":
+        return types.SendMessageUploadVideoAction(progress=0)
+    if name in {"record_voice", "record_audio"}:
+        return types.SendMessageRecordAudioAction()
+    if name in {"upload_voice", "upload_audio"}:
+        return types.SendMessageUploadAudioAction(progress=0)
+    if name == "upload_document":
+        return types.SendMessageUploadDocumentAction(progress=0)
+    if name == "find_location":
+        return types.SendMessageGeoLocationAction()
+    if name == "choose_contact":
+        return types.SendMessageChooseContactAction()
+    if name == "record_video_note":
+        return types.SendMessageRecordRoundAction()
+    if name == "upload_video_note":
+        return types.SendMessageUploadRoundAction(progress=0)
+    if name == "choose_sticker":
+        return types.SendMessageChooseStickerAction()
+    return types.SendMessageTypingAction()
 
 
 def _peer_to_id(peer: Any) -> int | None:
