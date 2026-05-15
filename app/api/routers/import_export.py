@@ -21,6 +21,7 @@ from app.domain.services.import_export import (
     NetscapeHtmlExporter,
 )
 from app.domain.services.import_parsers import PARSER_REGISTRY
+from app.config.settings import load_config
 
 logger = get_logger(__name__)
 router = APIRouter()
@@ -31,6 +32,25 @@ _EXPORT_FORMAT_MAP: dict[str, tuple[type, str, str]] = {
     "csv": (CsvExporter, "text/csv", "bookmarks.csv"),
     "html": (NetscapeHtmlExporter, "text/html", "bookmarks.html"),
 }
+
+
+async def _read_bounded(file: UploadFile, max_bytes: int) -> bytes:
+    """Read an upload in 64 KB chunks; raise 413 if max_bytes is exceeded."""
+    chunks: list[bytes] = []
+    total = 0
+    while True:
+        chunk = await file.read(65536)
+        if not chunk:
+            break
+        total += len(chunk)
+        if total > max_bytes:
+            raise APIException(
+                message=f"File exceeds maximum allowed size of {max_bytes} bytes",
+                error_code=ErrorCode.VALIDATION_ERROR,
+                status_code=413,
+            )
+        chunks.append(chunk)
+    return b"".join(chunks)
 
 
 async def _run_import_task(
@@ -65,6 +85,8 @@ async def import_bookmarks(
     user: dict[str, Any] = Depends(get_current_user),
 ) -> dict[str, Any]:
     """Import bookmarks from an uploaded file."""
+    cfg = load_config(allow_stub_telegram=True).import_export
+
     # Parse options
     try:
         opts = json.loads(options)
@@ -75,8 +97,8 @@ async def import_bookmarks(
             status_code=400,
         ) from err
 
-    # Read file content
-    content = await file.read()
+    # Read file content with size limit
+    content = await _read_bounded(file, cfg.max_upload_bytes)
     if not content:
         raise APIException(
             message="Uploaded file is empty",
@@ -106,6 +128,16 @@ async def import_bookmarks(
             status_code=400,
         )
 
+    if len(bookmarks) > cfg.max_items:
+        raise APIException(
+            message=(
+                f"Import contains {len(bookmarks)} items; "
+                f"maximum allowed is {cfg.max_items}"
+            ),
+            error_code=ErrorCode.VALIDATION_ERROR,
+            status_code=400,
+        )
+
     service = ImportExportService()
     job = await service.create_import_job(
         user_id=user["user_id"],
@@ -115,7 +147,6 @@ async def import_bookmarks(
         options=opts,
     )
 
-    # Kick off background processing -- store reference to prevent GC
     task = asyncio.create_task(
         _run_import_task(
             service,
