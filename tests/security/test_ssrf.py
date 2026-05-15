@@ -184,11 +184,7 @@ async def test_safe_async_transport_dns_rebinding_blocked() -> None:
     """
     from app.security.ssrf import SafeAsyncTransport
 
-    call_count = 0
-
     def rebinding_getaddrinfo(host: str, port: Any, **_: Any) -> list[Any]:
-        nonlocal call_count
-        call_count += 1
         # Simulate rebinding: always returns the private IP when the transport calls it
         return [(socket.AF_INET, socket.SOCK_STREAM, 0, "", ("10.0.0.1", port))]
 
@@ -205,11 +201,7 @@ async def test_safe_async_transport_blocks_redirect_to_private() -> None:
     """Second call to the transport (redirect hop) is blocked when target is private."""
     from app.security.ssrf import SafeAsyncTransport
 
-    call_count = 0
-
     def fake_getaddrinfo(host: str, port: Any, **_: Any) -> list[Any]:
-        nonlocal call_count
-        call_count += 1
         if host == "example.com":
             return [(socket.AF_INET, socket.SOCK_STREAM, 0, "", ("93.184.216.34", port))]
         # redirect target resolves to private
@@ -232,7 +224,7 @@ async def test_safe_async_transport_pins_ip_in_forwarded_request() -> None:
 
     captured: dict[str, Any] = {}
 
-    async def fake_super(request: httpx.Request) -> httpx.Response:
+    async def mock_super_handler(self: Any, request: httpx.Request) -> httpx.Response:
         captured["url_host"] = request.url.host
         captured["host_header"] = request.headers.get("host")
         return httpx.Response(200, content=b"ok")
@@ -247,7 +239,7 @@ async def test_safe_async_transport_pins_ip_in_forwarded_request() -> None:
         with patch.object(
             httpx.AsyncHTTPTransport,
             "handle_async_request",
-            side_effect=lambda self, req: fake_super(req),
+            new=mock_super_handler,
         ):
             await transport.handle_async_request(request)
 
@@ -262,7 +254,7 @@ async def test_safe_async_transport_sets_sni_for_https() -> None:
 
     captured: dict[str, Any] = {}
 
-    async def fake_super(request: httpx.Request) -> httpx.Response:
+    async def mock_super_handler(self: Any, request: httpx.Request) -> httpx.Response:
         captured["extensions"] = dict(request.extensions)
         return httpx.Response(200, content=b"ok")
 
@@ -276,7 +268,7 @@ async def test_safe_async_transport_sets_sni_for_https() -> None:
         with patch.object(
             httpx.AsyncHTTPTransport,
             "handle_async_request",
-            side_effect=lambda self, req: fake_super(req),
+            new=mock_super_handler,
         ):
             await transport.handle_async_request(request)
 
@@ -321,4 +313,27 @@ def test_safe_sync_transport_blocks_dns_rebinding() -> None:
 
     with patch("app.security.ssrf.socket.getaddrinfo", side_effect=fake_getaddrinfo):
         with pytest.raises(httpx.ConnectError, match="SSRF blocked"):
+            transport.handle_request(request)
+
+
+def test_safe_sync_transport_blocks_non_http_scheme() -> None:
+    from app.security.ssrf import SafeSyncTransport
+
+    transport = SafeSyncTransport()
+    request = httpx.Request("GET", "ftp://example.com/")
+    with pytest.raises(httpx.ConnectError, match="Blocked scheme"):
+        transport.handle_request(request)
+
+
+def test_safe_sync_transport_raises_on_dns_failure() -> None:
+    from app.security.ssrf import SafeSyncTransport
+
+    transport = SafeSyncTransport()
+    request = httpx.Request("GET", "http://nxdomain.example.invalid/")
+
+    with patch(
+        "app.security.ssrf.socket.getaddrinfo",
+        side_effect=socket.gaierror("NXDOMAIN"),
+    ):
+        with pytest.raises(httpx.ConnectError, match="DNS resolution failed"):
             transport.handle_request(request)
