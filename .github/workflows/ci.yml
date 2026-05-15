@@ -609,6 +609,41 @@ jobs:
           POSTGRES_PASSWORD: ci-smoke
         run: docker compose -f ops/docker/docker-compose.yml config --quiet
 
+      - name: Verify core service commands are present
+        env:
+          POSTGRES_PASSWORD: ci-smoke
+        run: |
+          config=$(docker compose -f ops/docker/docker-compose.yml config)
+          for svc_cmd in \
+            "python -m bot" \
+            "python -m app.cli.migrate_db" \
+            "taskiq worker" \
+            "taskiq scheduler"; do
+            echo "$config" | grep -q "$svc_cmd" \
+              || { echo "MISSING command: $svc_cmd"; exit 1; }
+          done
+          echo "All expected service commands found."
+
+      - name: Verify all core services are listed
+        env:
+          POSTGRES_PASSWORD: ci-smoke
+        run: |
+          services=$(docker compose -f ops/docker/docker-compose.yml config --services)
+          for svc in migrate ratatoskr worker scheduler mobile-api; do
+            echo "$services" | grep -q "^${svc}$" \
+              || { echo "MISSING service: $svc"; exit 1; }
+          done
+          echo "All core services present."
+
+      - name: Validate dev overlay renders cleanly
+        env:
+          POSTGRES_PASSWORD: ci-smoke
+        run: |
+          docker compose \
+            -f ops/docker/docker-compose.yml \
+            -f ops/docker/docker-compose.dev.yml \
+            config --quiet
+
   secrets:
     runs-on: ubuntu-latest
     timeout-minutes: 10
