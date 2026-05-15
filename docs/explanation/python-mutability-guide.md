@@ -115,16 +115,88 @@ def items(self):
     return list(self._items)
 ```
 
+## Identity vs Value Comparison: `is` vs `==`
+
+Python has two distinct equality operators:
+
+| Operator | Checks | Use when |
+|----------|--------|----------|
+| `is` / `is not` | **Object identity** (same memory address) | Singletons: `None`, sentinels, deliberate identity |
+| `==` / `!=` | **Value equality** | Everything else |
+
+### The bug
+
+```python
+# Bug: "ok" may or may not be interned; this can silently return False
+status = get_status_from_json()
+if status is "ok":          # F632: use == instead
+    ...
+
+# Bug: integers outside [-5, 256] are not cached by CPython
+code = http_response.status_code
+if code is 200:             # F632: use == instead
+    ...
+```
+
+### The fix
+
+```python
+# Correct value comparisons
+if status == "ok":
+    ...
+if code == 200:
+    ...
+```
+
+### What legitimately uses `is`
+
+```python
+# Singleton: None
+if value is None:           # correct — None is always the same object
+    ...
+if value is not None:       # correct
+    ...
+
+# Private sentinel for "not provided" (distinct from None)
+MISSING = object()
+def f(x=MISSING):
+    if x is MISSING:        # correct — MISSING is always the same object
+        ...
+
+# Ellipsis sentinel (stdlib pattern)
+def g(callback=...):
+    if callback is not ...: # correct — Ellipsis is a singleton
+        ...
+
+# Real Enum members (project convention)
+if result.status is CallStatus.OK:  # OK — enum members are singletons
+    ...
+```
+
+### Rule
+
+Ruff `F632` enforces this automatically. It fires on `is`/`is not` against any
+literal value (string, int, float, bytes, …) and is enabled project-wide via
+the `"F"` pyflakes selector in `pyproject.toml`. If you have a genuine
+false-positive (rare), suppress it narrowly:
+
+```python
+result = cache.get(key)
+if result is _SENTINEL:  # noqa: F632 — _SENTINEL is an object() singleton, not a value literal
+    ...
+```
+
 ## Automatic Detection
 
 Three complementary layers enforce these rules:
 
 | Layer | What it catches | When it runs |
 |-------|----------------|--------------|
+| **Ruff F632** | `is`/`is not` against value literals | `make lint`, pre-commit, CI |
 | **Ruff B006** | Mutable default arguments | `make lint`, pre-commit, CI |
 | **Ruff B023** | Late-binding closures in loops | `make lint`, pre-commit, CI |
 | **Semgrep** (`semgrep/python-mutability.yml`) | `[mutable]*N`, `dict.fromkeys(keys, mutable)` | `make static-checks`, pre-commit, CI |
-| **Architecture tests** (`tests/architecture/`) | All patterns above (full AST scan) | `make test`, CI |
+| **Architecture tests** (`tests/architecture/`) | All patterns above (regression fixtures) | `make test`, CI |
 
 Run `make static-checks` locally before pushing to catch Semgrep findings early.
 

@@ -1,4 +1,4 @@
-"""Regression fixture: verify Ruff B006 and B023 are enforced.
+"""Regression fixture: verify Ruff B006, B023, and F632 are enforced.
 
 B006 fires when a function uses a mutable literal or constructor as a default
 argument value. Python evaluates defaults once at definition time, so shared
@@ -8,9 +8,14 @@ B023 fires when a lambda or nested function defined inside a loop references a
 loop variable without early binding. All generated closures will see the
 *final* loop value, not the value at creation time.
 
-If either test class fails, check that the relevant rule is not suppressed in
-``pyproject.toml`` and that the ``"B"`` selector is present under
-``[tool.ruff.lint] select``.
+F632 fires when ``is`` or ``is not`` is used to compare against a literal value
+(string, int, float, bytes, …). Python ``is`` checks object identity, not
+value equality, so ``x is "ok"`` may silently return ``False`` even when the
+strings are equal but stored as different objects.
+
+If any test in this module fails, check that the relevant rule is not suppressed
+in ``pyproject.toml`` and that the corresponding selector is present under
+``[tool.ruff.lint] select`` (``"B"`` for B006/B023, ``"F"`` for F632).
 """
 
 from __future__ import annotations
@@ -126,3 +131,81 @@ def test_sort_key_lambda_passes_b023() -> None:
     source = "for group in groups:\n    group.sort(key=lambda item: item.score)\n"
     result = _lint_b023(source)
     assert result.returncode == 0, f"Sort key lambda must pass B023:\n{result.stdout}"
+
+
+# ---------------------------------------------------------------------------
+# F632: is-literal (use == to compare constant literals)
+# ---------------------------------------------------------------------------
+
+_F632 = "F632"
+
+
+def _lint_f632(source: str) -> subprocess.CompletedProcess[str]:
+    with tempfile.NamedTemporaryFile(suffix=".py", mode="w", delete=False) as fh:
+        fh.write(source)
+        path = fh.name
+    return subprocess.run(
+        [str(_RUFF), "check", "--select", _F632, path],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+
+def test_is_string_literal_is_rejected() -> None:
+    """``x is "ok"`` must fail F632 — use ``x == "ok"``."""
+    result = _lint_f632('x = "ok"\nassert x is "ok"\n')
+    assert result.returncode != 0, "F632 should have flagged `x is <string>`"
+    assert _F632 in result.stdout or _F632 in result.stderr
+
+
+def test_is_not_string_literal_is_rejected() -> None:
+    """``x is not "ok"`` must fail F632 — use ``x != "ok"``."""
+    result = _lint_f632('x = "ok"\nassert x is not "ok"\n')
+    assert result.returncode != 0, "F632 should have flagged `x is not <string>`"
+    assert _F632 in result.stdout or _F632 in result.stderr
+
+
+def test_is_int_literal_is_rejected() -> None:
+    """``status is 200`` must fail F632 — use ``status == 200``."""
+    result = _lint_f632("status = 200\nassert status is 200\n")
+    assert result.returncode != 0, "F632 should have flagged `status is 200`"
+    assert _F632 in result.stdout or _F632 in result.stderr
+
+
+def test_is_bytes_literal_is_rejected() -> None:
+    """``value is b"abc"`` must fail F632 — use ``value == b"abc"``."""
+    result = _lint_f632('value = b"abc"\nassert value is b"abc"\n')
+    assert result.returncode != 0, "F632 should have flagged `value is b\"abc\"`"
+    assert _F632 in result.stdout or _F632 in result.stderr
+
+
+def test_is_none_passes_f632() -> None:
+    """``x is None`` is the correct singleton check — must pass F632."""
+    result = _lint_f632("x = None\nassert x is None\n")
+    assert result.returncode == 0, f"Singleton `is None` must pass F632:\n{result.stdout}"
+
+
+def test_is_not_none_passes_f632() -> None:
+    """``x is not None`` is the correct singleton check — must pass F632."""
+    result = _lint_f632("x = None\nassert x is not None\n")
+    assert result.returncode == 0, f"Singleton `is not None` must pass F632:\n{result.stdout}"
+
+
+def test_equality_string_passes_f632() -> None:
+    """``x == "ok"`` is correct value comparison — must pass F632."""
+    result = _lint_f632('x = "ok"\nassert x == "ok"\n')
+    assert result.returncode == 0, f"Value equality must pass F632:\n{result.stdout}"
+
+
+def test_equality_int_passes_f632() -> None:
+    """``status == 200`` is correct value comparison — must pass F632."""
+    result = _lint_f632("status = 200\nassert status == 200\n")
+    assert result.returncode == 0, f"Value equality must pass F632:\n{result.stdout}"
+
+
+def test_sentinel_object_passes_f632() -> None:
+    """``value is MISSING`` with a private sentinel object must pass F632."""
+    source = "MISSING = object()\nvalue = MISSING\nassert value is MISSING\n"
+    result = _lint_f632(source)
+    assert result.returncode == 0, f"Sentinel identity check must pass F632:\n{result.stdout}"
