@@ -107,3 +107,218 @@ def test_is_url_safe_blocks_hostname_that_resolves_to_private(monkeypatch: pytes
     safe, reason = is_url_safe("http://evil.example.com/")
     assert safe is False
     assert reason is not None
+
+
+# ---------------------------------------------------------------------------
+# SafeAsyncTransport — IP-pinning and DNS-rebinding prevention
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_safe_async_transport_blocks_private_ip_literal() -> None:
+    """Transport raises ConnectError for an IP-literal URL in a blocked range."""
+    from app.security.ssrf import SafeAsyncTransport
+
+    transport = SafeAsyncTransport()
+    request = httpx.Request("GET", "http://192.168.1.1/")
+    with pytest.raises(httpx.ConnectError, match="SSRF blocked"):
+        await transport.handle_async_request(request)
+
+
+@pytest.mark.asyncio
+async def test_safe_async_transport_blocks_ipv6_loopback() -> None:
+    from app.security.ssrf import SafeAsyncTransport
+
+    transport = SafeAsyncTransport()
+    request = httpx.Request("GET", "http://[::1]/")
+    with pytest.raises(httpx.ConnectError, match="SSRF blocked"):
+        await transport.handle_async_request(request)
+
+
+@pytest.mark.asyncio
+async def test_safe_async_transport_blocks_aws_metadata() -> None:
+    from app.security.ssrf import SafeAsyncTransport
+
+    transport = SafeAsyncTransport()
+    request = httpx.Request("GET", "http://169.254.169.254/latest/meta-data/")
+    with pytest.raises(httpx.ConnectError, match="SSRF blocked"):
+        await transport.handle_async_request(request)
+
+
+@pytest.mark.asyncio
+async def test_safe_async_transport_blocks_non_http_scheme() -> None:
+    from app.security.ssrf import SafeAsyncTransport
+
+    transport = SafeAsyncTransport()
+    request = httpx.Request("GET", "ftp://example.com/")
+    with pytest.raises(httpx.ConnectError, match="Blocked scheme"):
+        await transport.handle_async_request(request)
+
+
+@pytest.mark.asyncio
+async def test_safe_async_transport_blocks_if_any_resolved_ip_is_private() -> None:
+    """All resolved IPs are checked — one private IP poisons the whole response."""
+    from app.security.ssrf import SafeAsyncTransport
+
+    transport = SafeAsyncTransport()
+    request = httpx.Request("GET", "http://example.com/")
+
+    def fake_getaddrinfo(host: str, port: Any, **_: Any) -> list[Any]:
+        return [
+            (socket.AF_INET, socket.SOCK_STREAM, 0, "", ("8.8.8.8", port)),
+            (socket.AF_INET, socket.SOCK_STREAM, 0, "", ("192.168.1.1", port)),
+        ]
+
+    with patch("app.security.ssrf.socket.getaddrinfo", side_effect=fake_getaddrinfo):
+        with pytest.raises(httpx.ConnectError, match="SSRF blocked"):
+            await transport.handle_async_request(request)
+
+
+@pytest.mark.asyncio
+async def test_safe_async_transport_dns_rebinding_blocked() -> None:
+    """Simulates DNS rebinding: transport resolves private IP at connect time and blocks it.
+
+    Before this transport existed, a preflight check would pass (public IP on first
+    lookup) and httpcore would re-resolve to a private IP at connect time.  The
+    transport closes that window by being the resolver.
+    """
+    from app.security.ssrf import SafeAsyncTransport
+
+    call_count = 0
+
+    def rebinding_getaddrinfo(host: str, port: Any, **_: Any) -> list[Any]:
+        nonlocal call_count
+        call_count += 1
+        # Simulate rebinding: always returns the private IP when the transport calls it
+        return [(socket.AF_INET, socket.SOCK_STREAM, 0, "", ("10.0.0.1", port))]
+
+    transport = SafeAsyncTransport()
+    request = httpx.Request("GET", "http://rebind.example.com/")
+
+    with patch("app.security.ssrf.socket.getaddrinfo", side_effect=rebinding_getaddrinfo):
+        with pytest.raises(httpx.ConnectError, match="SSRF blocked"):
+            await transport.handle_async_request(request)
+
+
+@pytest.mark.asyncio
+async def test_safe_async_transport_blocks_redirect_to_private() -> None:
+    """Second call to the transport (redirect hop) is blocked when target is private."""
+    from app.security.ssrf import SafeAsyncTransport
+
+    call_count = 0
+
+    def fake_getaddrinfo(host: str, port: Any, **_: Any) -> list[Any]:
+        nonlocal call_count
+        call_count += 1
+        if host == "example.com":
+            return [(socket.AF_INET, socket.SOCK_STREAM, 0, "", ("93.184.216.34", port))]
+        # redirect target resolves to private
+        return [(socket.AF_INET, socket.SOCK_STREAM, 0, "", ("192.168.1.1", port))]
+
+    transport = SafeAsyncTransport()
+    # Simulate the redirect hop: caller already followed the redirect and
+    # now calls the transport with the Location URL directly.
+    redirect_request = httpx.Request("GET", "http://internal.corp/secret")
+
+    with patch("app.security.ssrf.socket.getaddrinfo", side_effect=fake_getaddrinfo):
+        with pytest.raises(httpx.ConnectError, match="SSRF blocked"):
+            await transport.handle_async_request(redirect_request)
+
+
+@pytest.mark.asyncio
+async def test_safe_async_transport_pins_ip_in_forwarded_request() -> None:
+    """Transport rewrites URL host to the resolved IP before calling super(), preventing re-resolution."""
+    from app.security.ssrf import SafeAsyncTransport
+
+    captured: dict[str, Any] = {}
+
+    async def fake_super(request: httpx.Request) -> httpx.Response:
+        captured["url_host"] = request.url.host
+        captured["host_header"] = request.headers.get("host")
+        return httpx.Response(200, content=b"ok")
+
+    def fake_getaddrinfo(host: str, port: Any, **_: Any) -> list[Any]:
+        return [(socket.AF_INET, socket.SOCK_STREAM, 0, "", ("93.184.216.34", port))]
+
+    transport = SafeAsyncTransport()
+    request = httpx.Request("GET", "http://example.com/")
+
+    with patch("app.security.ssrf.socket.getaddrinfo", side_effect=fake_getaddrinfo):
+        with patch.object(
+            httpx.AsyncHTTPTransport,
+            "handle_async_request",
+            side_effect=lambda self, req: fake_super(req),
+        ):
+            await transport.handle_async_request(request)
+
+    assert captured["url_host"] == "93.184.216.34", "URL must use pinned IP, not hostname"
+    assert captured["host_header"] == "example.com", "Host header must be original hostname"
+
+
+@pytest.mark.asyncio
+async def test_safe_async_transport_sets_sni_for_https() -> None:
+    """For HTTPS requests, transport adds sni_hostname so cert validation still works."""
+    from app.security.ssrf import SafeAsyncTransport
+
+    captured: dict[str, Any] = {}
+
+    async def fake_super(request: httpx.Request) -> httpx.Response:
+        captured["extensions"] = dict(request.extensions)
+        return httpx.Response(200, content=b"ok")
+
+    def fake_getaddrinfo(host: str, port: Any, **_: Any) -> list[Any]:
+        return [(socket.AF_INET, socket.SOCK_STREAM, 0, "", ("93.184.216.34", port))]
+
+    transport = SafeAsyncTransport()
+    request = httpx.Request("GET", "https://example.com/")
+
+    with patch("app.security.ssrf.socket.getaddrinfo", side_effect=fake_getaddrinfo):
+        with patch.object(
+            httpx.AsyncHTTPTransport,
+            "handle_async_request",
+            side_effect=lambda self, req: fake_super(req),
+        ):
+            await transport.handle_async_request(request)
+
+    assert captured["extensions"].get("sni_hostname") == b"example.com"
+
+
+@pytest.mark.asyncio
+async def test_safe_async_transport_raises_on_dns_failure() -> None:
+    from app.security.ssrf import SafeAsyncTransport
+
+    transport = SafeAsyncTransport()
+    request = httpx.Request("GET", "http://nxdomain.example.invalid/")
+
+    with patch(
+        "app.security.ssrf.socket.getaddrinfo",
+        side_effect=socket.gaierror("NXDOMAIN"),
+    ):
+        with pytest.raises(httpx.ConnectError, match="DNS resolution failed"):
+            await transport.handle_async_request(request)
+
+
+# SafeSyncTransport
+
+
+def test_safe_sync_transport_blocks_private_ip_literal() -> None:
+    from app.security.ssrf import SafeSyncTransport
+
+    transport = SafeSyncTransport()
+    request = httpx.Request("GET", "http://10.0.0.1/")
+    with pytest.raises(httpx.ConnectError, match="SSRF blocked"):
+        transport.handle_request(request)
+
+
+def test_safe_sync_transport_blocks_dns_rebinding() -> None:
+    from app.security.ssrf import SafeSyncTransport
+
+    def fake_getaddrinfo(host: str, port: Any, **_: Any) -> list[Any]:
+        return [(socket.AF_INET, socket.SOCK_STREAM, 0, "", ("172.16.0.1", port))]
+
+    transport = SafeSyncTransport()
+    request = httpx.Request("GET", "http://rebind.example.com/")
+
+    with patch("app.security.ssrf.socket.getaddrinfo", side_effect=fake_getaddrinfo):
+        with pytest.raises(httpx.ConnectError, match="SSRF blocked"):
+            transport.handle_request(request)
