@@ -31,7 +31,7 @@ MAX_BACKUPS_PER_HOUR = 3
 _UPLOAD_CHUNK_SIZE = 64 * 1024  # 64 KB
 
 
-async def _read_upload_capped(file: UploadFile, limit: int) -> bytes:
+async def _read_bounded(file: UploadFile, limit: int) -> bytes:
     """Read an upload in chunks, raising 413 if it exceeds *limit* bytes."""
     chunks: list[bytes] = []
     received = 0
@@ -127,7 +127,7 @@ async def restore_backup(
 ) -> dict[str, Any]:
     """Restore user data from an uploaded backup ZIP."""
     cfg = load_backup_config()
-    content = await _read_upload_capped(file, cfg.max_restore_bytes)
+    content = await _read_bounded(file, cfg.max_restore_bytes)
     if not content:
         raise APIException(
             message="Uploaded file is empty",
