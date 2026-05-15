@@ -225,7 +225,6 @@ services:
       - "app.tasks.scheduler:scheduler"
       - "--skip-first-run"
     environment:
-      - DATABASE_URL=${DATABASE_URL:-postgresql+asyncpg://ratatoskr_app:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/ratatoskr}
       - REDIS_ENABLED=1
       - REDIS_HOST=redis
       - REDIS_PORT=6379
