@@ -583,23 +583,23 @@ async def test_english_language_prompt() -> None:
 
 
 async def test_token_calculation() -> None:
+    """``max_tokens`` is the OUTPUT budget for the structured summary JSON
+    schema; it must NOT scale with prompt length. A flat 6144 ensures even a
+    one-line forward gets the full schema-sized response budget (the prior
+    prompt-length-derived formula gave short forwards ~2k tokens, causing
+    truncation → ``truncation_recovery_skipped_budget_tight``).
+    """
     summarizer = _make_summarizer()
     mock_workflow = AsyncMock(return_value=None)
 
     with patch.object(summarizer._workflow, "execute_summary_workflow", new=mock_workflow):
         await summarizer.summarize_forward(MagicMock(), "short", "en", "sys", 1, "cid", None)
-
-    expected = max(2048, min(6144, len("short") // 4 + 2048))
-    assert expected == 2049
-    assert mock_workflow.call_args.kwargs["requests"][0].max_tokens == 2049
+    assert mock_workflow.call_args.kwargs["requests"][0].max_tokens == 6144
 
     long_text = "X" * 20000
     mock_workflow.reset_mock()
     with patch.object(summarizer._workflow, "execute_summary_workflow", new=mock_workflow):
         await summarizer.summarize_forward(MagicMock(), long_text, "en", "sys", 1, "cid", None)
-
-    expected = max(2048, min(6144, len(long_text) // 4 + 2048))
-    assert expected == 6144
     assert mock_workflow.call_args.kwargs["requests"][0].max_tokens == 6144
 
 

@@ -111,7 +111,14 @@ class ForwardSummarizer:
             },
         ]
 
-        forward_tokens = max(2048, min(6144, len(prompt) // 4 + 2048))
+        # ``max_tokens`` is the OUTPUT budget, not total -- the structured
+        # summary JSON schema (35+ fields, nested structures) needs ~6k output
+        # tokens regardless of input size. Sizing this from ``len(prompt)``
+        # used to give short forwards only ~2-3k tokens, the LLM truncated
+        # mid-JSON, the budget-tight guard then skipped truncation recovery,
+        # and every fallback model died with
+        # ``truncation_recovery_skipped_budget_tight``.
+        forward_tokens = 6144
 
         response_format = self._workflow.build_structured_response_format()
         requests = [
