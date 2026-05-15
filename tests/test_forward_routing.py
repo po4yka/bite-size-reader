@@ -33,6 +33,9 @@ def _make_router(database: Database):
     response_formatter: Any = SimpleNamespace(
         safe_reply=AsyncMock(),
         send_error_notification=AsyncMock(),
+        # Spy on the typing indicator's underlying call so tests can assert
+        # whether the router started a typing indicator for a given message.
+        send_chat_action=AsyncMock(return_value=True),
     )
 
     router = MessageRouter(
@@ -285,3 +288,65 @@ async def test_forward_substantive_post_with_links_routes_to_forward_flow(
 
     forward_processor.handle_forward_flow.assert_awaited_once()
     aggregation_handler.handle_message_bundle.assert_not_awaited()
+
+
+# ===========================================================================
+# Typing indicator: must fire the moment a content-bearing message arrives
+# so the user sees feedback during scraping / enrichment / LLM cascade.
+# ===========================================================================
+
+
+async def test_forwarded_post_starts_typing_indicator_immediately(
+    database: Database,
+) -> None:
+    (router, *_others, response_formatter, _url) = _make_router(database)
+
+    message = _base_message(
+        text="Channel post body with hyperlinked words",
+        forward_from_chat=SimpleNamespace(id=-100200300, title="Forwarded Channel"),
+        forward_from_message_id=123,
+        forward_date=1700000000,
+    )
+
+    await router.route_message(message)
+
+    # TypingIndicator.start() sends the first chat-action synchronously before
+    # spawning the refresh task, so awaiting route_message must produce at
+    # least one send_chat_action call before the handler returns.
+    response_formatter.send_chat_action.assert_awaited()
+    first_call = response_formatter.send_chat_action.await_args_list[0]
+    assert first_call.args[1] == "typing"
+
+
+async def test_url_message_starts_typing_indicator_immediately(
+    database: Database,
+) -> None:
+    (router, *_others, response_formatter, _url) = _make_router(database)
+
+    message = _base_message(text="https://example.com/article")
+
+    await router.route_message(message)
+
+    response_formatter.send_chat_action.assert_awaited()
+
+
+async def test_command_does_not_start_typing_indicator(database: Database) -> None:
+    (router, *_others, response_formatter, _url) = _make_router(database)
+
+    message = _base_message(text="/start")
+
+    await router.route_message(message)
+
+    # Commands answer instantly -- no typing indicator should fire.
+    response_formatter.send_chat_action.assert_not_awaited()
+
+
+async def test_plain_text_does_not_start_typing_indicator(database: Database) -> None:
+    (router, *_others, response_formatter, _url) = _make_router(database)
+
+    message = _base_message(text="hello there")
+
+    await router.route_message(message)
+
+    # Plain text gets the fallback hint -- no typing indicator.
+    response_formatter.send_chat_action.assert_not_awaited()

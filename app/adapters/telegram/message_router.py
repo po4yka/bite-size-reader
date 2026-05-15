@@ -15,6 +15,7 @@ from app.adapters.telegram.routing import (
     MessageRouteFailureHandler,
 )
 from app.core.logging_utils import generate_correlation_id
+from app.utils.typing_indicator import TypingIndicator
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -123,6 +124,7 @@ class MessageRouter:
         limiter: RedisUserRateLimiter | UserRateLimiter = self._rate_limit_coordinator.rate_limiter
         concurrent_acquired = False
         correlation_id = generate_correlation_id()
+        typing_indicator_obj: TypingIndicator | None = None
         from app.observability.otel import get_tracer, set_correlation_id_attr
 
         _tracer = get_tracer(__name__)
@@ -190,6 +192,28 @@ class MessageRouter:
                     return
                 concurrent_acquired = True
 
+                # Show the user a typing indicator the moment a content-bearing
+                # message arrives, so the wait through scraping / link
+                # enrichment / LLM cascade is visible. TypingIndicator.start()
+                # sends the first action synchronously and then refreshes every
+                # 4 s for as long as the request runs. Commands answer
+                # instantly and plain text gets the fallback hint, so neither
+                # needs an indicator.
+                send_chat_action = getattr(self.response_formatter, "send_chat_action", None)
+                if (
+                    send_chat_action is not None
+                    and route_context.chat_id is not None
+                    and (
+                        route_context.interaction_type == "forward"
+                        or route_context.first_url is not None
+                    )
+                ):
+                    typing_indicator_obj = TypingIndicator(
+                        send_chat_action_func=send_chat_action,
+                        chat_id=route_context.chat_id,
+                    )
+                    await typing_indicator_obj.start()
+
                 await self._route_content_with_tracking(route_context, interaction_id, start_time)
 
         except asyncio.CancelledError:
@@ -209,6 +233,15 @@ class MessageRouter:
                 start_time=start_time,
             )
         finally:
+            if typing_indicator_obj is not None:
+                try:
+                    await typing_indicator_obj.stop()
+                except Exception:  # pragma: no cover - defensive: never block teardown
+                    logger.debug(
+                        "typing_indicator_stop_failed_in_router",
+                        extra={"cid": correlation_id},
+                        exc_info=True,
+                    )
             if concurrent_acquired:
                 await self._rate_limit_coordinator.release_concurrent_slot(limiter, uid)
 
