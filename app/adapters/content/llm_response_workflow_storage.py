@@ -71,8 +71,8 @@ class LLMWorkflowStorageMixin:
         model = (
             attempt.get("model")
             or getattr(llm, "model", None)
-            or getattr(self.cfg, "openrouter", None)
-            and self.cfg.openrouter.model
+            or (getattr(self.cfg, "openrouter", None)
+            and self.cfg.openrouter.model)
             or "unknown"
         )
         return {

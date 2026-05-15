@@ -8,7 +8,7 @@ from types import SimpleNamespace
 from typing import TYPE_CHECKING
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import pytest  # noqa: TC002
+import pytest
 
 if TYPE_CHECKING:
     from argparse import Namespace

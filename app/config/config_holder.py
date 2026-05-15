@@ -5,7 +5,6 @@ from __future__ import annotations
 import asyncio
 import os
 import threading
-from collections.abc import Callable
 from dataclasses import replace as dc_replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -13,6 +12,8 @@ from typing import TYPE_CHECKING, Any
 from app.core.logging_utils import get_logger
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from app.config.adaptive_timeout import AdaptiveTimeoutConfig
     from app.config.api import ApiLimitsConfig, AuthConfig, SyncConfig
     from app.config.background import BackgroundProcessorConfig

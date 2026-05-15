@@ -273,7 +273,7 @@ async def test_sync_imports_new_starred_repos(monkeypatch):
         fake_client.list_starred = AsyncMock(return_value=_async_iter(starred_items))
 
         with patch("app.tasks.github_sync.GitHubAPIClient", return_value=fake_client):
-            imported, updated, unstarred, llm_made, llm_deferred = await _sync_one_integration(
+            imported, updated, _unstarred, _llm_made, _llm_deferred = await _sync_one_integration(
                 integration=integration,
                 cfg=_build_cfg(),
                 db=db,
@@ -372,7 +372,7 @@ async def test_sync_unstars_repos_no_longer_starred(monkeypatch):
         patch("app.tasks.github_sync._build_analyze_use_case", return_value=fake_use_case),
         patch("app.tasks.github_sync.GitHubAPIClient", return_value=fake_client),
     ):
-        imported, updated, unstarred, _, _ = await _sync_one_integration(
+        _imported, _updated, unstarred, _, _ = await _sync_one_integration(
             integration=integration,
             cfg=_build_cfg(),
             db=db,

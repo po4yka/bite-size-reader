@@ -170,7 +170,7 @@ class RepositorySearchService:
         qdrant_filter = Filter(
             must=must,
             should=should if should else None,
-            min_should=1 if should else None,  # type: ignore[arg-type]
+            min_should=1 if should else None,
         )
 
         # 3. Query Qdrant — +50 buffer for Postgres-side filter mismatches

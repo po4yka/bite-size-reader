@@ -598,7 +598,6 @@ class TestJsonYamlSync:
     """
 
     def _load_yaml(self) -> dict[str, Any]:
-        import json as _json
 
         with open(SPEC_PATH) as f:
             return yaml.safe_load(f)

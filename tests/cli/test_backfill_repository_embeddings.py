@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import types
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -219,7 +219,7 @@ async def test_refreshes_when_model_version_target_mismatches(
     """Repos with model_version='1.0', target='2.0' → 3 refreshed."""
     repos = [_make_repo(i) for i in range(1, 4)]
     embeddings = [_make_embedding(r.id, model_version="1.0") for r in repos]
-    rows = list(zip(repos, embeddings))
+    rows = list(zip(repos, embeddings, strict=False))
 
     gen = StubEmbeddingGenerator()
     db = _make_db_with_rows([rows, []])

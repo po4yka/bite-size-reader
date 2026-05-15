@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Sequence
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
 
 from app.core.logging_utils import get_logger
 from app.infrastructure.embedding.embedding_protocol import EmbeddingSerializationMixin

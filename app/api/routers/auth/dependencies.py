@@ -13,7 +13,7 @@ class AuthenticatedUser(TypedDict):
     client_id: str
 
 
-from app.core.logging_utils import get_logger
+from app.core.logging_utils import get_logger  # noqa: E402
 
 try:
     from fastapi import Depends, Request  # noqa: TC002 - used at runtime by FastAPI DI
@@ -32,10 +32,10 @@ except Exception:  # pragma: no cover - fallback for environments without compat
         return None
 
 
-from app.api.dependencies.database import get_auth_repository as get_db_auth_repository
-from app.api.exceptions import AuthenticationError, AuthorizationError
-from app.api.routers.auth.tokens import decode_token, validate_client_id
-from app.config import Config
+from app.api.dependencies.database import get_auth_repository as get_db_auth_repository  # noqa: E402
+from app.api.exceptions import AuthenticationError, AuthorizationError  # noqa: E402
+from app.api.routers.auth.tokens import decode_token, validate_client_id  # noqa: E402
+from app.config import Config  # noqa: E402
 
 logger = get_logger(__name__)
 

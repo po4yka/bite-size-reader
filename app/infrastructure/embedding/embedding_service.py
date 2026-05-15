@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Sequence
 from typing import TYPE_CHECKING, Any
 
 from app.application.ports.search import EmbeddingDependencyUnavailableError
@@ -11,6 +10,8 @@ from app.core.logging_utils import get_logger
 from app.infrastructure.embedding.embedding_protocol import EmbeddingSerializationMixin
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
     from sentence_transformers import SentenceTransformer
 
 logger = get_logger(__name__)

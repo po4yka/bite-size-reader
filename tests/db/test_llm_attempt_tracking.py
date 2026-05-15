@@ -28,7 +28,7 @@ def _tables() -> list:
 
 
 @pytest.fixture
-async def db_with_schema() -> AsyncGenerator[Database, None]:
+async def db_with_schema() -> AsyncGenerator[Database]:
     """Spin up a fresh schema for each test and tear it down after."""
     dsn = _test_dsn()
     if not dsn:

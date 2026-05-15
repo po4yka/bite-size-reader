@@ -128,7 +128,7 @@ async def run_repository_cli(args: argparse.Namespace) -> None:
         environment=cfg.vector_store.environment,
         user_scope=cfg.vector_store.user_scope,
     )
-    agent = RepoAnalysisAgent(llm_service=llm_client)  # type: ignore[arg-type]
+    agent = RepoAnalysisAgent(llm_service=llm_client)
     analyze_use_case = AnalyzeRepositoryUseCase(
         db=db,
         agent=agent,

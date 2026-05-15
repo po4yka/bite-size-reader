@@ -7,13 +7,11 @@ and monkeypatch get_stream_hub() at the url_processor import site.
 
 from __future__ import annotations
 
-from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
 
 from app.adapters.content.streaming.events import StreamEvent
-from app.adapters.content.streaming.stream_hub import StreamHub
 
 # ---------------------------------------------------------------------------
 # Recording stub hub

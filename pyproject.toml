@@ -19,7 +19,7 @@ select = [
   "UP",    # pyupgrade
   "ASYNC", # async issues
   "N",     # pep8-naming
-  "B",     # flake8-bugbear
+  "B",     # flake8-bugbear (includes B006: mutable-argument-default — must stay enabled)
   "C4",    # flake8-comprehensions
   "DTZ",   # flake8-datetimez
   "T10",   # flake8-debugger
@@ -84,6 +84,12 @@ ignore = [
   "PT011",   # pytest.raises too broad - can be improved later
   "PT009",   # unittest assertions - can be migrated later
   "PT027",   # unittest-style assertRaises - using unittest.TestCase
+  "PT018",   # compound assertions - acceptable for brevity in tests
+  "TC001",   # app imports for type annotations - needed at runtime for fixtures/markers
+  "TC002",   # third-party imports for type annotations - needed at runtime for pytest markers
+  "TC003",   # stdlib imports for type annotations - needed at runtime in test contexts
+  "N814",    # camelCase as constant alias - test doubles use arbitrary names
+  "N817",    # CamelCase as acronym alias - test doubles use arbitrary names
   "UP042",   # StrEnum compatibility shim for Python 3.10
   "UP017",   # datetime.UTC compatibility shim for Python 3.10
   "PT012",   # pytest.raises complex statements - acceptable in integration tests

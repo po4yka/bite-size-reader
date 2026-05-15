@@ -53,11 +53,13 @@ def _user_ctx(user) -> dict:
 
 
 class _FakeRequest:
-    headers: dict = {}
+    def __init__(self) -> None:
+        self.headers: dict = {}
 
 
 class _FakeResponse:
-    headers: dict = {}
+    def __init__(self) -> None:
+        self.headers: dict = {}
 
 
 # ---------------------------------------------------------------------------

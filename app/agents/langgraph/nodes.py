@@ -12,13 +12,13 @@ import hashlib
 import json
 from typing import TYPE_CHECKING, Any
 
-from app.agents.langgraph.state import SummarizationGraphState
 from app.core.logging_utils import get_logger
 
 if TYPE_CHECKING:
     from app.adapters.content.pure_summary_service import PureSummaryService
-    from app.agents.validation_agent import ValidationAgent, ValidationInput
-    from app.agents.web_search_agent import WebSearchAgent, WebSearchAgentInput
+    from app.agents.langgraph.state import SummarizationGraphState
+    from app.agents.validation_agent import ValidationAgent
+    from app.agents.web_search_agent import WebSearchAgent
 
 logger = get_logger(__name__)
 

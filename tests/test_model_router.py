@@ -79,11 +79,12 @@ class TestResolveModelForContent:
     ) -> None:
         """Long context should override content tier selection.
 
-        80000 tokens * 4 chars/token = 320000 chars; use 320001 to exceed threshold.
+        80000 tokens * 4 chars/token = 320000 chars; use 320004 to exceed threshold
+        (320001 // 4 == 80000, which is not > 80000; need 80001*4 = 320004).
         """
         result = resolve_model_for_content(
             tier=ContentTier.TECHNICAL,
-            content_length=320001,
+            content_length=320004,
             has_images=False,
             routing_config=routing_config,
             openrouter_config=openrouter_config,
@@ -198,10 +199,11 @@ class TestResolveModelForContent:
             quick_model="qwen/qwen3.6-flash",
             quick_threshold_tokens=500,
         )
-        # 500 tokens * 4 chars = 2000 chars; use 2001 to exceed threshold
+        # 500 tokens * 4 chars = 2000 chars; use 2004 to exceed threshold
+        # (2001 // 4 == 500 which is still <= 500; need 501*4 = 2004)
         result = resolve_model_for_content(
             tier=ContentTier.DEFAULT,
-            content_length=2001,
+            content_length=2004,
             has_images=False,
             routing_config=config,
             openrouter_config=openrouter_config,

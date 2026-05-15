@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import asyncio
 import struct
-from collections.abc import Sequence
-from typing import Any, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
 
 
 def pack_embedding(embedding: Any) -> bytes:

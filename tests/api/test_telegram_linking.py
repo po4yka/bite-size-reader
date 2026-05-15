@@ -101,7 +101,7 @@ async def test_link_uses_constant_time_nonce_compare(
     calls: list[tuple[str, str]] = []
     real_compare = endpoints_telegram.hmac.compare_digest
 
-    def spy_compare(a, b):  # noqa: ANN001
+    def spy_compare(a, b):
         calls.append((a, b))
         return real_compare(a, b)
 

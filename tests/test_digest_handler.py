@@ -7,7 +7,6 @@ from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any, cast
 from unittest.mock import AsyncMock, MagicMock
 
-import pytest
 from sqlalchemy import select
 
 from app.adapters.telegram.command_handlers.digest_handler import DigestHandler
