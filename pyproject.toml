@@ -19,7 +19,7 @@ select = [
   "UP",    # pyupgrade
   "ASYNC", # async issues
   "N",     # pep8-naming
-  "B",     # flake8-bugbear (includes B006: mutable-argument-default — must stay enabled)
+  "B",     # flake8-bugbear (B006: mutable-argument-default, B023: function-uses-loop-variable — must stay enabled)
   "C4",    # flake8-comprehensions
   "DTZ",   # flake8-datetimez
   "T10",   # flake8-debugger

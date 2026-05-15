@@ -132,6 +132,15 @@ Defined in `app/core/summary_contract.py` (validation) and `app/core/summary_sch
 - **Pre-commit Hooks:** ruff (fix + format) -> isort -> mypy + standard hooks
 - **Testing:** pytest + pytest-asyncio, hypothesis, pytest-benchmark
 
+#### Two enforced bugbear rules to never suppress project-wide
+
+| Rule | What it catches | Safe fix |
+|------|-----------------|----------|
+| **B006** `mutable-argument-default` | `def f(x=[])` — shared mutable default leaks state across calls | Use `None` sentinel + in-body init |
+| **B023** `function-uses-loop-variable` | `lambda: key` inside loop — all closures see the final loop value | `lambda key=key: key`, factory function, or `functools.partial` |
+
+When a suppression is genuinely needed (e.g. a test that demonstrates the bug), use a **narrow inline `# noqa: B023`** with a justification comment — never a file-level ignore.
+
 ### Common Commands
 
 ```bash
