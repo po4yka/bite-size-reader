@@ -18,6 +18,7 @@ from .adaptive_timeout import AdaptiveTimeoutConfig
 from .api import ApiLimitsConfig, AuthConfig, SyncConfig
 from .backup import BackupConfig
 from .background import BackgroundProcessorConfig
+from .import_export import ImportConfig
 from .circuit_breaker import CircuitBreakerConfig
 from .content import ContentLimitsConfig
 from .database import DatabaseConfig
@@ -195,6 +196,7 @@ class AppConfig:
     vector_reconcile: VectorReconcileConfig = field(default_factory=VectorReconcileConfig)
     retention: RetentionConfig = field(default_factory=RetentionConfig)
     backup: BackupConfig = field(default_factory=BackupConfig)
+    import_export: ImportConfig = field(default_factory=ImportConfig)
 
 
 class Settings(BaseSettings):
@@ -252,6 +254,7 @@ class Settings(BaseSettings):
     vector_reconcile: VectorReconcileConfig = Field(default_factory=VectorReconcileConfig)
     retention: RetentionConfig = Field(default_factory=RetentionConfig)
     backup: BackupConfig = Field(default_factory=BackupConfig)
+    import_export: ImportConfig = Field(default_factory=ImportConfig)
 
     @model_validator(mode="before")
     @classmethod
@@ -393,6 +396,7 @@ class Settings(BaseSettings):
             vector_reconcile=self.vector_reconcile,
             retention=self.retention,
             backup=self.backup,
+            import_export=self.import_export,
         )
 
 

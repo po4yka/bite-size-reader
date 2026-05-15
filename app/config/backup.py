@@ -31,7 +31,7 @@ class BackupConfig(BaseModel):
     max_restore_bytes: int = Field(
         default=100 * 1024 * 1024,
         ge=1024,
-        validation_alias="BACKUP_MAX_RESTORE_BYTES",
+        validation_alias="BACKUP_RESTORE_MAX_UPLOAD_BYTES",
         description="Maximum upload size in bytes for the restore endpoint (default 100 MB).",
     )
     max_zip_entries: int = Field(
