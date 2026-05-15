@@ -34,6 +34,75 @@ all operational tables, or config.
 
 ---
 
+## Backup Encryption
+
+The per-user export ZIPs created by the `/v1/backups` API and the Telegram `/backup`
+command can be encrypted at rest using Fernet (AES-128-CBC + HMAC-SHA256). The
+`cryptography` package that ships with Ratatoskr provides this without extra
+dependencies.
+
+### Generating A Key
+
+```bash
+python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+```
+
+Copy the 44-character output into `.env`:
+
+```bash
+BACKUP_ENCRYPTION_KEY=<your-44-char-key>
+```
+
+Encryption is enabled automatically when `BACKUP_ENCRYPTION_KEY` is present.
+Encrypted files are written with a `.zip.enc` extension; unencrypted files keep `.zip`.
+
+### Disabling Encryption Explicitly
+
+Set `BACKUP_ENCRYPTION_ENABLED=false` to skip encryption even when a key is
+configured — for example, during a migration window:
+
+```bash
+BACKUP_ENCRYPTION_ENABLED=false
+```
+
+This does not affect instance-level backups (PostgreSQL, Qdrant, media) described
+in this guide.
+
+### Restoring Encrypted Archives
+
+The restore endpoint auto-detects whether an uploaded archive is encrypted and
+decrypts it before extraction. Provide the same `BACKUP_ENCRYPTION_KEY` that was
+active when the backup was created. Old plaintext `.zip` archives remain restorable
+without a key.
+
+If the wrong key is active the restore returns without touching the database:
+
+```json
+{ "errors": ["Could not decrypt backup (wrong key or corrupted archive)"] }
+```
+
+If encryption was enabled when the backup was created but `BACKUP_ENCRYPTION_KEY`
+is missing on restore:
+
+```json
+{ "errors": ["Encrypted backup but BACKUP_ENCRYPTION_KEY is not configured"] }
+```
+
+### Safety Limits
+
+The restore endpoint validates ZIP metadata before extracting any bytes. These
+limits are configurable via environment variables:
+
+| Variable | Default | Description |
+|---|---|---|
+| `BACKUP_MAX_RESTORE_BYTES` | 100 MB | Upload size gate (returns 413 before reading body) |
+| `BACKUP_MAX_ZIP_ENTRIES` | 100 | Maximum number of entries in the archive |
+| `BACKUP_MAX_COMPRESSED_BYTES` | 100 MB | Maximum sum of compressed entry sizes |
+| `BACKUP_MAX_DECOMPRESSED_BYTES` | 500 MB | Maximum sum of uncompressed entry sizes |
+| `BACKUP_MAX_COMPRESSION_RATIO` | 100 | Per-entry ratio cap (zip bomb guard) |
+
+---
+
 ## Before You Start
 
 Set a backup timestamp once so every archive has matching names:
