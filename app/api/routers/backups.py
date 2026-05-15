@@ -17,6 +17,7 @@ from app.api.exceptions import APIException, ErrorCode, ResourceNotFoundError
 from app.api.models.responses import BackupResponse, success_response
 from app.api.routers.auth import get_current_user
 from app.api.search_helpers import isotime
+from app.config.backup import load_backup_config
 from app.core.logging_utils import get_logger
 from app.infrastructure.persistence.backup_archive_service import (
     async_create_backup_archive,
@@ -27,6 +28,26 @@ logger = get_logger(__name__)
 router = APIRouter()
 
 MAX_BACKUPS_PER_HOUR = 3
+_UPLOAD_CHUNK_SIZE = 64 * 1024  # 64 KB
+
+
+async def _read_upload_capped(file: UploadFile, limit: int) -> bytes:
+    """Read an upload in chunks, raising 413 if it exceeds *limit* bytes."""
+    chunks: list[bytes] = []
+    received = 0
+    while True:
+        chunk = await file.read(_UPLOAD_CHUNK_SIZE)
+        if not chunk:
+            break
+        received += len(chunk)
+        if received > limit:
+            raise APIException(
+                message=f"Upload exceeds {limit // 1024 // 1024} MB limit",
+                error_code=ErrorCode.VALIDATION_ERROR,
+                status_code=413,
+            )
+        chunks.append(chunk)
+    return b"".join(chunks)
 
 
 def _backup_to_response(b: dict[str, Any]) -> BackupResponse:
@@ -105,7 +126,8 @@ async def restore_backup(
     user: dict[str, Any] = Depends(get_current_user),
 ) -> dict[str, Any]:
     """Restore user data from an uploaded backup ZIP."""
-    content = await file.read()
+    cfg = load_backup_config()
+    content = await _read_upload_capped(file, cfg.max_restore_bytes)
     if not content:
         raise APIException(
             message="Uploaded file is empty",
@@ -113,7 +135,9 @@ async def restore_backup(
             status_code=400,
         )
 
-    summary = await async_restore_from_archive(user["user_id"], content, db=get_session_manager())
+    summary = await async_restore_from_archive(
+        user["user_id"], content, db=get_session_manager(), cfg=cfg
+    )
     return success_response(summary)
 
 
@@ -202,11 +226,8 @@ async def download_backup(
         )
 
     filename = os.path.basename(file_path)
-    return FileResponse(
-        path=file_path,
-        filename=filename,
-        media_type="application/zip",
-    )
+    media_type = "application/zip" if filename.endswith(".zip") else "application/octet-stream"
+    return FileResponse(path=file_path, filename=filename, media_type=media_type)
 
 
 @router.delete("/{backup_id}")

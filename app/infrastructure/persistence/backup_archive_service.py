@@ -28,10 +28,18 @@ from app.db.models import (
     model_to_dict,
 )
 from app.db.types import _utcnow
+from app.infrastructure.persistence.backup_crypto import (
+    InvalidBackupCiphertextError,
+    decrypt_backup,
+    encrypt_backup,
+    is_fernet_ciphertext,
+)
+from app.infrastructure.persistence.backup_safety import ZipSafetyViolation, validate_zip_safety
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
+    from app.config.backup import BackupConfig
     from app.db.session import Database
 
 logger = get_logger(__name__)
@@ -72,8 +80,12 @@ async def async_create_backup_archive(
     *,
     db: Database | None = None,
     data_dir: str | None = None,
+    cfg: BackupConfig | None = None,
 ) -> None:
     """Create a ZIP backup of all user data."""
+    from app.config.backup import load_backup_config
+
+    cfg = cfg or load_backup_config()
     database = _database(db)
     backup_dir = _resolve_data_dir(data_dir) / "backups" / str(user_id)
 
@@ -211,9 +223,9 @@ async def async_create_backup_archive(
 
         os.makedirs(backup_dir, exist_ok=True)
         timestamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
-        zip_path = backup_dir / f"ratatoskr-backup-{user_id}-{timestamp}.zip"
 
-        with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as archive:
+        buf = BytesIO()
+        with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as archive:
             archive.writestr("manifest.json", json.dumps(manifest, default=str, indent=2))
             archive.writestr("requests.json", json.dumps(requests_data, default=str))
             archive.writestr("summaries.json", json.dumps(summaries_data, default=str))
@@ -229,7 +241,17 @@ async def async_create_backup_archive(
                 json.dumps(preferences, default=str) if preferences else "{}",
             )
 
-        file_size = zip_path.stat().st_size
+        zip_bytes = buf.getvalue()
+        if cfg.is_encryption_enabled:
+            payload = encrypt_backup(zip_bytes, cfg.encryption_key)  # type: ignore[arg-type]
+            suffix = ".zip.enc"
+        else:
+            payload = zip_bytes
+            suffix = ".zip"
+
+        zip_path = backup_dir / f"ratatoskr-backup-{user_id}-{timestamp}{suffix}"
+        zip_path.write_bytes(payload)
+        file_size = len(payload)
         async with database.transaction() as session:
             await session.execute(
                 update(UserBackup)
@@ -269,8 +291,11 @@ async def async_restore_from_archive(
     zip_bytes: bytes,
     *,
     db: Database | None = None,
+    cfg: BackupConfig | None = None,
 ) -> dict[str, Any]:
     """Restore user data from a backup ZIP and return a summary."""
+    from app.config.backup import load_backup_config
+
     restored: dict[str, int] = {
         "requests": 0,
         "summaries": 0,
@@ -287,6 +312,32 @@ async def async_restore_from_archive(
         "collections": 0,
     }
     errors: list[str] = []
+
+    cfg = cfg or load_backup_config()
+
+    if is_fernet_ciphertext(zip_bytes):
+        if cfg.encryption_key is None:
+            errors.append("Encrypted backup but BACKUP_ENCRYPTION_KEY is not configured")
+            return {"restored": restored, "skipped": skipped, "errors": errors}
+        try:
+            zip_bytes = decrypt_backup(zip_bytes, cfg.encryption_key)
+        except InvalidBackupCiphertextError:
+            errors.append("Could not decrypt backup (wrong key or corrupted archive)")
+            return {"restored": restored, "skipped": skipped, "errors": errors}
+    else:
+        logger.warning("restore_unencrypted_backup", extra={"user_id": user_id})
+
+    try:
+        validate_zip_safety(
+            zip_bytes,
+            max_entries=cfg.max_zip_entries,
+            max_compressed_bytes=cfg.max_compressed_bytes,
+            max_decompressed_bytes=cfg.max_decompressed_bytes,
+            max_ratio=cfg.max_compression_ratio,
+        )
+    except ZipSafetyViolation as exc:
+        errors.append(str(exc))
+        return {"restored": restored, "skipped": skipped, "errors": errors}
 
     try:
         with zipfile.ZipFile(BytesIO(zip_bytes), "r") as archive:
@@ -532,6 +583,7 @@ def create_backup_archive(
     *,
     db: Database | None = None,
     data_dir: str | None = None,
+    cfg: BackupConfig | None = None,
 ) -> None:
     """Synchronous compatibility wrapper for backup archive creation."""
     asyncio.run(
@@ -540,6 +592,7 @@ def create_backup_archive(
             backup_id=backup_id,
             db=db,
             data_dir=data_dir,
+            cfg=cfg,
         )
     )
 
@@ -549,6 +602,9 @@ def restore_from_archive(
     zip_bytes: bytes,
     *,
     db: Database | None = None,
+    cfg: BackupConfig | None = None,
 ) -> dict[str, Any]:
     """Synchronous compatibility wrapper for backup archive restore."""
-    return asyncio.run(async_restore_from_archive(user_id=user_id, zip_bytes=zip_bytes, db=db))
+    return asyncio.run(
+        async_restore_from_archive(user_id=user_id, zip_bytes=zip_bytes, db=db, cfg=cfg)
+    )

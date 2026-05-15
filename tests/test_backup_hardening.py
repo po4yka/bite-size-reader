@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import io
+import json
 import zipfile
+from contextlib import asynccontextmanager
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from pydantic import ValidationError
@@ -217,3 +220,135 @@ class TestZipSafety:
 
         with pytest.raises(ZipSafetyViolation, match="corrupt"):
             validate_zip_safety(b"not a zip", **_LIMITS)
+
+
+# ---------------------------------------------------------------------------
+# Restore pipeline (decrypt + safety + import)
+# ---------------------------------------------------------------------------
+
+def _minimal_backup_zip() -> bytes:
+    """Minimal valid backup ZIP with empty data arrays."""
+    manifest = {
+        "version": "1.0",
+        "user_id": 1,
+        "created_at": "2024-01-01T00:00:00+00:00",
+        "counts": {
+            "requests": 0, "summaries": 0, "tags": 0, "summary_tags": 0,
+            "collections": 0, "collection_items": 0, "highlights": 0,
+        },
+    }
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        zf.writestr("manifest.json", json.dumps(manifest))
+        for name in (
+            "requests", "summaries", "tags", "summary_tags",
+            "collections", "collection_items", "highlights",
+        ):
+            zf.writestr(f"{name}.json", "[]")
+    return buf.getvalue()
+
+
+def _make_mock_db() -> MagicMock:
+    """Minimal DB mock that satisfies async_restore_from_archive."""
+    @asynccontextmanager
+    async def fake_transaction():
+        session = MagicMock()
+        session.scalar = AsyncMock(return_value=None)
+        session.execute = AsyncMock(return_value=MagicMock())
+        session.flush = AsyncMock()
+        yield session
+
+    db = MagicMock()
+    db.transaction = fake_transaction
+    return db
+
+
+class TestRestoreHardening:
+    async def test_restore_accepts_encrypted_archive(self) -> None:
+        from pydantic import SecretStr
+
+        from app.infrastructure.persistence.backup_archive_service import (
+            async_restore_from_archive,
+        )
+        from app.infrastructure.persistence.backup_crypto import encrypt_backup
+
+        encrypted = encrypt_backup(_minimal_backup_zip(), SecretStr(_TEST_KEY_STR))
+        cfg = BackupConfig(encryption_key=_TEST_KEY_STR)
+        result = await async_restore_from_archive(1, encrypted, db=_make_mock_db(), cfg=cfg)
+        assert result["errors"] == []
+        assert result["restored"]["requests"] == 0
+
+    async def test_restore_accepts_unencrypted_archive(self) -> None:
+        from app.infrastructure.persistence.backup_archive_service import (
+            async_restore_from_archive,
+        )
+
+        cfg = BackupConfig()
+        result = await async_restore_from_archive(
+            1, _minimal_backup_zip(), db=_make_mock_db(), cfg=cfg
+        )
+        assert result["errors"] == []
+
+    async def test_restore_rejects_encrypted_without_key(self) -> None:
+        from pydantic import SecretStr
+
+        from app.infrastructure.persistence.backup_archive_service import (
+            async_restore_from_archive,
+        )
+        from app.infrastructure.persistence.backup_crypto import encrypt_backup
+
+        encrypted = encrypt_backup(_minimal_backup_zip(), SecretStr(_TEST_KEY_STR))
+        cfg = BackupConfig()  # no key
+        result = await async_restore_from_archive(1, encrypted, cfg=cfg)
+        assert any("BACKUP_ENCRYPTION_KEY" in e for e in result["errors"])
+
+    async def test_restore_rejects_wrong_key(self) -> None:
+        from pydantic import SecretStr
+
+        from app.infrastructure.persistence.backup_archive_service import (
+            async_restore_from_archive,
+        )
+        from app.infrastructure.persistence.backup_crypto import encrypt_backup
+
+        encrypted = encrypt_backup(_minimal_backup_zip(), SecretStr(_TEST_KEY_STR))
+        cfg = BackupConfig(encryption_key=_OTHER_KEY)
+        result = await async_restore_from_archive(1, encrypted, cfg=cfg)
+        assert any("decrypt" in e.lower() for e in result["errors"])
+
+    async def test_restore_rejects_safety_violation(self) -> None:
+        from app.infrastructure.persistence.backup_archive_service import (
+            async_restore_from_archive,
+        )
+
+        # "a" * 5000 compresses to ~15 B → ratio ~333, exceeds default max_ratio=100
+        bomb = _one_entry_zip(content=b"a" * 5000)
+        cfg = BackupConfig()
+        result = await async_restore_from_archive(1, bomb, cfg=cfg)
+        assert len(result["errors"]) == 1
+        assert "ratio" in result["errors"][0].lower()
+
+
+# ---------------------------------------------------------------------------
+# Upload cap (router helper)
+# ---------------------------------------------------------------------------
+
+
+class TestUploadCap:
+    async def test_oversized_upload_rejected(self) -> None:
+        from app.api.exceptions import APIException
+        from app.api.routers.backups import _read_upload_capped
+
+        mock_file = AsyncMock()
+        # 50 + 60 = 110 bytes > limit of 100
+        mock_file.read.side_effect = [b"a" * 50, b"b" * 60, b""]
+        with pytest.raises(APIException) as exc_info:
+            await _read_upload_capped(mock_file, limit=100)
+        assert exc_info.value.status_code == 413
+
+    async def test_within_limit_passes(self) -> None:
+        from app.api.routers.backups import _read_upload_capped
+
+        mock_file = AsyncMock()
+        mock_file.read.side_effect = [b"hello world", b""]
+        content = await _read_upload_capped(mock_file, limit=100)
+        assert content == b"hello world"
