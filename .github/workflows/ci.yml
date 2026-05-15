@@ -223,6 +223,11 @@ jobs:
           radon cc app --min B --show-complexity --no-assert
           radon mi app --min B
 
+      - name: Semgrep (Python mutability rules)
+        run: |
+          uv pip install --system semgrep --quiet
+          semgrep --config semgrep/python-mutability.yml --error app/ tests/
+
   type-check:
     name: Type Check (mypy)
     needs: prepare-environment

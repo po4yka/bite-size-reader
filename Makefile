@@ -1,4 +1,4 @@
-.PHONY: format lint type test test-unit test-integration test-all all setup-dev venv pre-commit-install pre-commit-run check-lock check-openapi check-openapi-validate check-file-loc check-layout clean-generated security
+.PHONY: format lint type test test-unit test-integration test-all all setup-dev venv pre-commit-install pre-commit-run check-lock check-openapi check-openapi-validate check-file-loc check-layout clean-generated security static-checks
 
 COMPOSE_FILE := ops/docker/docker-compose.yml
 DOCKERFILE_BOT := ops/docker/Dockerfile
@@ -39,6 +39,11 @@ test-fast:
 security:
 	uv run --frozen bandit -r app -ll
 	uv run --frozen pip-audit
+
+# Runs custom Semgrep rules that catch mutable-aliasing patterns not covered by
+# Ruff. Also enforced in the lint-and-format CI job and as a pre-commit hook.
+static-checks:
+	semgrep --config semgrep/python-mutability.yml --error app/ tests/
 
 # Note: `all` deliberately omits `security`; run `make security` separately.
 all: format lint type test

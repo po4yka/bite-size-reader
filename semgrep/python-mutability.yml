@@ -1,0 +1,88 @@
+rules:
+  # ------------------------------------------------------------------
+  # [mutable] * N  aliasing patterns
+  # ------------------------------------------------------------------
+  # `[[]] * N` creates N references to the *same* inner list object.
+  # Mutating any slot mutates every slot.  Use a list comprehension.
+
+  - id: mutable-inner-list-repeated
+    languages: [python]
+    severity: ERROR
+    message: >
+      `[[...]] * N` creates N aliases to the same inner list object.
+      Mutating any element mutates all of them.
+      Fix: `[[] for _ in range(N)]` or `[list(template) for _ in range(N)]`.
+    pattern-either:
+      - pattern: "[[...]] * $_"
+      - pattern: "$_ * [[...]]"
+    paths:
+      exclude:
+        - "**/tests/architecture/test_mutability_isolation.py"
+
+  - id: mutable-inner-dict-repeated
+    languages: [python]
+    severity: ERROR
+    message: >
+      `[{...}] * N` creates N aliases to the same inner dict object.
+      Mutating any element mutates all of them.
+      Fix: `[{} for _ in range(N)]` or `[dict(template) for _ in range(N)]`.
+    pattern-either:
+      - pattern: "[{...}] * $_"
+      - pattern: "$_ * [{...}]"
+    paths:
+      exclude:
+        - "**/tests/architecture/test_mutability_isolation.py"
+        - "**/tests/test_openrouter_compliance.py"
+
+  - id: mutable-inner-set-repeated
+    languages: [python]
+    severity: ERROR
+    message: >
+      `[set(...)] * N` creates N aliases to the same inner set object.
+      Fix: `[set() for _ in range(N)]`.
+    pattern-either:
+      - pattern: "[set(...)] * $_"
+      - pattern: "$_ * [set(...)]"
+    paths:
+      exclude:
+        - "**/tests/architecture/test_mutability_isolation.py"
+
+  # ------------------------------------------------------------------
+  # dict.fromkeys(keys, mutable_value)  aliasing patterns
+  # ------------------------------------------------------------------
+  # `dict.fromkeys(keys, [])` stores a reference to the *same* list in
+  # every key.  Mutating `d["a"]` also mutates `d["b"]`, `d["c"]`, …
+  # Use a comprehension: `{k: [] for k in keys}`.
+
+  - id: dict-fromkeys-mutable-list
+    languages: [python]
+    severity: ERROR
+    message: >
+      `dict.fromkeys(keys, [...])` shares one list object across all keys.
+      Fix: `{k: [] for k in keys}`.
+    pattern: "dict.fromkeys($_, [...])"
+    paths:
+      exclude:
+        - "**/tests/architecture/test_mutability_isolation.py"
+
+  - id: dict-fromkeys-mutable-dict
+    languages: [python]
+    severity: ERROR
+    message: >
+      `dict.fromkeys(keys, {...})` shares one dict object across all keys.
+      Fix: `{k: {} for k in keys}`.
+    pattern: "dict.fromkeys($_, {...})"
+    paths:
+      exclude:
+        - "**/tests/architecture/test_mutability_isolation.py"
+
+  - id: dict-fromkeys-mutable-set
+    languages: [python]
+    severity: ERROR
+    message: >
+      `dict.fromkeys(keys, set())` shares one set object across all keys.
+      Fix: `{k: set() for k in keys}`.
+    pattern: "dict.fromkeys($_, set())"
+    paths:
+      exclude:
+        - "**/tests/architecture/test_mutability_isolation.py"
