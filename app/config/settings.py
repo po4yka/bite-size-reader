@@ -37,6 +37,7 @@ from .media import AttachmentConfig, YouTubeConfig
 from .otel import OtelConfig, SentryConfig
 from .push import PushNotificationConfig
 from .redis import RedisConfig
+from .retention import RetentionConfig
 from .rss import RSSConfig
 from .runtime import RuntimeConfig
 from .scraper import ScraperConfig
@@ -191,6 +192,7 @@ class AppConfig:
     github: GitHubConfig = field(default_factory=GitHubConfig)
     cocoindex: CocoIndexConfig = field(default_factory=CocoIndexConfig)
     vector_reconcile: VectorReconcileConfig = field(default_factory=VectorReconcileConfig)
+    retention: RetentionConfig = field(default_factory=RetentionConfig)
 
 
 class Settings(BaseSettings):
@@ -246,6 +248,7 @@ class Settings(BaseSettings):
     github: GitHubConfig = Field(default_factory=GitHubConfig)
     cocoindex: CocoIndexConfig = Field(default_factory=CocoIndexConfig)
     vector_reconcile: VectorReconcileConfig = Field(default_factory=VectorReconcileConfig)
+    retention: RetentionConfig = Field(default_factory=RetentionConfig)
 
     @model_validator(mode="before")
     @classmethod
@@ -385,6 +388,7 @@ class Settings(BaseSettings):
             github=self.github,
             cocoindex=self.cocoindex,
             vector_reconcile=self.vector_reconcile,
+            retention=self.retention,
         )
 
 

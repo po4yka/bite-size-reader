@@ -15,6 +15,7 @@ from .media import AttachmentConfig, YouTubeConfig
 from .otel import SentryConfig
 from .push import PushNotificationConfig
 from .redis import RedisConfig
+from .retention import RetentionConfig
 from .rss import RSSConfig
 from .runtime import RuntimeConfig
 from .scraper import ScraperConfig
@@ -51,6 +52,7 @@ __all__ = [
     "QdrantConfig",
     "RSSConfig",
     "RedisConfig",
+    "RetentionConfig",
     "RuntimeConfig",
     "ScraperConfig",
     "SentryConfig",
