@@ -8,17 +8,11 @@ services:
     container_name: ratatoskr-migrate
     init: true
     command: ["python", "-m", "app.cli.migrate_db"]
-    env_file:
-      - path: ../../.env
-        required: false
     environment:
       - DATABASE_URL=${DATABASE_URL:-postgresql+asyncpg://ratatoskr_app:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/ratatoskr}
       - PYTHONUNBUFFERED=1
       - PYTHONDONTWRITEBYTECODE=1
       - RATATOSKR_PROCESS_ROLE=migrate
-    volumes:
-      - ../../data:/data
-      - /etc/localtime:/etc/localtime:ro
     tmpfs:
       - /tmp
     depends_on:
