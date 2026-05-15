@@ -111,7 +111,7 @@ async def _null_columns(
     async with db.session() as session:
         result = await session.execute(stmt)
         await session.commit()
-        return result.rowcount or 0
+        return result.rowcount or 0  # type: ignore[attr-defined]
 
 
 async def _purge_telegram_raw(
