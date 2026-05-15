@@ -10,7 +10,8 @@ All targeted columns are already nullable=True; no migration is needed.
 from __future__ import annotations
 
 import datetime as dt
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass
+from typing import Any
 
 from sqlalchemy import select, update
 from taskiq import TaskiqDepends
@@ -42,12 +43,12 @@ _PURGE_LOCK_TTL = 600
 class PurgeStats:
     """Per-subsystem counts of rows that had at least one field NULLed."""
 
-    telegram_raw: int = field(default=0)
-    crawl_content: int = field(default=0)
-    llm_payload: int = field(default=0)
-    video_transcript: int = field(default=0)
-    interaction_text: int = field(default=0)
-    request_content: int = field(default=0)
+    telegram_raw: int = 0
+    crawl_content: int = 0
+    llm_payload: int = 0
+    video_transcript: int = 0
+    interaction_text: int = 0
+    request_content: int = 0
 
 
 @broker.task(task_name="ratatoskr.data.purge")
@@ -70,7 +71,11 @@ async def purge_raw_data(
 
 
 async def _purge_body(cfg: AppConfig, db: Database) -> PurgeStats:
-    """Execute all subsystem purges and return aggregate stats."""
+    """Execute all subsystem purges and return aggregate stats.
+
+    Each subsystem runs in its own transaction so a failure in one does not
+    roll back earlier subsystem progress.
+    """
     if not cfg.retention.enabled:
         logger.info("data_purge_disabled")
         return PurgeStats()
@@ -93,18 +98,20 @@ async def _purge_body(cfg: AppConfig, db: Database) -> PurgeStats:
             db, now, ret.request_content_days, batch
         ),
     )
-    logger.info(
-        "data_purge_complete",
-        extra={
-            "telegram_raw": stats.telegram_raw,
-            "crawl_content": stats.crawl_content,
-            "llm_payload": stats.llm_payload,
-            "video_transcript": stats.video_transcript,
-            "interaction_text": stats.interaction_text,
-            "request_content": stats.request_content,
-        },
-    )
+    logger.info("data_purge_complete", extra=asdict(stats))
     return stats
+
+
+async def _null_columns(
+    db: Database,
+    *,
+    stmt: Any,
+) -> int:
+    """Execute a prebuilt UPDATE statement and return the affected rowcount."""
+    async with db.session() as session:
+        result = await session.execute(stmt)
+        await session.commit()
+        return result.rowcount or 0
 
 
 async def _purge_telegram_raw(
@@ -118,29 +125,26 @@ async def _purge_telegram_raw(
     if days == 0:
         return 0
     cutoff = now - dt.timedelta(days=days)
-    async with db.session() as session:
-        stmt = (
-            update(TelegramMessage)
-            .where(
-                TelegramMessage.id.in_(
-                    select(TelegramMessage.id)
-                    .join(Request, Request.id == TelegramMessage.request_id)
-                    .where(
-                        Request.created_at < cutoff,
-                        (
-                            TelegramMessage.text_full.is_not(None)
-                            | TelegramMessage.entities_json.is_not(None)
-                            | TelegramMessage.telegram_raw_json.is_not(None)
-                        ),
-                    )
-                    .limit(batch)
+    stmt = (
+        update(TelegramMessage)
+        .where(
+            TelegramMessage.id.in_(
+                select(TelegramMessage.id)
+                .join(Request, Request.id == TelegramMessage.request_id)
+                .where(
+                    Request.created_at < cutoff,
+                    (
+                        TelegramMessage.text_full.is_not(None)
+                        | TelegramMessage.entities_json.is_not(None)
+                        | TelegramMessage.telegram_raw_json.is_not(None)
+                    ),
                 )
+                .limit(batch)
             )
-            .values(text_full=None, entities_json=None, telegram_raw_json=None)
         )
-        result = await session.execute(stmt)
-        await session.commit()
-        return result.rowcount or 0
+        .values(text_full=None, entities_json=None, telegram_raw_json=None)
+    )
+    return await _null_columns(db, stmt=stmt)
 
 
 async def _purge_crawl_content(
@@ -149,45 +153,45 @@ async def _purge_crawl_content(
     """NULL content_markdown, content_html, raw_response_json, firecrawl_details_json,
     structured_json, metadata_json, links_json.
 
-    crawl_results has updated_at but not created_at; use updated_at as age reference.
+    crawl_results has no created_at; age is derived from the parent
+    requests.created_at via JOIN so that status changes and error backfills
+    (which bump updated_at) do not reset the retention clock.
     """
     if days == 0:
         return 0
     cutoff = now - dt.timedelta(days=days)
-    async with db.session() as session:
-        stmt = (
-            update(CrawlResult)
-            .where(
-                CrawlResult.id.in_(
-                    select(CrawlResult.id)
-                    .where(
-                        CrawlResult.updated_at < cutoff,
-                        (
-                            CrawlResult.content_markdown.is_not(None)
-                            | CrawlResult.content_html.is_not(None)
-                            | CrawlResult.raw_response_json.is_not(None)
-                            | CrawlResult.firecrawl_details_json.is_not(None)
-                            | CrawlResult.structured_json.is_not(None)
-                            | CrawlResult.metadata_json.is_not(None)
-                            | CrawlResult.links_json.is_not(None)
-                        ),
-                    )
-                    .limit(batch)
+    stmt = (
+        update(CrawlResult)
+        .where(
+            CrawlResult.id.in_(
+                select(CrawlResult.id)
+                .join(Request, Request.id == CrawlResult.request_id)
+                .where(
+                    Request.created_at < cutoff,
+                    (
+                        CrawlResult.content_markdown.is_not(None)
+                        | CrawlResult.content_html.is_not(None)
+                        | CrawlResult.raw_response_json.is_not(None)
+                        | CrawlResult.firecrawl_details_json.is_not(None)
+                        | CrawlResult.structured_json.is_not(None)
+                        | CrawlResult.metadata_json.is_not(None)
+                        | CrawlResult.links_json.is_not(None)
+                    ),
                 )
-            )
-            .values(
-                content_markdown=None,
-                content_html=None,
-                raw_response_json=None,
-                firecrawl_details_json=None,
-                structured_json=None,
-                metadata_json=None,
-                links_json=None,
+                .limit(batch)
             )
         )
-        result = await session.execute(stmt)
-        await session.commit()
-        return result.rowcount or 0
+        .values(
+            content_markdown=None,
+            content_html=None,
+            raw_response_json=None,
+            firecrawl_details_json=None,
+            structured_json=None,
+            metadata_json=None,
+            links_json=None,
+        )
+    )
+    return await _null_columns(db, stmt=stmt)
 
 
 async def _purge_llm_payload(
@@ -202,38 +206,35 @@ async def _purge_llm_payload(
     if days == 0:
         return 0
     cutoff = now - dt.timedelta(days=days)
-    async with db.session() as session:
-        stmt = (
-            update(LLMCall)
-            .where(
-                LLMCall.id.in_(
-                    select(LLMCall.id)
-                    .where(
-                        LLMCall.created_at < cutoff,
-                        (
-                            LLMCall.request_messages_json.is_not(None)
-                            | LLMCall.request_headers_json.is_not(None)
-                            | LLMCall.response_text.is_not(None)
-                            | LLMCall.response_json.is_not(None)
-                            | LLMCall.openrouter_response_text.is_not(None)
-                            | LLMCall.openrouter_response_json.is_not(None)
-                        ),
-                    )
-                    .limit(batch)
+    stmt = (
+        update(LLMCall)
+        .where(
+            LLMCall.id.in_(
+                select(LLMCall.id)
+                .where(
+                    LLMCall.created_at < cutoff,
+                    (
+                        LLMCall.request_messages_json.is_not(None)
+                        | LLMCall.request_headers_json.is_not(None)
+                        | LLMCall.response_text.is_not(None)
+                        | LLMCall.response_json.is_not(None)
+                        | LLMCall.openrouter_response_text.is_not(None)
+                        | LLMCall.openrouter_response_json.is_not(None)
+                    ),
                 )
-            )
-            .values(
-                request_messages_json=None,
-                request_headers_json=None,
-                response_text=None,
-                response_json=None,
-                openrouter_response_text=None,
-                openrouter_response_json=None,
+                .limit(batch)
             )
         )
-        result = await session.execute(stmt)
-        await session.commit()
-        return result.rowcount or 0
+        .values(
+            request_messages_json=None,
+            request_headers_json=None,
+            response_text=None,
+            response_json=None,
+            openrouter_response_text=None,
+            openrouter_response_json=None,
+        )
+    )
+    return await _null_columns(db, stmt=stmt)
 
 
 async def _purge_video_transcript(
@@ -243,24 +244,21 @@ async def _purge_video_transcript(
     if days == 0:
         return 0
     cutoff = now - dt.timedelta(days=days)
-    async with db.session() as session:
-        stmt = (
-            update(VideoDownload)
-            .where(
-                VideoDownload.id.in_(
-                    select(VideoDownload.id)
-                    .where(
-                        VideoDownload.created_at < cutoff,
-                        VideoDownload.transcript_text.is_not(None),
-                    )
-                    .limit(batch)
+    stmt = (
+        update(VideoDownload)
+        .where(
+            VideoDownload.id.in_(
+                select(VideoDownload.id)
+                .where(
+                    VideoDownload.created_at < cutoff,
+                    VideoDownload.transcript_text.is_not(None),
                 )
+                .limit(batch)
             )
-            .values(transcript_text=None)
         )
-        result = await session.execute(stmt)
-        await session.commit()
-        return result.rowcount or 0
+        .values(transcript_text=None)
+    )
+    return await _null_columns(db, stmt=stmt)
 
 
 async def _purge_interaction_text(
@@ -270,24 +268,21 @@ async def _purge_interaction_text(
     if days == 0:
         return 0
     cutoff = now - dt.timedelta(days=days)
-    async with db.session() as session:
-        stmt = (
-            update(UserInteraction)
-            .where(
-                UserInteraction.id.in_(
-                    select(UserInteraction.id)
-                    .where(
-                        UserInteraction.created_at < cutoff,
-                        UserInteraction.input_text.is_not(None),
-                    )
-                    .limit(batch)
+    stmt = (
+        update(UserInteraction)
+        .where(
+            UserInteraction.id.in_(
+                select(UserInteraction.id)
+                .where(
+                    UserInteraction.created_at < cutoff,
+                    UserInteraction.input_text.is_not(None),
                 )
+                .limit(batch)
             )
-            .values(input_text=None)
         )
-        result = await session.execute(stmt)
-        await session.commit()
-        return result.rowcount or 0
+        .values(input_text=None)
+    )
+    return await _null_columns(db, stmt=stmt)
 
 
 async def _purge_request_content(
@@ -297,24 +292,21 @@ async def _purge_request_content(
     if days == 0:
         return 0
     cutoff = now - dt.timedelta(days=days)
-    async with db.session() as session:
-        stmt = (
-            update(Request)
-            .where(
-                Request.id.in_(
-                    select(Request.id)
-                    .where(
-                        Request.created_at < cutoff,
-                        (
-                            Request.content_text.is_not(None)
-                            | Request.error_context_json.is_not(None)
-                        ),
-                    )
-                    .limit(batch)
+    stmt = (
+        update(Request)
+        .where(
+            Request.id.in_(
+                select(Request.id)
+                .where(
+                    Request.created_at < cutoff,
+                    (
+                        Request.content_text.is_not(None)
+                        | Request.error_context_json.is_not(None)
+                    ),
                 )
+                .limit(batch)
             )
-            .values(content_text=None, error_context_json=None)
         )
-        result = await session.execute(stmt)
-        await session.commit()
-        return result.rowcount or 0
+        .values(content_text=None, error_context_json=None)
+    )
+    return await _null_columns(db, stmt=stmt)
