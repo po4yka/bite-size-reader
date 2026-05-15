@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from pydantic import BaseModel, ConfigDict, Field
+from typing import Any
+
+from pydantic import BaseModel, ConfigDict, Field, ValidationInfo, field_validator
 
 
 class RetentionConfig(BaseModel):
@@ -58,3 +60,41 @@ class RetentionConfig(BaseModel):
         validation_alias="RETENTION_REQUEST_CONTENT_DAYS",
         description="Days to keep requests.content_text + error_context_json. 0 = never purge.",
     )
+
+    @field_validator("cron", mode="before")
+    @classmethod
+    def _validate_cron(cls, value: Any) -> str:
+        if value in (None, ""):
+            return "0 3 * * *"
+        cron = str(value).strip()
+        if len(cron.split()) != 5:
+            msg = "Retention cron must be a valid 5-field cron expression"
+            raise ValueError(msg)
+        return cron
+
+    @field_validator("batch_size", mode="before")
+    @classmethod
+    def _validate_batch_size(cls, value: Any) -> int:
+        parsed = int(str(value)) if value not in (None, "") else 500
+        if parsed < 1 or parsed > 10_000:
+            msg = "Retention batch_size must be between 1 and 10000"
+            raise ValueError(msg)
+        return parsed
+
+    @field_validator(
+        "telegram_raw_days",
+        "crawl_content_days",
+        "llm_payload_days",
+        "video_transcript_days",
+        "interaction_text_days",
+        "request_content_days",
+        mode="before",
+    )
+    @classmethod
+    def _validate_ttl_days(cls, value: Any, info: ValidationInfo) -> int:
+        default = cls.model_fields[info.field_name].default
+        parsed = int(str(value)) if value not in (None, "") else default
+        if parsed < 0:
+            msg = f"{info.field_name} must be >= 0 (0 means 'never purge')"
+            raise ValueError(msg)
+        return parsed
