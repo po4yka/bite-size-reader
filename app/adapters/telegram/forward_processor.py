@@ -143,17 +143,15 @@ class ForwardProcessor:
                     dict(forward_shaped) if isinstance(forward_shaped, dict) else None
                 )
 
-                self._schedule_background_task(
-                    self._maybe_generate_custom_article(
-                        message,
-                        summary_payload,
-                        chosen_lang,
-                        req_id,
-                        correlation_id,
-                    ),
-                    correlation_id,
-                    "custom_article_forward",
-                )
+                # NOTE: standalone-article generation is intentionally NOT
+                # scheduled here. The forward summary card already carries
+                # TL;DR, tags, entities and categories, so a follow-up
+                # "standalone article from topics & tags" duplicates the
+                # delivered content. The background LLM call could also
+                # stall (e.g. structured-output 422 on qwen-flash), leaving
+                # the user with a dangling "Crafting…" notice. The URL flow
+                # still has its own custom-article generation in
+                # url_post_summary_task_service.py.
 
                 self._schedule_background_task(
                     self._run_forward_insights(
@@ -360,73 +358,6 @@ class ForwardProcessor:
                 user_repo=self.user_repo,
             )
         return self._summarization_runtime
-
-    async def _maybe_generate_custom_article(
-        self,
-        message: Any,
-        summary: dict[str, Any] | None,
-        chosen_lang: str,
-        req_id: int,
-        correlation_id: str | None,
-    ) -> None:
-        """Generate a standalone article for forwarded content when topics are present."""
-        if not summary:
-            return
-
-        topics_raw = summary.get("key_ideas") if isinstance(summary, Mapping) else None
-        tags_raw = summary.get("topic_tags") if isinstance(summary, Mapping) else None
-
-        topics = [str(item).strip() for item in (topics_raw or []) if str(item).strip()]
-        tags = [str(item).strip() for item in (tags_raw or []) if str(item).strip()]
-
-        if not topics and not tags:
-            return
-
-        logger.info(
-            "custom_article_flow_started_for_forward",
-            extra={
-                "cid": correlation_id,
-                "topics_count": len(topics),
-                "tags_count": len(tags),
-            },
-        )
-
-        from app.core.async_utils import raise_if_cancelled
-
-        article_generator = self._get_summarization_runtime().article_generator
-
-        try:
-            await self.response_formatter.safe_reply(
-                message,
-                "📝 Crafting a standalone article from topics & tags…",
-            )
-        except Exception as exc:
-            raise_if_cancelled(exc)
-            logger.debug(
-                "forward_custom_article_notice_failed",
-                extra={"cid": correlation_id, "error": str(exc)},
-            )
-
-        article = await article_generator.generate_custom_article(
-            message,
-            chosen_lang=chosen_lang,
-            req_id=req_id,
-            topics=topics,
-            tags=tags,
-            correlation_id=correlation_id,
-        )
-
-        if article:
-            await self.response_formatter.send_custom_article(message, article)
-            logger.info(
-                "custom_article_sent_for_forward",
-                extra={"cid": correlation_id, "has_article": True},
-            )
-        else:
-            logger.debug(
-                "custom_article_not_generated_for_forward",
-                extra={"cid": correlation_id},
-            )
 
     async def _handle_additional_insights(
         self,

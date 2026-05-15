@@ -477,38 +477,67 @@ async def test_summarizer_error_caught() -> None:
 
 
 # ===========================================================================
-# ForwardProcessor: custom-article edges
+# ForwardProcessor: standalone-article follow-up suppressed for forwards
 # ===========================================================================
+# The forward summary card already carries TL;DR, tags, entities and
+# categories, so generating an additional "standalone article from topics &
+# tags" duplicates work the user just received. Worse, the background LLM
+# call can stall (e.g. qwen-flash 422 on structured outputs) leaving the
+# "Crafting a standalone article…" notice with no follow-up. Drop the
+# scheduling entirely on the forward path -- the URL path keeps its own
+# article flow.
 
 
-def _custom_article_processor():
+async def test_handle_forward_flow_does_not_schedule_custom_article() -> None:
+    """A successful forward summary must NOT trigger the standalone-article
+    flow -- no 'Crafting…' notice, no extra LLM call."""
     from app.adapters.telegram.forward_processor import ForwardProcessor
 
-    return ForwardProcessor(
+    response_formatter = MagicMock()
+    response_formatter.safe_reply = AsyncMock()
+    response_formatter.send_forward_summary_response = AsyncMock()
+
+    processor = ForwardProcessor(
         cfg=_make_workflow_cfg(),
         db=MagicMock(),
         openrouter=MagicMock(),
-        response_formatter=MagicMock(),
+        response_formatter=response_formatter,
         audit_func=lambda *_a, **_kw: None,
         sem=lambda: MagicMock(__aenter__=AsyncMock(), __aexit__=AsyncMock()),
         **_forward_processor_repo_kwargs(),
     )
 
+    processor.content_processor.process_forward_content = AsyncMock(  # type: ignore[method-assign]
+        return_value=(1, "prompt", "en", "sys")
+    )
+    processor._maybe_reply_with_cached_summary = AsyncMock(return_value=False)  # type: ignore[method-assign]
+    # A complete summary with topics + tags -- the exact case the old code
+    # would have used to schedule a standalone-article generation.
+    summary_payload: dict[str, Any] = {
+        "key_ideas": ["topic one", "topic two"],
+        "topic_tags": ["#tag1", "#tag2"],
+    }
+    processor.summarizer.summarize_forward = AsyncMock(return_value=summary_payload)  # type: ignore[method-assign]
 
-async def test_none_summary_returns_early() -> None:
-    processor = _custom_article_processor()
-    await processor._maybe_generate_custom_article(MagicMock(), None, "en", 1, "cid")
+    await processor.handle_forward_flow(MagicMock(), correlation_id="cid", interaction_id=None)
 
+    # The "Crafting a standalone article…" notice is the only place
+    # safe_reply is fired from the custom-article flow. If it never fires,
+    # the flow was not scheduled.
+    crafting_calls = [
+        call
+        for call in response_formatter.safe_reply.await_args_list
+        if len(call.args) >= 2 and "Crafting a standalone article" in str(call.args[1])
+    ]
+    assert crafting_calls == [], (
+        "Forward flow must not send the 'Crafting…' notice; "
+        f"got {len(crafting_calls)} crafting reply(ies)"
+    )
 
-async def test_empty_topics_and_tags_returns_early() -> None:
-    processor = _custom_article_processor()
-    summary: dict[str, Any] = {"key_ideas": [], "topic_tags": []}
-    await processor._maybe_generate_custom_article(MagicMock(), summary, "en", 1, "cid")
-
-
-async def test_non_mapping_summary_returns_early() -> None:
-    processor = _custom_article_processor()
-    await processor._maybe_generate_custom_article(MagicMock(), "not a dict", "en", 1, "cid")
+    # And the method itself must be gone from the public surface of the
+    # processor -- not just unscheduled but removed, so future contributors
+    # don't accidentally wire it back in.
+    assert not hasattr(processor, "_maybe_generate_custom_article")
 
 
 # ===========================================================================
