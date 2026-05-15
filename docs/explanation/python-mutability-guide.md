@@ -173,12 +173,33 @@ if result.status is CallStatus.OK:  # OK — enum members are singletons
     ...
 ```
 
+### None specifically: always use `is` / `is not`
+
+`None` is a singleton; comparing it with `==` or `!=` is also wrong:
+
+```python
+# Bug (Ruff E711): can invoke custom __eq__, wrong for numpy arrays, etc.
+if value == None:
+    ...
+if result != None:
+    ...
+
+# Fix: singleton identity check
+if value is None:
+    ...
+if result is not None:
+    ...
+```
+
+Ruff `E711` (comparison-to-None) enforces this via the `"E"` selector in
+`pyproject.toml`. It catches `== None`, `!= None`, `None == x`, and `None != x`.
+
 ### Rule
 
-Ruff `F632` enforces this automatically. It fires on `is`/`is not` against any
-literal value (string, int, float, bytes, …) and is enabled project-wide via
-the `"F"` pyflakes selector in `pyproject.toml`. If you have a genuine
-false-positive (rare), suppress it narrowly:
+Ruff `F632` enforces the `is`/`is not`-vs-literal rule automatically. It fires
+on `is`/`is not` against any literal value (string, int, float, bytes, …) and
+is enabled project-wide via the `"F"` pyflakes selector in `pyproject.toml`.
+If you have a genuine false-positive (rare), suppress it narrowly:
 
 ```python
 result = cache.get(key)
@@ -192,6 +213,7 @@ Three complementary layers enforce these rules:
 
 | Layer | What it catches | When it runs |
 |-------|----------------|--------------|
+| **Ruff E711** | `== None` / `!= None` instead of `is` | `make lint`, pre-commit, CI |
 | **Ruff F632** | `is`/`is not` against value literals | `make lint`, pre-commit, CI |
 | **Ruff B006** | Mutable default arguments | `make lint`, pre-commit, CI |
 | **Ruff B023** | Late-binding closures in loops | `make lint`, pre-commit, CI |

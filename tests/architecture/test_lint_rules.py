@@ -1,4 +1,4 @@
-"""Regression fixture: verify Ruff B006, B023, and F632 are enforced.
+"""Regression fixture: verify Ruff B006, B023, E711, and F632 are enforced.
 
 B006 fires when a function uses a mutable literal or constructor as a default
 argument value. Python evaluates defaults once at definition time, so shared
@@ -8,6 +8,11 @@ B023 fires when a lambda or nested function defined inside a loop references a
 loop variable without early binding. All generated closures will see the
 *final* loop value, not the value at creation time.
 
+E711 fires when ``== None`` or ``!= None`` is used instead of the correct
+singleton comparison ``is None`` / ``is not None``. ``None`` is a singleton;
+equality comparison can call a custom ``__eq__`` and produces unexpected results
+with numpy arrays, SQLAlchemy column expressions, and other domain objects.
+
 F632 fires when ``is`` or ``is not`` is used to compare against a literal value
 (string, int, float, bytes, …). Python ``is`` checks object identity, not
 value equality, so ``x is "ok"`` may silently return ``False`` even when the
@@ -15,7 +20,8 @@ strings are equal but stored as different objects.
 
 If any test in this module fails, check that the relevant rule is not suppressed
 in ``pyproject.toml`` and that the corresponding selector is present under
-``[tool.ruff.lint] select`` (``"B"`` for B006/B023, ``"F"`` for F632).
+``[tool.ruff.lint] select`` (``"B"`` for B006/B023, ``"E"`` for E711,
+``"F"`` for F632).
 """
 
 from __future__ import annotations
@@ -209,3 +215,93 @@ def test_sentinel_object_passes_f632() -> None:
     source = "MISSING = object()\nvalue = MISSING\nassert value is MISSING\n"
     result = _lint_f632(source)
     assert result.returncode == 0, f"Sentinel identity check must pass F632:\n{result.stdout}"
+
+
+# ---------------------------------------------------------------------------
+# E711: comparison-to-None  (use is / is not, not == / !=)
+# ---------------------------------------------------------------------------
+
+_E711 = "E711"
+
+
+def _lint_e711(source: str) -> subprocess.CompletedProcess[str]:
+    with tempfile.NamedTemporaryFile(suffix=".py", mode="w", delete=False) as fh:
+        fh.write(source)
+        path = fh.name
+    return subprocess.run(
+        [str(_RUFF), "check", "--select", _E711, path],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+
+def test_eq_none_is_rejected() -> None:
+    """``x == None`` must fail E711 — use ``x is None``."""
+    result = _lint_e711("x = None\nassert x == None\n")
+    assert result.returncode != 0, "E711 should have flagged `x == None`"
+    assert _E711 in result.stdout or _E711 in result.stderr
+
+
+def test_neq_none_is_rejected() -> None:
+    """``x != None`` must fail E711 — use ``x is not None``."""
+    result = _lint_e711("x = None\nassert x != None\n")
+    assert result.returncode != 0, "E711 should have flagged `x != None`"
+    assert _E711 in result.stdout or _E711 in result.stderr
+
+
+def test_none_eq_x_is_rejected() -> None:
+    """``None == x`` must fail E711 — use ``x is None``."""
+    result = _lint_e711("x = None\nassert None == x\n")
+    assert result.returncode != 0, "E711 should have flagged `None == x`"
+    assert _E711 in result.stdout or _E711 in result.stderr
+
+
+def test_none_neq_x_is_rejected() -> None:
+    """``None != x`` must fail E711 — use ``x is not None``."""
+    result = _lint_e711("x = None\nassert None != x\n")
+    assert result.returncode != 0, "E711 should have flagged `None != x`"
+    assert _E711 in result.stdout or _E711 in result.stderr
+
+
+def test_is_none_passes_e711() -> None:
+    """``x is None`` is the correct singleton check — must pass E711."""
+    result = _lint_e711("x = None\nassert x is None\n")
+    assert result.returncode == 0, f"Singleton `is None` must pass E711:\n{result.stdout}"
+
+
+def test_is_not_none_passes_e711() -> None:
+    """``x is not None`` is the correct singleton check — must pass E711."""
+    result = _lint_e711("x = 1\nassert x is not None\n")
+    assert result.returncode == 0, f"Singleton `is not None` must pass E711:\n{result.stdout}"
+
+
+# ---------------------------------------------------------------------------
+# Behavioural proof — E711/E711 rules guard real bugs
+# ---------------------------------------------------------------------------
+
+
+def test_none_is_comparison_ignores_custom_eq() -> None:
+    """``is None`` is not affected by ``__eq__`` overloading; ``== None`` is.
+
+    This proves why E711 matters: a custom object with a broken or
+    domain-specific ``__eq__`` can make ``x == None`` return True even when
+    ``x is not None``.
+    """
+
+    class AlwaysEqualToNone:
+        __hash__ = None  # type: ignore[assignment]  # unhashable by design
+
+        def __eq__(self, other: object) -> bool:
+            return other is None  # broken: equals None but is not None
+
+    obj = AlwaysEqualToNone()
+    assert obj == None, "Custom __eq__ makes == None return True"  # noqa: E711
+    assert obj is not None, "But is not None correctly identifies the object"
+
+
+def test_falsy_non_none_values_are_not_none() -> None:
+    """Falsy values (0, '', [], {}) are not None; both checks must agree."""
+    for falsy in (0, "", [], {}, 0.0, False):
+        assert falsy is not None, f"{falsy!r} is falsy but is not None"
+        assert falsy != None, f"{falsy!r} is falsy but != None must hold"  # noqa: E711
