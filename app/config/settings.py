@@ -194,6 +194,7 @@ class AppConfig:
     cocoindex: CocoIndexConfig = field(default_factory=CocoIndexConfig)
     vector_reconcile: VectorReconcileConfig = field(default_factory=VectorReconcileConfig)
     retention: RetentionConfig = field(default_factory=RetentionConfig)
+    backup: BackupConfig = field(default_factory=BackupConfig)
 
 
 class Settings(BaseSettings):
@@ -391,6 +392,7 @@ class Settings(BaseSettings):
             cocoindex=self.cocoindex,
             vector_reconcile=self.vector_reconcile,
             retention=self.retention,
+            backup=self.backup,
         )
 
 
