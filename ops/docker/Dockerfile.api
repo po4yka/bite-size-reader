@@ -52,10 +52,23 @@ RUN apt-get update \
 COPY --from=builder /app/.venv /app/.venv
 
 # Install Chromium for Playwright-based scraping fallback.
+# Browsers are placed in /ms-playwright (shared, world-readable) so that the
+# non-root `appuser` at runtime can find them — without PLAYWRIGHT_BROWSERS_PATH
+# the install lands in /root/.cache/ms-playwright and appuser fails with
+# "Executable doesn't exist at /home/appuser/.cache/ms-playwright/...".
+# patchright is Scrapling's stealth Playwright backend; it honours the same
+# env var and ships its own patched Chromium build.
 # Set WITH_PLAYWRIGHT=0 at build time to produce a slimmer image without
 # the browser engine (e.g. when SCRAPER_PLAYWRIGHT_ENABLED=false).
+ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
 ARG WITH_PLAYWRIGHT=1
-RUN if [ "${WITH_PLAYWRIGHT}" = "1" ]; then playwright install --with-deps chromium; fi
+RUN set -eux; \
+    if [ "${WITH_PLAYWRIGHT}" = "1" ]; then \
+        mkdir -p /ms-playwright; \
+        playwright install --with-deps chromium; \
+        patchright install chromium; \
+        chmod -R a+rX /ms-playwright; \
+    fi
 
 # Copy application source
 COPY app ./app
