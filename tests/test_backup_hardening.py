@@ -190,6 +190,25 @@ class TestZipSafety:
         with pytest.raises(ZipSafetyViolation, match="absolute"):
             validate_zip_safety(_one_entry_zip(filename="/etc/passwd"), **_LIMITS)
 
+    def test_backslash_absolute_path_rejected(self) -> None:
+        from app.infrastructure.persistence.backup_safety import (
+            ZipSafetyViolation,
+            validate_zip_safety,
+        )
+
+        # Windows-style absolute path bypasses naive startswith("/") check
+        with pytest.raises(ZipSafetyViolation, match="absolute"):
+            validate_zip_safety(_one_entry_zip(filename="\\etc\\passwd"), **_LIMITS)
+
+    def test_windows_drive_path_rejected(self) -> None:
+        from app.infrastructure.persistence.backup_safety import (
+            ZipSafetyViolation,
+            validate_zip_safety,
+        )
+
+        with pytest.raises(ZipSafetyViolation, match="absolute"):
+            validate_zip_safety(_one_entry_zip(filename="C:/Windows/system32/evil.dll"), **_LIMITS)
+
     def test_corrupt_zip_raises_violation(self) -> None:
         from app.infrastructure.persistence.backup_safety import (
             ZipSafetyViolation,

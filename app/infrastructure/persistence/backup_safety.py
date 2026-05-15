@@ -55,20 +55,23 @@ def validate_zip_safety(
         )
 
     for entry in entries:
+        normalized = entry.filename.replace("\\", "/")
+        if normalized.startswith("/") or (len(normalized) >= 2 and normalized[1] == ":"):
+            raise ZipSafetyViolation(
+                f"Entry '{entry.filename}' has an absolute path (path traversal risk)"
+            )
+        if ".." in normalized.split("/"):
+            raise ZipSafetyViolation(
+                f"Entry '{entry.filename}' contains '..' component (path traversal risk)"
+            )
+        if entry.compress_size == 0 and entry.file_size > 0:
+            raise ZipSafetyViolation(
+                f"Entry '{entry.filename}' reports {entry.file_size} B uncompressed "
+                "but 0 B compressed (suspicious metadata)"
+            )
         ratio = entry.file_size / max(entry.compress_size, 1)
         if ratio > max_ratio:
             raise ZipSafetyViolation(
                 f"Entry '{entry.filename}' compression ratio {ratio:.1f} exceeds "
                 f"limit {max_ratio} (zip bomb guard)"
-            )
-
-        name = entry.filename
-        if name.startswith("/"):
-            raise ZipSafetyViolation(
-                f"Entry '{name}' has an absolute path (path traversal risk)"
-            )
-        parts = name.replace("\\", "/").split("/")
-        if ".." in parts:
-            raise ZipSafetyViolation(
-                f"Entry '{name}' contains '..' component (path traversal risk)"
             )
