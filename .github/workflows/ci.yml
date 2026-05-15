@@ -616,14 +616,21 @@ jobs:
               - 'pyproject.toml'
               - 'uv.lock'
 
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
       - name: Build API image
         if: github.event_name == 'pull_request' || steps.filter.outputs.docker == 'true'
-        run: |
-          docker build \
-            -f ops/docker/Dockerfile.api \
-            -t ratatoskr-api:smoke \
-            --build-arg WITH_PLAYWRIGHT=1 \
-            .
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: ops/docker/Dockerfile.api
+          push: false
+          load: true
+          tags: ratatoskr-api:smoke
+          build-args: WITH_PLAYWRIGHT=1
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
       - name: Verify Chromium resolves as appuser (UID 1000)
         if: github.event_name == 'pull_request' || steps.filter.outputs.docker == 'true'
