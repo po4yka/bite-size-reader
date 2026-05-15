@@ -33,13 +33,15 @@ _EXPORT_FORMAT_MAP: dict[str, tuple[type, str, str]] = {
     "html": (NetscapeHtmlExporter, "text/html", "bookmarks.html"),
 }
 
+_UPLOAD_CHUNK_SIZE = 64 * 1024  # 64 KB
+
 
 async def _read_bounded(file: UploadFile, max_bytes: int) -> bytes:
     """Read an upload in 64 KB chunks; raise 413 if max_bytes is exceeded."""
     chunks: list[bytes] = []
     total = 0
     while True:
-        chunk = await file.read(65536)
+        chunk = await file.read(_UPLOAD_CHUNK_SIZE)
         if not chunk:
             break
         total += len(chunk)
