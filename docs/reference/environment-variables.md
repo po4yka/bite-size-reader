@@ -473,6 +473,9 @@ indexing semantics, drift detection, and rollback procedure.
 | `CREDENTIALS_LOGIN_ARGON2_TIME_COST` | `3` | argon2id iterations |
 | `CREDENTIALS_LOGIN_ARGON2_MEMORY_KIB` | `65536` | argon2id memory cost in KiB (default 64 MiB) |
 | `CREDENTIALS_LOGIN_ARGON2_PARALLELISM` | `1` | argon2id parallelism (lanes) |
+| `IMPORT_MAX_UPLOAD_BYTES` | `10485760` | Max import upload size in bytes (default 10 MB) |
+| `IMPORT_MAX_ITEMS` | `10000` | Max parsed bookmarks per import (default 10 000) |
+| `BACKUP_RESTORE_MAX_UPLOAD_BYTES` | `104857600` | Max backup restore upload size in bytes (default 100 MB) |
 
 **External client ID guidance**:
 

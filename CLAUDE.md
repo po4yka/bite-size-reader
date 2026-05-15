@@ -484,6 +484,11 @@ VECTOR_RECONCILE_BATCH_SIZE=100       # Max stale summaries re-embedded per run
 # ElevenLabs TTS (optional)
 ELEVENLABS_ENABLED=false              # Enable text-to-speech
 ELEVENLABS_API_KEY=                   # ElevenLabs API key
+
+# Import / Backup restore (optional)
+IMPORT_MAX_UPLOAD_BYTES=10485760        # Max import upload size in bytes (default 10 MB)
+IMPORT_MAX_ITEMS=10000                  # Max parsed bookmarks per import (default 10 000)
+BACKUP_RESTORE_MAX_UPLOAD_BYTES=104857600  # Max backup restore upload size in bytes (default 100 MB)
 ```
 
 Full reference: `docs/reference/environment-variables.md`
