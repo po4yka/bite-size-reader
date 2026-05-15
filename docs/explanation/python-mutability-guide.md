@@ -207,6 +207,67 @@ if result is _SENTINEL:  # noqa: F632 — _SENTINEL is an object() singleton, no
     ...
 ```
 
+## Bare `except:` Clauses
+
+A bare `except:` catches **`BaseException`** — the root of Python's entire
+exception hierarchy — including:
+
+- `KeyboardInterrupt` (Ctrl-C / SIGINT): prevents graceful shutdown
+- `SystemExit` (raised by `sys.exit()`): prevents clean process termination
+- `asyncio.CancelledError` (Python 3.8+): swallows async task cancellation
+- Memory errors, segfaults, and other fatal conditions
+
+### The bug
+
+```python
+# Bug: catches KeyboardInterrupt and SystemExit too
+try:
+    result = dangerous_operation()
+except:
+    logger.error("Operation failed")  # silently swallows shutdown signals
+```
+
+### The fix
+
+```python
+# At a boundary — catch ordinary program errors only
+try:
+    result = dangerous_operation()
+except Exception as exc:
+    logger.exception("Operation failed: %s", exc)
+
+# For a specific case — narrow to exactly what can go wrong
+try:
+    data = json.loads(raw)
+except (ValueError, TypeError) as exc:
+    logger.warning("Invalid JSON: %s", exc)
+    return None
+```
+
+### Rules
+
+- Use **`except Exception`** when you need a true catch-all for ordinary
+  program errors at a boundary. Log the exception; never swallow silently.
+- Use **specific exception types** (or a tuple) for expected failure modes.
+- Never use bare `except:` — it prevents graceful shutdown and hides bugs.
+- In async code, do not catch `asyncio.CancelledError`; if you must enter
+  a broad handler in async code, re-raise cancellation:
+
+  ```python
+  import asyncio
+
+  try:
+      await operation()
+  except asyncio.CancelledError:
+      raise  # always let cancellation propagate
+  except Exception as exc:
+      logger.exception("Async operation failed: %s", exc)
+  ```
+
+Ruff `E722` (bare-except) enforces this automatically via the `"E"` selector.
+If a suppression is genuinely needed, use a narrow inline `# noqa: E722` with a
+comment explaining why the bare handler is safe.
+
 ## Automatic Detection
 
 Three complementary layers enforce these rules:
@@ -214,6 +275,7 @@ Three complementary layers enforce these rules:
 | Layer | What it catches | When it runs |
 |-------|----------------|--------------|
 | **Ruff E711** | `== None` / `!= None` instead of `is` | `make lint`, pre-commit, CI |
+| **Ruff E722** | Bare `except:` instead of `except Exception` | `make lint`, pre-commit, CI |
 | **Ruff F632** | `is`/`is not` against value literals | `make lint`, pre-commit, CI |
 | **Ruff B006** | Mutable default arguments | `make lint`, pre-commit, CI |
 | **Ruff B023** | Late-binding closures in loops | `make lint`, pre-commit, CI |

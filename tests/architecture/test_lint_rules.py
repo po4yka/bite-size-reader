@@ -1,4 +1,4 @@
-"""Regression fixture: verify Ruff B006, B023, E711, and F632 are enforced.
+"""Regression fixture: verify Ruff B006, B023, E711, E722, and F632 are enforced.
 
 B006 fires when a function uses a mutable literal or constructor as a default
 argument value. Python evaluates defaults once at definition time, so shared
@@ -13,6 +13,11 @@ singleton comparison ``is None`` / ``is not None``. ``None`` is a singleton;
 equality comparison can call a custom ``__eq__`` and produces unexpected results
 with numpy arrays, SQLAlchemy column expressions, and other domain objects.
 
+E722 fires on bare ``except:`` clauses. A bare ``except`` catches
+``BaseException``, including ``KeyboardInterrupt``, ``SystemExit``, and async
+cancellation exceptions that should not be swallowed. Replace with ``except
+Exception`` for a catch-all, or with the narrowest practical exception type(s).
+
 F632 fires when ``is`` or ``is not`` is used to compare against a literal value
 (string, int, float, bytes, …). Python ``is`` checks object identity, not
 value equality, so ``x is "ok"`` may silently return ``False`` even when the
@@ -20,7 +25,7 @@ strings are equal but stored as different objects.
 
 If any test in this module fails, check that the relevant rule is not suppressed
 in ``pyproject.toml`` and that the corresponding selector is present under
-``[tool.ruff.lint] select`` (``"B"`` for B006/B023, ``"E"`` for E711,
+``[tool.ruff.lint] select`` (``"B"`` for B006/B023, ``"E"`` for E711/E722,
 ``"F"`` for F632).
 """
 
@@ -305,3 +310,86 @@ def test_falsy_non_none_values_are_not_none() -> None:
     for falsy in (0, "", [], {}, 0.0, False):
         assert falsy is not None, f"{falsy!r} is falsy but is not None"
         assert falsy != None, f"{falsy!r} is falsy but != None must hold"  # noqa: E711
+
+
+# ---------------------------------------------------------------------------
+# E722: bare-except  (use except Exception or a specific exception type)
+# ---------------------------------------------------------------------------
+
+_E722 = "E722"
+
+
+def _lint_e722(source: str) -> subprocess.CompletedProcess[str]:
+    with tempfile.NamedTemporaryFile(suffix=".py", mode="w", delete=False) as fh:
+        fh.write(source)
+        path = fh.name
+    return subprocess.run(
+        [str(_RUFF), "check", "--select", _E722, path],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+
+def test_bare_except_is_rejected() -> None:
+    """A bare ``except:`` must fail E722."""
+    source = "try:\n    pass\nexcept:\n    pass\n"
+    result = _lint_e722(source)
+    assert result.returncode != 0, "E722 should have flagged bare `except:`"
+    assert _E722 in result.stdout or _E722 in result.stderr
+
+
+def test_except_exception_passes_e722() -> None:
+    """``except Exception:`` is allowed by E722 (boundary catch-all)."""
+    source = "try:\n    pass\nexcept Exception:\n    pass\n"
+    result = _lint_e722(source)
+    assert result.returncode == 0, f"Broad `except Exception` must pass E722:\n{result.stdout}"
+
+
+def test_except_specific_passes_e722() -> None:
+    """Specific exception types must pass E722."""
+    source = "try:\n    pass\nexcept ValueError:\n    pass\n"
+    result = _lint_e722(source)
+    assert result.returncode == 0, f"Specific `except ValueError` must pass E722:\n{result.stdout}"
+
+
+def test_except_tuple_passes_e722() -> None:
+    """A tuple of specific exceptions must pass E722."""
+    source = "try:\n    pass\nexcept (ValueError, TypeError):\n    pass\n"
+    result = _lint_e722(source)
+    assert result.returncode == 0, f"Tuple except must pass E722:\n{result.stdout}"
+
+
+# ---------------------------------------------------------------------------
+# Behavioural proof — bare except swallows KeyboardInterrupt
+# ---------------------------------------------------------------------------
+
+
+def test_bare_except_swallows_keyboard_interrupt() -> None:
+    """Prove that bare ``except:`` catches ``KeyboardInterrupt`` — the core hazard.
+
+    This demonstrates why E722 exists: a bare handler can prevent graceful
+    shutdown by catching signals that should propagate to the runtime.
+    ``except Exception:`` does NOT catch ``KeyboardInterrupt``.
+    """
+    caught_by_bare: list[type] = []
+    caught_by_exception: list[type] = []
+
+    try:
+        raise KeyboardInterrupt
+    except:  # noqa: E722 — intentional demo of the bare-except hazard
+        caught_by_bare.append(KeyboardInterrupt)
+
+    try:
+        raise KeyboardInterrupt
+    except Exception:
+        caught_by_exception.append(KeyboardInterrupt)  # pragma: no cover
+    except KeyboardInterrupt:
+        pass  # correct: let it propagate or handle explicitly
+
+    assert caught_by_bare == [KeyboardInterrupt], (
+        "Bare except caught KeyboardInterrupt — this is the bug"
+    )
+    assert caught_by_exception == [], (
+        "except Exception correctly did NOT catch KeyboardInterrupt"
+    )
