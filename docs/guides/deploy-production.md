@@ -127,41 +127,41 @@ The `docker-compose.dev.yml` overlay re-adds source bind mounts (`app/`, `bot.py
 
 Optional YAML config (`config/ratatoskr.yaml`, `config/models.yaml`) is not mounted in production. Use environment variables in `.env` instead (all YAML keys map 1-to-1 to env vars). If you prefer the file-based approach, set `RATATOSKR_CONFIG=/data/ratatoskr.yaml` and `MODELS_CONFIG_PATH=/data/models.yaml` and place the files in your `data/` directory — that volume is already mounted.
 
-The production `ops/docker/docker-compose.yml` defines a 5-service stack:
+The production `ops/docker/docker-compose.yml` defines a 7-service stack:
 
 ```yaml
 services:
-  ratatoskr:              # Telegram bot
-    build: .
-    env_file: .env
-    volumes: [./data:/data]
-    depends_on: [redis, qdrant (optional)]
-    healthcheck: SQLite SELECT 1 every 30s
+  migrate:              # One-shot migration job — exits 0 before app services start
+    command: ["python", "-m", "app.cli.migrate_db"]
+    restart: "no"
+    depends_on: [postgres]
 
-  mobile-api:       # FastAPI REST API
+  ratatoskr:            # Telegram bot
+    command: ["python", "-m", "bot"]
+    depends_on: [migrate, redis, qdrant (optional)]
+    healthcheck: DB ping (asyncpg) every 30s
+
+  worker:               # Taskiq task executor (consumes jobs from Redis)
+    command: ["taskiq", "worker", "app.tasks.broker:broker", ...]
+    depends_on: [migrate, postgres, redis, qdrant (optional)]
+    healthcheck: Redis TCP :6379 every 30s
+
+  scheduler:            # Taskiq task enqueuer — singleton, emits cron jobs
+    command: ["taskiq", "scheduler", "app.tasks.scheduler:scheduler", "--skip-first-run"]
+    depends_on: [migrate, redis]
+    healthcheck: Redis TCP :6379 every 30s
+
+  mobile-api:           # FastAPI REST API
     build: {context: ../.., dockerfile: ops/docker/Dockerfile.api}
-    env_file: .env
     ports: ["127.0.0.1:18000:8000"]
-    depends_on: [redis, qdrant (optional)]
-    healthcheck: HTTP /health every 30s
+    depends_on: [migrate, redis, qdrant (optional)]
+    healthcheck: DB ping (asyncpg) every 30s
 
-  mcp:              # MCP server (SSE transport)
-    build: .
-    command: ["python", "-m", "app.cli.mcp_server"]
-    volumes: [./data:/data:ro]  # read-only
-    ports: ["127.0.0.1:8200:8200"]
-    depends_on: [qdrant (optional)]
-    healthcheck: TCP socket check on port 8200 every 30s
-
-  redis:            # Caching, rate limits, sync locks
+  redis:                # Taskiq broker, rate limits, distributed locks
     image: redis:7-alpine
-    ports: ["127.0.0.1:6379:6379"]
-    healthcheck: redis-cli ping every 10s
 
-  qdrant:           # Vector search (Qdrant)
-    image: qdrant/qdrant:v1.12.4
-    ports: ["127.0.0.1:6333:6333", "127.0.0.1:6334:6334"]
-    healthcheck: HTTP /healthz every 30s
+  qdrant:               # Vector search
+    image: qdrant/qdrant:v1.13.6
 ```
 
 Run the core stack: `docker compose -f ops/docker/docker-compose.yml up -d --build`
@@ -330,15 +330,25 @@ Rollback triggers and actions:
 - Aggregation observability: Grafana provisioning includes `ops/monitoring/grafana/provisioning/dashboards/ratatoskr-aggregation.json` for bundle cost, latency, partial-success, and coverage tracking.
 - Backups: automatic snapshots land in `/data/backups`. Copy them off-host or adjust `DB_BACKUP_*` if you need a different cadence.
 
+### Scheduler singleton
+
+The `scheduler` service has `deploy.replicas: 1` (Compose default). Never run two scheduler
+instances against the same Redis broker — they each enqueue every task once per tick, resulting
+in duplicate job execution. In Docker Swarm, set `deploy.mode: replicated` with `replicas: 1`
+explicitly. On the Pi (systemd + Docker Compose), the compose stack already guarantees a single
+instance.
+
 ### Health Checks
 
-| Service | Method | Interval | Details |
-| --------- | -------- | ---------- | --------- |
-| ratatoskr | SQLite `SELECT 1` | 30s | Verifies DB connectivity; 5 retries, 60s start period |
-| mobile-api | HTTP `GET /health` | 30s | Returns 200 when API is ready; 5 retries, 60s start period |
-| mcp | TCP socket on port 8200 | 30s | SSE server liveness check; 3 retries, 30s start period |
-| redis | `redis-cli ping` | 10s | Standard Redis liveness check; 5 retries |
-| qdrant | HTTP `GET /healthz` | 30s | Qdrant health endpoint; 3 retries, 60s start period |
+| Service    | Method                          | Interval | Details                                                              |
+| ---------- | ------------------------------- | -------- | -------------------------------------------------------------------- |
+| migrate    | (none — one-shot exits 0/non-0) | —        | `restart: no`; dependants use `condition: service_completed_successfully` |
+| ratatoskr  | DB ping via asyncpg             | 30s      | Verifies DB connectivity; 5 retries, 60s start period                |
+| worker     | Redis TCP :6379                 | 30s      | Verifies broker reachability; 5 retries, 30s start period            |
+| scheduler  | Redis TCP :6379                 | 30s      | Verifies broker reachability; 5 retries, 30s start period            |
+| mobile-api | DB ping via asyncpg             | 30s      | Verifies DB ready; 5 retries, 60s start period                       |
+| redis      | `redis-cli ping`                | 10s      | Standard Redis liveness; 5 retries                                   |
+| qdrant     | HTTP `GET /healthz`             | 30s      | Qdrant health endpoint; 3 retries, 60s start period                  |
 
 ## Updating a Running Instance
 
@@ -388,6 +398,9 @@ docker build -f ops/docker/Dockerfile -t ratatoskr:latest .
 docker run -d --env-file .env -v $(pwd)/data:/data \
   -p 8000:8000 --name ratatoskr --restart unless-stopped ratatoskr:latest
 ```
+
+> The `migrate` service runs automatically before `ratatoskr`, `worker`, `scheduler`, and
+> `mobile-api` start. There is no need to run migrations manually.
 
 ### 5. Verify
 
