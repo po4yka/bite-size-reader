@@ -79,10 +79,14 @@ jobs:
         run: |
           if git diff --quiet uv.lock requirements.txt requirements-dev.txt; then
             echo "drift=false" >> "$GITHUB_OUTPUT"
-            echo "No lockfile drift detected."
+            echo "Lockfiles are up to date."
           else
-            echo "drift=true" >> "$GITHUB_OUTPUT"
-            echo "::warning::Lockfiles are out of date. Run 'make lock-uv' locally or trigger 'Update Lockfiles' workflow."
+            echo "::error::Lockfile drift detected — the following files differ from what uv export produces:"
+            git diff --name-only uv.lock requirements.txt requirements-dev.txt
+            echo ""
+            echo "Fix: run 'make lock-uv' locally and commit the updated files."
+            echo "     Alternatively, trigger the 'Update Lockfiles' workflow on this branch."
+            exit 1
           fi
 
       - name: Upload compiled requirements
@@ -406,10 +410,6 @@ jobs:
           coverage report \
             --omit="app/db/alembic/*,app/static/*,app/cli/migrations/*" \
             --show-missing
-
-      - name: Surface lockfile drift status
-        if: ${{ needs.prepare-environment.outputs.lock_drift == 'true' }}
-        run: echo "::warning::Lockfiles are out of date. Run 'make lock-uv' locally or trigger 'Update Lockfiles' workflow."
 
   bandit-scan:
     name: Security - Bandit (SAST)
@@ -749,12 +749,8 @@ jobs:
         with:
           script: |
             let summary = '## ✅ CI Summary\n\n';
-            const lockDrift = '${{ needs.prepare-environment.outputs.lock_drift }}';
-            if (lockDrift === 'true') {
-              summary += '⚠️ **Lockfiles are out of date** - Run `make lock-uv` locally\n\n';
-            } else {
-              summary += '✅ Lockfiles are up to date\n\n';
-            }
+            // Lockfile drift is a hard CI failure — if this job runs, lockfiles are current.
+            summary += '✅ Lockfiles are up to date\n\n';
             summary += '### Checks Completed\n';
             summary += '- ✅ Frontend build\n';
             summary += '- ✅ Web static checks (lint + typecheck)\n';
