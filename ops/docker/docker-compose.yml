@@ -1,4 +1,38 @@
 services:
+  migrate:
+    build:
+      context: ../..
+      dockerfile: ops/docker/Dockerfile
+      args:
+        VITE_TELEGRAM_BOT_USERNAME: ${VITE_TELEGRAM_BOT_USERNAME:-}
+    container_name: ratatoskr-migrate
+    init: true
+    command: ["python", "-m", "app.cli.migrate_db"]
+    env_file:
+      - path: ../../.env
+        required: false
+    environment:
+      - DATABASE_URL=${DATABASE_URL:-postgresql+asyncpg://ratatoskr_app:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/ratatoskr}
+      - PYTHONUNBUFFERED=1
+      - PYTHONDONTWRITEBYTECODE=1
+      - RATATOSKR_PROCESS_ROLE=migrate
+    volumes:
+      - ../../data:/data
+      - /etc/localtime:/etc/localtime:ro
+    tmpfs:
+      - /tmp
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "5m"
+        max-file: "2"
+    security_opt:
+      - no-new-privileges:true
+
   ratatoskr:
     build:
       context: ../..
@@ -45,6 +79,7 @@ services:
       - OLLAMA_MODEL=${OLLAMA_MODEL:-llama3.3}
       - OTEL_ENABLED=${OTEL_ENABLED:-false}
       - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT:-http://tempo:4317}
+      - RATATOSKR_PROCESS_ROLE=bot
     dns:
       - 1.1.1.1
       - 8.8.8.8
@@ -69,6 +104,8 @@ services:
       retries: 5
       start_period: 60s
     depends_on:
+      migrate:
+        condition: service_completed_successfully
       postgres:
         condition: service_healthy
       qdrant:
