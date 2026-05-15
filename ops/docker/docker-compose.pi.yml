@@ -36,6 +36,19 @@ services:
         condition: service_started
         required: false
 
+  worker:
+    environment:
+      - QDRANT_URL=http://host-gateway:6333
+    extra_hosts:
+      - "host-gateway:host-gateway"
+    networks:
+      default: {}
+      firecrawl_internal: {}
+    depends_on:
+      qdrant:
+        condition: service_started
+        required: false
+
   mobile-api:
     environment:
       - QDRANT_URL=http://host-gateway:6333
