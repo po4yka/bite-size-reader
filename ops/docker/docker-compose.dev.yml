@@ -30,3 +30,22 @@ services:
       - ../../bot.py:/app/bot.py:ro
       - ../../alembic.ini:/app/alembic.ini:ro
       - ../../config:/app/config:ro
+
+  worker:
+    volumes:
+      - ../../app:/app/app:ro
+      - ../../bot.py:/app/bot.py:ro
+      - ../../alembic.ini:/app/alembic.ini:ro
+      - ../../config:/app/config:ro
+
+  scheduler:
+    volumes:
+      - ../../app:/app/app:ro
+      - ../../alembic.ini:/app/alembic.ini:ro
+      - ../../config:/app/config:ro
+
+  migrate:
+    volumes:
+      - ../../app:/app/app:ro
+      - ../../alembic.ini:/app/alembic.ini:ro
+      - ../../config:/app/config:ro
