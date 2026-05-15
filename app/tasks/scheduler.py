@@ -106,6 +106,17 @@ class _AppConfigScheduleSource(ScheduleSource):
                 )
             )
 
+        if cfg.retention.enabled:
+            tasks.append(
+                ScheduledTask(
+                    task_name="ratatoskr.data.purge",
+                    cron=cfg.retention.cron,
+                    labels={"job": "data_purge"},
+                    args=[],
+                    kwargs={},
+                )
+            )
+
         return tasks
 
     async def get_schedules(self) -> list[ScheduledTask]:
