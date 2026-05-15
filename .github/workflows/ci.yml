@@ -594,6 +594,60 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+  docker-api-browser-smoke:
+    name: Docker API - Playwright browser smoke test
+    needs: prepare-environment
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Detect Docker-relevant changes
+        id: filter
+        uses: dorny/paths-filter@v4
+        with:
+          filters: |
+            docker:
+              - 'ops/docker/Dockerfile.api'
+              - 'app/**'
+              - 'pyproject.toml'
+              - 'uv.lock'
+
+      - name: Build API image
+        if: github.event_name == 'pull_request' || steps.filter.outputs.docker == 'true'
+        run: |
+          docker build \
+            -f ops/docker/Dockerfile.api \
+            -t ratatoskr-api:smoke \
+            --build-arg WITH_PLAYWRIGHT=1 \
+            .
+
+      - name: Verify Chromium resolves as appuser (UID 1000)
+        if: github.event_name == 'pull_request' || steps.filter.outputs.docker == 'true'
+        run: |
+          docker run --rm \
+            --user 1000 \
+            ratatoskr-api:smoke \
+            python -c "
+          import os, sys
+          browsers_path = os.environ.get('PLAYWRIGHT_BROWSERS_PATH', '')
+          print(f'PLAYWRIGHT_BROWSERS_PATH={browsers_path}')
+          assert browsers_path == '/ms-playwright', f'Wrong path: {browsers_path!r}'
+
+          from playwright.sync_api import sync_playwright
+          with sync_playwright() as p:
+              exe = p.chromium.executable_path
+              print(f'Chromium executable: {exe}')
+              assert exe.startswith('/ms-playwright'), f'Executable not under /ms-playwright: {exe!r}'
+              assert os.path.isfile(exe), f'Executable does not exist: {exe!r}'
+              assert os.access(exe, os.X_OK), f'Executable not executable by current user: {exe!r}'
+
+          print('Browser smoke test passed.')
+          "
+
   compose-config-check:
     name: Docker Compose - Config smoke test
     runs-on: ubuntu-latest
