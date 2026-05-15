@@ -11,14 +11,14 @@ services:
       - path: ../../.env
         required: false
     volumes:
-      # App code is baked into the image (Dockerfile `COPY app ./app`). Do NOT
-      # bind-mount ../../app or ../../bot.py here: a bind mount silently shadows
-      # the shipped image, so `make pi-deploy` would build/ship a new image that
-      # never actually runs. For local hot-reload, opt in explicitly with
-      # `-f ops/docker/docker-compose.dev.yml`.
+      # App code, alembic.ini, and config/ are baked into the image. Do NOT
+      # bind-mount ../../app, ../../bot.py, ../../alembic.ini, or ../../config
+      # here: bind mounts silently shadow the shipped image, so `make pi-deploy`
+      # would build/ship a new image that never actually runs. For local
+      # hot-reload and config overrides, use the dev overlay explicitly:
+      #   docker compose -f ops/docker/docker-compose.yml \
+      #                  -f ops/docker/docker-compose.dev.yml up -d ratatoskr
       - ../../data:/data
-      - ../../config:/app/config:ro
-      - ../../alembic.ini:/app/alembic.ini:ro
       - /etc/localtime:/etc/localtime:ro
     tmpfs:
       - /tmp
@@ -126,11 +126,9 @@ services:
       - OTEL_ENABLED=${OTEL_ENABLED:-false}
       - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT:-http://tempo:4317}
     volumes:
-      # App code ships in the image -- see the note on the ratatoskr service
-      # above. Bind-mounting ../../app here would shadow the deployed image.
+      # App code, alembic.ini, and config/ are baked into the image -- see the
+      # note on the ratatoskr service above.
       - ../../data:/data
-      - ../../config:/app/config:ro
-      - ../../alembic.ini:/app/alembic.ini:ro
       - /etc/localtime:/etc/localtime:ro
     ports:
       - "127.0.0.1:18000:8000"
@@ -201,7 +199,6 @@ services:
       - RATATOSKR_PROCESS_ROLE=mcp
     volumes:
       - ../../data:/data:ro
-      - ../../config:/app/config:ro
       - /etc/localtime:/etc/localtime:ro
     tmpfs:
       - /tmp
@@ -256,7 +253,6 @@ services:
       - PYTHONDONTWRITEBYTECODE=1
     volumes:
       - ../../data:/data
-      - ../../config:/app/config:ro
       - /etc/localtime:/etc/localtime:ro
     tmpfs:
       - /tmp
@@ -314,7 +310,6 @@ services:
       - PYTHONDONTWRITEBYTECODE=1
     volumes:
       - ../../data:/data
-      - ../../config:/app/config:ro
       - /etc/localtime:/etc/localtime:ro
     tmpfs:
       - /tmp

@@ -594,6 +594,21 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+  compose-config-check:
+    name: Docker Compose - Config smoke test
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Validate production compose renders cleanly
+        env:
+          POSTGRES_PASSWORD: ci-smoke
+        run: docker compose -f ops/docker/docker-compose.yml config --quiet
+
   secrets:
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -826,7 +841,7 @@ jobs:
   status-check:
     name: CI Status Check
     if: always()
-    needs: [prepare-environment, web-static-check, web-playwright-visual, lint-and-format, type-check, test, bandit-scan, pip-audit-scan, safety-scan, docker-build, secrets, integration-tests, migration-smoke-test]
+    needs: [prepare-environment, web-static-check, web-playwright-visual, lint-and-format, type-check, test, bandit-scan, pip-audit-scan, safety-scan, docker-build, compose-config-check, secrets, integration-tests, migration-smoke-test]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -888,6 +903,11 @@ jobs:
           # filter elides the build when only non-Docker files changed).
           if [[ "${{ needs.docker-build.result }}" == "failure" ]]; then
             echo "::error::docker-build job failed"
+            exit 1
+          fi
+
+          if [[ "${{ needs.compose-config-check.result }}" != "success" ]]; then
+            echo "::error::compose-config-check job failed"
             exit 1
           fi
 

@@ -1,11 +1,12 @@
 # Local-development compose overlay -- OPT-IN, never used on the Pi.
 #
-# The base docker-compose.yml deliberately does NOT bind-mount the app code:
-# a bind mount shadows the code baked into the image, which made `make
-# pi-deploy` ship images that never actually ran (see the volumes note in
-# docker-compose.yml). For the Pi the image is the single source of truth.
+# The base docker-compose.yml deliberately does NOT bind-mount the app code,
+# alembic.ini, or config/: bind mounts shadow the content baked into the
+# image, which made `make pi-deploy` ship images that never actually ran (see
+# the volumes note in docker-compose.yml). For the Pi the image is the single
+# source of truth.
 #
-# This overlay re-adds the source bind mounts so local development gets
+# This overlay re-adds source and config bind mounts so local development gets
 # edit-and-restart hot-reload without an image rebuild. Use it explicitly:
 #
 #   docker compose \
@@ -20,8 +21,12 @@ services:
     volumes:
       - ../../app:/app/app:ro
       - ../../bot.py:/app/bot.py:ro
+      - ../../alembic.ini:/app/alembic.ini:ro
+      - ../../config:/app/config:ro
 
   mobile-api:
     volumes:
       - ../../app:/app/app:ro
       - ../../bot.py:/app/bot.py:ro
+      - ../../alembic.ini:/app/alembic.ini:ro
+      - ../../config:/app/config:ro

@@ -113,6 +113,20 @@ Notes
 
 ## Docker Compose (recommended)
 
+### Production vs development compose
+
+| Use case | Command |
+|---|---|
+| **Production** (immutable image) | `docker compose -f ops/docker/docker-compose.yml up -d` |
+| **Local dev** (live source reload) | `docker compose -f ops/docker/docker-compose.yml -f ops/docker/docker-compose.dev.yml up -d` |
+| **Pi / remote deploy** | `make pi-deploy` (builds locally, streams image, restarts via Pi overlay) |
+
+The production compose bakes all app code (`app/`, `bot.py`, `alembic.ini`) into the image at build time and mounts only `/data` (persistent storage) and `/etc/localtime` (timezone). No source tree directories are bind-mounted.
+
+The `docker-compose.dev.yml` overlay re-adds source bind mounts (`app/`, `bot.py`, `alembic.ini`, `config/`) for edit-and-restart iteration without a full rebuild. **Never use this overlay on the Pi** — it shadows the shipped image and defeats `make pi-deploy`.
+
+Optional YAML config (`config/ratatoskr.yaml`, `config/models.yaml`) is not mounted in production. Use environment variables in `.env` instead (all YAML keys map 1-to-1 to env vars). If you prefer the file-based approach, set `RATATOSKR_CONFIG=/data/ratatoskr.yaml` and `MODELS_CONFIG_PATH=/data/models.yaml` and place the files in your `data/` directory — that volume is already mounted.
+
 The production `ops/docker/docker-compose.yml` defines a 5-service stack:
 
 ```yaml
