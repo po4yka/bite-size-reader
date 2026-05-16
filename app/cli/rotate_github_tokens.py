@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import json
 import sys
 from dataclasses import asdict, dataclass
 from pathlib import Path
@@ -67,8 +68,14 @@ async def reencrypt_all_tokens(
             if not dry_run:
                 async with db.transaction() as txn:
                     fresh = await txn.get(UserGitHubIntegration, row.id)
-                    if fresh is not None:
-                        fresh.encrypted_token = new_ct
+                    if fresh is None:
+                        failed += 1
+                        logger.warning(
+                            "token_reencrypt_skipped_row_gone",
+                            extra={"user_id": row.user_id},
+                        )
+                        continue
+                    fresh.encrypted_token = new_ct
                 row.encrypted_token = new_ct  # reflect for callers / tests
             reencrypted += 1
             logger.info(
@@ -124,8 +131,6 @@ async def _run(args: argparse.Namespace) -> None:
 
     db = build_runtime_database(cfg, migrate=False)
     result = await reencrypt_all_tokens(db, dry_run=args.dry_run, user_id=args.user_id)
-
-    import json
 
     try:
         import orjson
