@@ -481,3 +481,54 @@ async def test_device_poll_expired(
     # Redis key must be gone
     raw = await fake_redis.get(f"gh:device:{_DEVICE_CODE}")
     assert raw is None
+
+
+# ---------------------------------------------------------------------------
+# 10. device/poll: insufficient-scope token → 422
+# ---------------------------------------------------------------------------
+
+
+async def test_device_poll_insufficient_scope_returns_422(
+    client: Any,
+    db: Any,
+    gh_user: Any,
+    fake_redis: fakeredis.FakeRedis,
+) -> None:
+    """OAuth token missing repo scope → 422, device_code consumed from Redis."""
+    await fake_redis.set(
+        f"gh:device:{_DEVICE_CODE}",
+        json.dumps(_make_redis_state()),
+        ex=900,
+    )
+
+    _inject_redis(client, fake_redis)
+    try:
+        with respx.mock(assert_all_called=False) as mock:
+            mock.post("https://github.com/login/oauth/access_token").mock(
+                return_value=Response(
+                    200, json={"access_token": _ACCESS_TOKEN, "token_type": "bearer", "scope": ""}
+                )
+            )
+            mock.get("https://api.github.com/user").mock(
+                return_value=Response(
+                    200,
+                    json=_GH_USER_PAYLOAD,
+                    headers={"X-GitHub-OAuthScopes": "read:user, public_repo"},
+                )
+            )
+            resp = client.post(
+                "/v1/auth/github/device/poll",
+                json={"device_code": _DEVICE_CODE},
+                headers=_auth_headers(),
+            )
+    finally:
+        _clear_redis(client)
+
+    assert resp.status_code == 422
+    detail = resp.json()["detail"]
+    assert "missing required scopes" in detail
+    assert "repo" in detail
+
+    # Redis key must be consumed (deleted before validate_and_store)
+    raw = await fake_redis.get(f"gh:device:{_DEVICE_CODE}")
+    assert raw is None
