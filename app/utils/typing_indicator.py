@@ -59,10 +59,11 @@ class TypingIndicator:
         self._task: asyncio.Task[Any] | None = None
         self._stop_event = asyncio.Event()
 
-    async def _send_action_once(self, *, initial: bool = False) -> bool:
+    async def _send_action_once(self, *, initial: bool = False, action: str | None = None) -> bool:
         """Send one chat-action event and convert failures to diagnostics."""
+        action_to_send = action if action is not None else self._action
         try:
-            return await self._send_chat_action(self._chat_id, self._action)
+            return await self._send_chat_action(self._chat_id, action_to_send)
         except Exception:
             event = (
                 "typing_indicator_initial_send_failed"
@@ -71,7 +72,7 @@ class TypingIndicator:
             )
             logger.debug(
                 event,
-                extra={"chat_id": self._chat_id, "action": self._action},
+                extra={"chat_id": self._chat_id, "action": action_to_send},
                 exc_info=True,
             )
             return False
@@ -79,20 +80,23 @@ class TypingIndicator:
     async def _typing_loop(self) -> None:
         """Background task that periodically sends typing indicators."""
         while not self._stop_event.is_set():
-            await self._send_action_once(initial=False)
             await asyncio.sleep(self._interval)
+            if not self._stop_event.is_set():
+                await self._send_action_once(initial=False)
 
     async def start(self) -> None:
         """Start the typing indicator."""
         if self._task is not None:
             return  # Already running
 
+        # Clear before any await so a concurrent stop() cannot race past this.
+        self._stop_event.clear()
+
         # Send initial typing indicator
         initial_send_ok = await self._send_action_once(initial=True)
         if not initial_send_ok:
             logger.debug("typing_indicator_start_continues_without_initial_send")
 
-        self._stop_event.clear()
         self._task = asyncio.create_task(self._typing_loop())
         logger.debug(
             "typing_indicator_started",
@@ -108,10 +112,13 @@ class TypingIndicator:
         self._task.cancel()
         result = await asyncio.gather(self._task, return_exceptions=True)
         task_error = result[0] if result else None
-        if isinstance(task_error, Exception) and not isinstance(task_error, asyncio.CancelledError):
+        if isinstance(task_error, BaseException) and not isinstance(task_error, asyncio.CancelledError):
             logger.debug("typing_indicator_stop_wait_failed", extra={"error": str(task_error)})
 
         self._task = None
+        # Explicitly clear the indicator on Telegram's side; without this the
+        # last-sent action persists for ~5 s after the bot has already replied.
+        await self._send_action_once(action="cancel")
         logger.debug(
             "typing_indicator_stopped",
             extra={"chat_id": self._chat_id},
