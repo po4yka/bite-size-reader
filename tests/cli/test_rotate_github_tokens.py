@@ -59,6 +59,7 @@ async def test_reencrypt_row_encrypted_with_old_key(monkeypatch: pytest.MonkeyPa
     reencrypt_all_tokens = _import_reencrypt()
     result = await reencrypt_all_tokens(db, dry_run=False)
 
+    db.transaction.assert_called_once()
     assert result.processed == 1
     assert result.reencrypted == 1
     assert result.failed == 0
@@ -153,5 +154,6 @@ async def test_user_id_filter(monkeypatch: pytest.MonkeyPatch) -> None:
     reencrypt_all_tokens = _import_reencrypt()
     result = await reencrypt_all_tokens(db, dry_run=False, user_id=42)
 
+    db.transaction.assert_called_once()
     assert result.processed == 1
     assert result.reencrypted == 1
