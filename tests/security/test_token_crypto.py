@@ -12,6 +12,8 @@ from app.security.token_crypto import (
 
 @pytest.fixture(autouse=True)
 def _reset_cache():
+    # Pre-reset is the real protection: ensures a clean state even if the previous
+    # test's teardown reset fired while monkeypatched env vars were still active.
     reset_key_cache()
     yield
     reset_key_cache()

@@ -7,7 +7,7 @@ Key rotation (zero-downtime):
 1. Generate a new key: ``python tools/scripts/generate_github_encryption_key.py``
 2. Set the new key as ``GITHUB_TOKEN_ENCRYPTION_KEY``.
 3. Move the old key to ``GITHUB_TOKEN_PREVIOUS_KEYS`` (comma-separated; multiple old keys OK).
-4. Deploy — existing ciphertexts still decrypt; new writes use the new key.
+4. Deploy (requires process restart) — existing ciphertexts still decrypt; new writes use the new key.
 5. Backfill: ``python -m app.cli.rotate_github_tokens``
 6. Remove the old key from ``GITHUB_TOKEN_PREVIOUS_KEYS`` and redeploy.
 """
@@ -41,7 +41,7 @@ def _parse_previous_keys(raw: str | None) -> list[Fernet]:
         return []
     result: list[Fernet] = []
     for i, part in enumerate(p.strip() for p in raw.split(",") if p.strip()):
-        encoded = part.encode("utf-8") if isinstance(part, str) else part
+        encoded = part.encode("utf-8")
         try:
             result.append(Fernet(encoded))
         except (ValueError, TypeError) as exc:
