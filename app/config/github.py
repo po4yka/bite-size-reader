@@ -51,6 +51,15 @@ class GitHubConfig(BaseModel):
         validation_alias="GITHUB_TOKEN_ENCRYPTION_KEY",
         description="Fernet encryption key (32 url-safe base64 bytes) for stored tokens",
     )
+    # Previous Fernet keys for zero-downtime rotation (comma-separated; see token_crypto.py)
+    token_previous_keys: SecretStr | None = Field(
+        default=None,
+        validation_alias="GITHUB_TOKEN_PREVIOUS_KEYS",
+        description=(
+            "Comma-separated previous Fernet keys still needed to decrypt existing rows. "
+            "Remove each key only after running `python -m app.cli.rotate_github_tokens`."
+        ),
+    )
 
     # Daily stars sync
     sync_enabled: bool = Field(
