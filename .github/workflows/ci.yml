@@ -885,10 +885,26 @@ jobs:
             }
 
   migration-smoke-test:
-    name: Migration Smoke Test (Alembic)
+    name: Migration Smoke Test (Alembic + PostgreSQL)
     needs: prepare-environment
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: ratatoskr_ci
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+    env:
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/ratatoskr_ci
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -916,20 +932,13 @@ jobs:
       - name: Install dependencies
         run: uv pip sync --system requirements-all.txt requirements-dev.txt
 
-      - name: Initialize database (Peewee schema + Alembic stamp to head)
-        env:
-          DB_PATH: /tmp/test_migration.db
-        run: python -c "from app.db.session import DatabaseSessionManager; DatabaseSessionManager(path='/tmp/test_migration.db').migrate()"
-
-      - name: Run Alembic downgrade -1
-        env:
-          DB_PATH: /tmp/test_migration.db
-        run: alembic downgrade -1
-
-      - name: Run Alembic upgrade head
-        env:
-          DB_PATH: /tmp/test_migration.db
-        run: alembic upgrade head
+      - name: Run migration round-trip
+        run: |
+          set -euo pipefail
+          python -m app.cli.migrate_db
+          alembic downgrade -1
+          alembic upgrade head
+          alembic current 2>&1 | grep -q "(head)"
 
   status-check:
     name: CI Status Check
