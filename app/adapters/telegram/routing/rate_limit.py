@@ -88,8 +88,32 @@ class MessageRateLimitCoordinator:
             assert self._redis_limiter is not None
             return self._redis_limiter
 
+        is_prod = self.cfg.deployment.is_production_mode
         if self._redis_limiter_available is True:
-            logger.info("telegram_rate_limiter_fallback_to_memory")
+            if is_prod:
+                logger.warning(
+                    "telegram_rate_limiter_fallback_to_memory",
+                    extra={
+                        "warning": (
+                            "[DEV-ONLY FALLBACK ACTIVE IN PRODUCTION] "
+                            "Telegram rate limiting fell back to in-memory state. "
+                            "Limits are not shared across workers or restarts."
+                        )
+                    },
+                )
+            else:
+                logger.info("telegram_rate_limiter_fallback_to_memory")
+        elif is_prod and self._redis_limiter_available is None:
+            logger.warning(
+                "telegram_rate_limiter_using_memory_in_production",
+                extra={
+                    "warning": (
+                        "[DEV-ONLY FALLBACK ACTIVE IN PRODUCTION] "
+                        "Redis unavailable at startup; Telegram rate limiting is "
+                        "in-memory only. Limits are not shared across workers."
+                    )
+                },
+            )
         self._redis_limiter_available = False
         return self._rate_limiter
 

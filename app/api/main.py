@@ -107,6 +107,24 @@ async def lifespan(app: FastAPI):
 
         runtime = await build_api_runtime()
         setup_json_logging(runtime.cfg.runtime.log_level)
+
+        # Startup gate: warn if in-memory rate limiting is active in production.
+        # The config validator blocks this unless RATE_LIMIT_REDIS_OVERRIDE=true,
+        # so reaching here in production means the override was set explicitly.
+        if runtime.cfg.deployment.is_production_mode and not runtime.cfg.redis.required:
+            logger.warning(
+                "rate_limit_production_redis_not_required",
+                extra={
+                    "app_env": runtime.cfg.deployment.env,
+                    "api_public_exposure": runtime.cfg.deployment.api_public_exposure,
+                    "rate_limit_redis_override": runtime.cfg.deployment.rate_limit_redis_override,
+                    "warning": (
+                        "RATE_LIMIT_REDIS_OVERRIDE=true is active. "
+                        "Rate limiting uses in-memory state — limits are NOT shared "
+                        "across workers or across restarts."
+                    ),
+                },
+            )
         try:
             from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 

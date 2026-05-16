@@ -311,14 +311,20 @@ def _log_redis_unavailable_once(cfg: AppConfig, correlation_id: str | None, path
     global _redis_warning_logged
     if _redis_warning_logged:
         return
-    logger.warning(
-        "rate_limit_redis_unavailable",
-        extra={
-            "required": cfg.redis.required,
-            "correlation_id": correlation_id,
-            "path": path,
-        },
-    )
+    is_prod = cfg.deployment.is_production_mode
+    extra: dict = {
+        "required": cfg.redis.required,
+        "correlation_id": correlation_id,
+        "path": path,
+        "production_mode": is_prod,
+    }
+    if is_prod:
+        extra["warning"] = (
+            "[DEV-ONLY FALLBACK ACTIVE IN PRODUCTION] "
+            "Rate limiting is using in-memory state. Limits are not shared across "
+            "workers or restarts. Set REDIS_REQUIRED=true in production."
+        )
+    logger.warning("rate_limit_redis_unavailable", extra=extra)
     _redis_warning_logged = True
 
 

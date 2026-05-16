@@ -330,13 +330,27 @@ uv run python tools/scripts/twitter_article_live_smoke.py \
 | `WEB_SEARCH_MAX_CONTEXT_CHARS` | `2000` | Max injected context chars (500-10000) |
 | `WEB_SEARCH_CACHE_TTL_SEC` | `3600` | Search result cache TTL (60-86400s) |
 
+## Deployment
+
+| Variable | Default | Description |
+| ---------- | --------- | ------------- |
+| `APP_ENV` | `development` | Deployment environment: `development`, `staging`, or `production`. Setting `production` enables strict safety checks — see below. |
+| `API_PUBLIC_EXPOSURE` | `false` | Set `true` when the API is reachable from the public internet. Triggers the same safety checks as `APP_ENV=production` regardless of `APP_ENV`. |
+| `RATE_LIMIT_REDIS_OVERRIDE` | `false` | Emergency override: allow in-memory rate limiting even in production. Must be explicitly set to acknowledge that per-process limits are not shared across workers or restarts. |
+
+### Production Redis requirement
+
+When `APP_ENV=production` or `API_PUBLIC_EXPOSURE=true`, the application **refuses to start** unless both `REDIS_ENABLED=true` and `REDIS_REQUIRED=true` are set. This prevents silent fallback to process-local rate limiting, which is ineffective under multiple workers or after restarts.
+
+To override (e.g. single-process deploy, edge cache handles rate limiting externally), set `RATE_LIMIT_REDIS_OVERRIDE=true` and acknowledge the risk in your deployment notes.
+
 ## Redis Caching
 
 | Variable | Default | Description |
 | ---------- | --------- | ------------- |
 | `REDIS_ENABLED` | `true` | Enable Redis integration |
 | `REDIS_CACHE_ENABLED` | `true` | Enable caching via Redis |
-| `REDIS_REQUIRED` | `false` | Fail requests when Redis unavailable |
+| `REDIS_REQUIRED` | `false` | Fail requests when Redis unavailable. **Must be `true` in production** (enforced automatically when `APP_ENV=production`). |
 | `REDIS_URL` | _(none)_ | Full Redis URL (overrides host/port/db) |
 | `REDIS_HOST` | `127.0.0.1` | Redis host |
 | `REDIS_PORT` | `6379` | Redis port |

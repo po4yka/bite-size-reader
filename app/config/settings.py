@@ -16,6 +16,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from .adaptive_timeout import AdaptiveTimeoutConfig
 from .api import ApiLimitsConfig, AuthConfig, SyncConfig
+from .deployment import DeploymentConfig
 from .backup import BackupConfig
 from .background import BackgroundProcessorConfig
 from .import_export import ImportConfig
@@ -197,6 +198,7 @@ class AppConfig:
     retention: RetentionConfig = field(default_factory=RetentionConfig)
     backup: BackupConfig = field(default_factory=BackupConfig)
     import_export: ImportConfig = field(default_factory=ImportConfig)
+    deployment: DeploymentConfig = field(default_factory=DeploymentConfig)
 
 
 class Settings(BaseSettings):
@@ -255,6 +257,7 @@ class Settings(BaseSettings):
     retention: RetentionConfig = Field(default_factory=RetentionConfig)
     backup: BackupConfig = Field(default_factory=BackupConfig)
     import_export: ImportConfig = Field(default_factory=ImportConfig)
+    deployment: DeploymentConfig = Field(default_factory=DeploymentConfig)
 
     @model_validator(mode="before")
     @classmethod
@@ -355,6 +358,46 @@ class Settings(BaseSettings):
             raise RuntimeError(msg)
         return self
 
+    @model_validator(mode="after")
+    def _ensure_production_redis_rate_limiting(self) -> Self:
+        """Require Redis-backed rate limiting in production unless explicitly overridden.
+
+        In-memory rate limiting is process-local: limits are not shared across
+        workers or across restarts. This is unacceptable in production.
+        """
+        if not self.deployment.is_production_mode:
+            return self
+        if self.deployment.rate_limit_redis_override:
+            logger.warning(
+                "rate_limit_redis_override_active",
+                extra={
+                    "app_env": self.deployment.env,
+                    "api_public_exposure": self.deployment.api_public_exposure,
+                    "warning": (
+                        "RATE_LIMIT_REDIS_OVERRIDE=true: using in-memory rate limiting "
+                        "in production. Limits are NOT shared across workers or restarts."
+                    ),
+                },
+            )
+            return self
+        if not self.redis.enabled:
+            raise RuntimeError(
+                "Production deployment requires Redis for rate limiting "
+                "(REDIS_ENABLED=true). "
+                "In-memory rate limiting is per-process and unsafe for multi-worker "
+                "deployments. Set REDIS_ENABLED=true and REDIS_REQUIRED=true, "
+                "or set RATE_LIMIT_REDIS_OVERRIDE=true to explicitly accept the risk."
+            )
+        if not self.redis.required:
+            raise RuntimeError(
+                "Production deployment requires REDIS_REQUIRED=true. "
+                "Without it, rate limiting silently falls back to in-memory state "
+                "when Redis is unavailable, making limits ineffective across workers. "
+                "Set REDIS_REQUIRED=true, or set RATE_LIMIT_REDIS_OVERRIDE=true "
+                "to explicitly accept the risk."
+            )
+        return self
+
     def as_app_config(self) -> AppConfig:
         return AppConfig(
             telegram=self.telegram,
@@ -397,6 +440,7 @@ class Settings(BaseSettings):
             retention=self.retention,
             backup=self.backup,
             import_export=self.import_export,
+            deployment=self.deployment,
         )
 
 
