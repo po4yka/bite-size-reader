@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-import contextlib
 from dataclasses import dataclass
 from enum import StrEnum
 from typing import Any
 
+from app.core.async_utils import raise_if_cancelled
 from app.core.logging_utils import get_logger
 
 logger = get_logger(__name__)
@@ -237,7 +237,15 @@ class TelethonBotClient:
             return
         # Resolve the chat id to an InputPeer via Telethon's entity cache so
         # raw TL requests work for any chat the bot has seen.
-        peer = await self._client.get_input_entity(chat_id)
+        try:
+            peer = await self._client.get_input_entity(chat_id)
+        except Exception as exc:
+            raise_if_cancelled(exc)
+            logger.debug(
+                "send_chat_action_entity_not_found",
+                extra={"chat_id": chat_id, "error": str(exc)},
+            )
+            return
         await self._client(functions.messages.SetTypingRequest(peer=peer, action=tl_action))
 
     async def edit_message_text(
@@ -305,7 +313,7 @@ class TelethonBotClient:
     ) -> None:
         if functions is None:
             return
-        with contextlib.suppress(Exception):
+        try:
             await self._client(
                 functions.bots.SetBotInfoRequest(
                     lang_code=language_code or "",
@@ -313,6 +321,9 @@ class TelethonBotClient:
                     description=description,
                 )
             )
+        except Exception as exc:
+            raise_if_cancelled(exc)
+            logger.warning("set_bot_info_failed", extra={"error": str(exc)})
 
     async def set_chat_menu_button(self, **_kwargs: Any) -> None:
         return None

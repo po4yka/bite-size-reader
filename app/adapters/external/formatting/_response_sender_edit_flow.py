@@ -113,11 +113,15 @@ class ResponseSenderEditFlow:
 
     @staticmethod
     def _get_flood_wait_seconds(exc: Exception) -> float | None:
-        """Extract the wait duration from a FloodWait-style exception."""
-        # Telegram FloodWait-style exceptions commonly store the delay in exc.value.
-        value = getattr(exc, "value", None)
-        if isinstance(value, (int, float)) and value > 0:
-            return float(value)
+        """Extract the wait duration from a FloodWait-style exception.
+
+        Telethon stores it in exc.seconds; older builds and other wrappers
+        use exc.value, exc.wait_time, or exc.retry_after.
+        """
+        for attr in ("seconds", "value", "wait_time", "retry_after"):
+            val = getattr(exc, attr, None)
+            if isinstance(val, (int, float)) and val > 0:
+                return float(val)
         return None
 
     async def edit_message(

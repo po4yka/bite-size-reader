@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import io
 import json
 from typing import Any
@@ -39,10 +40,10 @@ class ResponseSenderPayloadFlow:
 
         pretty = json.dumps(payload, ensure_ascii=False, indent=2)
         try:
-            bio = io.BytesIO(pretty.encode("utf-8"))
-            bio.name = build_json_filename(obj)
-            msg_any: Any = message
-            await msg_any.reply_document(bio, caption="📊 Full Summary JSON attached")
+            with contextlib.closing(io.BytesIO(pretty.encode("utf-8"))) as bio:
+                bio.name = build_json_filename(obj)
+                msg_any: Any = message
+                await msg_any.reply_document(bio, caption="📊 Full Summary JSON attached")
             return
         except Exception as exc:
             raise_if_cancelled(exc)
