@@ -277,7 +277,7 @@ async def test_secret_login_token_delivery(client_id, expect_cookie):
     ],
 )
 async def test_refresh_token_delivery(db, user_factory, client_id, expect_cookie):
-    from app.api.dependencies.database import get_auth_repository
+    from app.api.routers.auth.dependencies import get_auth_repository
     from app.api.models.auth import RefreshTokenRequest
     from app.api.routers.auth.endpoints_sessions import refresh_access_token
     from app.api.routers.auth.tokens import create_refresh_token
@@ -307,4 +307,7 @@ async def test_refresh_token_delivery(db, user_factory, client_id, expect_cookie
         assert tokens["refreshToken"] is None
     else:
         response.set_cookie.assert_not_called()
-        assert tokens["refreshToken"] is not None
+        refresh = tokens["refreshToken"]
+        assert isinstance(refresh, str) and refresh
+        assert refresh != tokens["accessToken"]
+        assert refresh != tokens["accessToken"]
