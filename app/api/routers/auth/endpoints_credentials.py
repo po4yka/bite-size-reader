@@ -38,6 +38,7 @@ from app.api.routers.auth.tokens import (
     ACCESS_TOKEN_EXPIRE_MINUTES,
     create_access_token,
     create_refresh_token,
+    is_web_client,
     validate_client_id,
 )
 from app.config import load_config
@@ -177,11 +178,13 @@ async def credentials_login(
         remember_me=payload.remember_me,
     )
 
-    set_refresh_cookie(response, refresh_token, max_age=cookie_max_age)
+    web = is_web_client(payload.client_id)
+    if web:
+        set_refresh_cookie(response, refresh_token, max_age=cookie_max_age)
 
     tokens = TokenPair(
         access_token=access_token,
-        refresh_token=refresh_token,
+        refresh_token=None if web else refresh_token,
         expires_in=ACCESS_TOKEN_EXPIRE_MINUTES * 60,
         token_type="Bearer",
     )

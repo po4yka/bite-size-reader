@@ -49,6 +49,7 @@ from app.api.routers.auth.tokens import (
     create_access_token,
     create_refresh_token,
     is_self_service_secret_client,
+    is_web_client,
     validate_client_id,
 )
 from app.api.services.auth_service import AuthService
@@ -166,11 +167,13 @@ async def secret_login(login_data: SecretLoginRequest, response: Response):
     access_token = create_access_token(user_id, username, login_data.client_id)
     refresh_token, session_id = await create_refresh_token(user_id, login_data.client_id)
 
-    set_refresh_cookie(response, refresh_token)
+    web = is_web_client(login_data.client_id)
+    if web:
+        set_refresh_cookie(response, refresh_token)
 
     tokens = TokenPair(
         access_token=access_token,
-        refresh_token=refresh_token,
+        refresh_token=None if web else refresh_token,
         expires_in=ACCESS_TOKEN_EXPIRE_MINUTES * 60,
         token_type="Bearer",
     )

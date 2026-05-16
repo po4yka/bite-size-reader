@@ -34,6 +34,7 @@ from app.api.routers.auth.tokens import (
     ACCESS_TOKEN_EXPIRE_MINUTES,
     create_access_token,
     create_refresh_token,
+    is_web_client,
     validate_client_id,
 )
 from app.api.services.auth_service import AuthService
@@ -87,11 +88,13 @@ async def telegram_login(login_data: TelegramLoginRequest, response: Response):
             },
         )
 
-        set_refresh_cookie(response, refresh_token)
+        web = is_web_client(login_data.client_id)
+        if web:
+            set_refresh_cookie(response, refresh_token)
 
         tokens = TokenPair(
             access_token=access_token,
-            refresh_token=refresh_token,
+            refresh_token=None if web else refresh_token,
             expires_in=ACCESS_TOKEN_EXPIRE_MINUTES * 60,
             token_type="Bearer",
         )
