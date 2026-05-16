@@ -10,7 +10,11 @@ if TYPE_CHECKING:
 
 from sqlalchemy import func, select
 
-from app.adapters.github.exceptions import GitHubAuthError, InvalidGitHubTokenError
+from app.adapters.github.exceptions import (
+    GitHubAuthError,
+    InsufficientScopeError,
+    InvalidGitHubTokenError,
+)
 from app.adapters.github.github_api_client import GitHubAPIClient
 from app.core.logging_utils import get_logger
 from app.db.models.repository import (
@@ -25,6 +29,34 @@ if TYPE_CHECKING:
     from app.db.session import Database
 
 logger = get_logger(__name__)
+
+_REQUIRED_SCOPES: frozenset[str] = frozenset({"read:user", "repo"})
+_KNOWN_SAFE_SCOPES: frozenset[str] = frozenset(
+    {"read:user", "user:email", "repo", "public_repo", "read:org", "gist", "notifications"}
+)
+_OVERBROAD_SCOPES: dict[str, str] = {
+    "admin:org": "token has org admin access — consider a narrower token",
+    "admin:repo_hook": "token has webhook admin access — consider a narrower token",
+    "delete_repo": "token can delete repositories — consider a narrower token",
+    "write:packages": "token can publish packages — consider a narrower token",
+    "admin:gpg_key": "token has GPG key admin access — consider a narrower token",
+    "admin:public_key": "token has SSH key admin access — consider a narrower token",
+}
+
+
+def _collect_scope_warnings(scopes: list[str]) -> list[str]:
+    """Raise InsufficientScopeError if required scopes missing; return overbroad warnings."""
+    scope_set = set(scopes)
+    missing = sorted(_REQUIRED_SCOPES - scope_set)
+    if missing:
+        raise InsufficientScopeError(missing_scopes=missing)
+    warnings: list[str] = []
+    for scope in scopes:
+        if scope in _OVERBROAD_SCOPES:
+            warnings.append(_OVERBROAD_SCOPES[scope])
+        elif scope not in _KNOWN_SAFE_SCOPES:
+            warnings.append(f"unrecognised scope '{scope}' — consider using a narrower token")
+    return warnings
 
 
 @dataclass(frozen=True)
@@ -53,17 +85,30 @@ class ManageGitHubIntegrationUseCase:
         user_id: int,
         *,
         correlation_id: str,
-    ) -> UserGitHubIntegration:
-        """Validate *token* against GitHub /user, encrypt it, and upsert the integration row.
+    ) -> tuple[UserGitHubIntegration, list[str]]:
+        """Validate token scopes, encrypt it, and upsert the integration row.
+
+        Returns (integration_row, scope_warnings).
 
         Raises:
-            InvalidGitHubTokenError: when GitHub returns 401/403 for the token.
+            InsufficientScopeError: token is missing required scopes.
+            InvalidGitHubTokenError: GitHub rejected the token (401/403).
         """
         async with GitHubAPIClient(token) as gh:
             try:
-                gh_user = await gh.get_authenticated_user()
+                gh_user, scopes = await gh.get_user_with_scopes()
             except GitHubAuthError as exc:
                 raise InvalidGitHubTokenError(f"Token rejected by GitHub: {exc}") from exc
+
+            if not scopes:
+                # Fine-grained PAT: scope names are opaque; probe capability instead
+                if not await gh.probe_repository_access():
+                    raise InsufficientScopeError(missing_scopes=["repository access"])
+                token_scopes_value = "fine-grained"
+                scope_warnings: list[str] = []
+            else:
+                scope_warnings = _collect_scope_warnings(scopes)
+                token_scopes_value = ", ".join(scopes)
 
         encrypted = encrypt_token(token)
 
@@ -76,6 +121,7 @@ class ManageGitHubIntegrationUseCase:
                     user_id=user_id,
                     auth_method=auth_method,
                     encrypted_token=encrypted,
+                    token_scopes=token_scopes_value,
                     github_login=gh_user.login,
                     github_user_id=gh_user.id,
                     status=GitHubIntegrationStatusEnum.ACTIVE,
@@ -84,6 +130,7 @@ class ManageGitHubIntegrationUseCase:
             else:
                 existing.auth_method = auth_method
                 existing.encrypted_token = encrypted
+                existing.token_scopes = token_scopes_value
                 existing.github_login = gh_user.login
                 existing.github_user_id = gh_user.id
                 existing.status = GitHubIntegrationStatusEnum.ACTIVE
@@ -101,7 +148,7 @@ class ManageGitHubIntegrationUseCase:
                 "github_login": gh_user.login,
             },
         )
-        return row
+        return row, scope_warnings
 
     async def get_status(self, user_id: int) -> GitHubIntegrationStatus:
         """Return current integration status DTO. is_connected=False when no row exists."""

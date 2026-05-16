@@ -238,12 +238,16 @@ async def test_use_case_validate_and_store_idempotent(db: Database, gh_user: Any
 
     with respx.mock(assert_all_called=False) as mock:
         mock.get("https://api.github.com/user").mock(
-            return_value=Response(200, json=_GH_USER_PAYLOAD)
+            return_value=Response(
+                200,
+                json=_GH_USER_PAYLOAD,
+                headers={"X-GitHub-OAuthScopes": "repo, read:user"},
+            )
         )
-        row1 = await use_case.validate_and_store(
+        row1, _ = await use_case.validate_and_store(
             token, GitHubAuthMethod.PAT, _USER_ID, correlation_id="cid-1"
         )
-        row2 = await use_case.validate_and_store(
+        row2, _ = await use_case.validate_and_store(
             token, GitHubAuthMethod.PAT, _USER_ID, correlation_id="cid-2"
         )
 
