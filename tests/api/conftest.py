@@ -40,7 +40,7 @@ import app.di.database as _di_database
 from app.api.dependencies.database import clear_session_manager
 from app.config.database import DatabaseConfig
 from app.db.base import Base
-from app.db.models import Request, Summary, User
+from app.db.models import Request, Summary, TopicSearchIndex, User
 
 if TYPE_CHECKING:
     from app.db.session import Database
@@ -238,3 +238,188 @@ def summary_factory(db: Database, user_factory):
             return summary
 
     return create_summary
+
+
+# ==================== Search test fixtures ====================
+
+from datetime import datetime, timedelta  # noqa: E402
+from unittest.mock import AsyncMock, patch  # noqa: E402
+
+from app.api.models.responses import PaginationInfo, SearchResult, SearchResultsData  # noqa: E402
+from app.api.routers.auth.tokens import create_access_token  # noqa: E402
+from app.api.services.search_service import SearchService  # noqa: E402
+from app.core.time_utils import UTC  # noqa: E402
+from app.core.url_utils import compute_dedupe_hash, normalize_url  # noqa: E402
+
+
+def _build_search_results(
+    *,
+    query: str,
+    results: list[SearchResult] | None = None,
+    total: int | None = None,
+    limit: int = 10,
+    offset: int = 0,
+    intent: str = "keyword",
+    mode: str = "keyword",
+    facets: dict[str, Any] | None = None,
+) -> SearchResultsData:
+    search_results = results or []
+    total_items = len(search_results) if total is None else total
+    return SearchResultsData(
+        results=search_results,
+        pagination=PaginationInfo(
+            total=total_items,
+            limit=limit,
+            offset=offset,
+            has_more=(offset + limit) < total_items,
+        ),
+        query=query,
+        intent=intent,
+        mode=mode,
+        facets=facets or {"domains": [], "tags": [], "languages": []},
+    )
+
+
+@pytest.fixture
+def search_user(db):
+    """Create a test user for search tests."""
+    return User.create(telegram_user_id=987654321, username="search_test_user")
+
+
+@pytest.fixture
+def search_token(search_user):
+    """Create access token for search user."""
+    return create_access_token(search_user.telegram_user_id, client_id="test")
+
+
+@pytest.fixture
+def search_data(db, search_user):
+    """Create test data for search tests."""
+    # Create multiple requests and summaries
+    data = []
+
+    # First article - about AI
+    req1 = Request.create(
+        user_id=search_user.telegram_user_id,
+        type="url",
+        status="completed",
+        input_url="https://example.com/ai-article",
+        normalized_url="https://example.com/ai-article",
+        created_at=datetime.now(UTC) - timedelta(days=1),
+    )
+
+    payload1 = {
+        "summary_250": "This is an article about artificial intelligence and machine learning.",
+        "summary_1000": "Long summary about AI",
+        "tldr": "AI is transforming technology",
+        "key_ideas": ["AI", "Machine Learning"],
+        "topic_tags": ["#ai", "#technology"],
+        "entities": {"people": [], "organizations": [], "locations": []},
+        "estimated_reading_time_min": 5,
+        "key_stats": [],
+        "answered_questions": [],
+        "readability": {"method": "FK", "score": 50.0, "level": "Easy"},
+        "seo_keywords": ["ai", "artificial intelligence"],
+        "metadata": {
+            "title": "Introduction to AI",
+            "domain": "example.com",
+            "author": "John Doe",
+            "published_at": "2023-01-01",
+        },
+        "confidence": 0.9,
+        "hallucination_risk": "low",
+    }
+
+    summary1 = Summary.create(
+        request=req1,
+        lang="en",
+        json_payload=payload1,
+        is_read=False,
+    )
+
+    # Create FTS index entry for first article
+    TopicSearchIndex.create(
+        request_id=req1.id,
+        title="Introduction to AI",
+        snippet="This is an article about artificial intelligence",
+        source="example.com",
+        published_at=datetime.now(UTC) - timedelta(days=1),
+        lang="en",
+    )
+
+    data.append({"request": req1, "summary": summary1})
+
+    # Second article - about blockchain
+    req2 = Request.create(
+        user_id=search_user.telegram_user_id,
+        type="url",
+        status="completed",
+        input_url="https://example.com/blockchain-article",
+        normalized_url="https://example.com/blockchain-article",
+        created_at=datetime.now(UTC) - timedelta(days=2),
+    )
+
+    payload2 = {
+        "summary_250": "Blockchain technology and cryptocurrency explained.",
+        "summary_1000": "Long summary about blockchain",
+        "tldr": "Blockchain powers cryptocurrencies",
+        "key_ideas": ["Blockchain", "Cryptocurrency"],
+        "topic_tags": ["#blockchain", "#crypto"],
+        "entities": {"people": [], "organizations": [], "locations": []},
+        "estimated_reading_time_min": 7,
+        "key_stats": [],
+        "answered_questions": [],
+        "readability": {"method": "FK", "score": 55.0, "level": "Medium"},
+        "seo_keywords": ["blockchain", "crypto"],
+        "metadata": {
+            "title": "Understanding Blockchain",
+            "domain": "example.com",
+            "author": "Jane Smith",
+            "published_at": "2023-02-01",
+        },
+        "confidence": 0.85,
+        "hallucination_risk": "low",
+    }
+
+    summary2 = Summary.create(
+        request=req2,
+        lang="en",
+        json_payload=payload2,
+        is_read=True,
+    )
+
+    # Create FTS index entry for second article
+    TopicSearchIndex.create(
+        request_id=req2.id,
+        title="Understanding Blockchain",
+        snippet="Blockchain technology and cryptocurrency explained",
+        source="example.com",
+        published_at=datetime.now(UTC) - timedelta(days=2),
+        lang="en",
+    )
+
+    data.append({"request": req2, "summary": summary2})
+
+    return data
+
+
+@pytest.fixture
+def mock_search_service_results():
+    """Patch the search service with a generic empty-result response."""
+
+    async def _search(**kwargs: Any) -> SearchResultsData:
+        resolved_mode = kwargs.get("mode", "keyword")
+        if resolved_mode == "auto":
+            resolved_mode = "keyword"
+        return _build_search_results(
+            query=kwargs["q"],
+            results=[],
+            total=0,
+            limit=kwargs["limit"],
+            offset=kwargs["offset"],
+            intent="keyword",
+            mode=resolved_mode,
+        )
+
+    with patch.object(SearchService, "search_summaries", AsyncMock(side_effect=_search)) as mock:
+        yield mock
