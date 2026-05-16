@@ -261,3 +261,50 @@ async def test_secret_login_token_delivery(client_id, expect_cookie):
     else:
         response.set_cookie.assert_not_called()
         assert tokens["refreshToken"] == "ref.tok"
+
+
+# ---------------------------------------------------------------------------
+# /refresh — integration tests against real DB
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("client_id", "expect_cookie"),
+    [
+        ("webapp", True),
+        ("mobile-ios", False),
+    ],
+)
+async def test_refresh_token_delivery(db, user_factory, client_id, expect_cookie):
+    from app.api.dependencies.database import get_auth_repository
+    from app.api.models.auth import RefreshTokenRequest
+    from app.api.routers.auth.endpoints_sessions import refresh_access_token
+    from app.api.routers.auth.tokens import create_refresh_token
+
+    user = await user_factory(telegram_user_id=987654321, username="delivery_test")
+    token, _ = await create_refresh_token(
+        user_id=user.telegram_user_id,
+        client_id=client_id,
+    )
+
+    request = MagicMock()
+    request.cookies = {}
+    response = MagicMock()
+    body = RefreshTokenRequest(refresh_token=token)
+    auth_repo = get_auth_repository()
+
+    result = await refresh_access_token(
+        request=request,
+        response=response,
+        refresh_data=body,
+        auth_repo=auth_repo,
+    )
+
+    tokens = result["data"]["tokens"]
+    if expect_cookie:
+        response.set_cookie.assert_called_once()
+        assert tokens["refreshToken"] is None
+    else:
+        response.set_cookie.assert_not_called()
+        assert tokens["refreshToken"] is not None

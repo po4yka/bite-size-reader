@@ -32,6 +32,7 @@ from app.api.routers.auth.tokens import (
     create_access_token,
     create_refresh_token,
     decode_token,
+    is_web_client,
     validate_client_id,
 )
 from app.core.logging_utils import get_logger, log_exception
@@ -137,14 +138,17 @@ async def refresh_access_token(
         },
     )
 
-    # Set the new refresh token as httpOnly cookie for web clients.
+    # Apply delivery policy: web clients get an httpOnly cookie and no body
+    # token; non-web clients (mobile, CLI, MCP) get the token in the body.
     # max_age=None issues a session cookie (vanishes on browser close) for
     # the credentials-login no-remember mode.
-    set_refresh_cookie(response, new_refresh_token, max_age=cookie_max_age)
+    web = is_web_client(client_id)
+    if web:
+        set_refresh_cookie(response, new_refresh_token, max_age=cookie_max_age)
 
     tokens = TokenPair(
         access_token=access_token,
-        refresh_token=new_refresh_token,
+        refresh_token=None if web else new_refresh_token,
         expires_in=ACCESS_TOKEN_EXPIRE_MINUTES * 60,
         token_type="Bearer",
     )
