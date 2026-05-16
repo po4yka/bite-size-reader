@@ -79,7 +79,11 @@ async def test_post_pat_with_valid_token_stores_encrypted(
 
     with respx.mock(assert_all_called=False) as mock:
         mock.get("https://api.github.com/user").mock(
-            return_value=Response(200, json=_GH_USER_PAYLOAD)
+            return_value=Response(
+                200,
+                json=_GH_USER_PAYLOAD,
+                headers={"X-GitHub-OAuthScopes": "repo, read:user"},
+            )
         )
         resp = client.post(
             "/v1/auth/github/pat",
@@ -275,7 +279,11 @@ async def test_token_not_logged(
     with caplog.at_level(logging.DEBUG):
         with respx.mock(assert_all_called=False) as mock:
             mock.get("https://api.github.com/user").mock(
-                return_value=Response(200, json=_GH_USER_PAYLOAD)
+                return_value=Response(
+                    200,
+                    json=_GH_USER_PAYLOAD,
+                    headers={"X-GitHub-OAuthScopes": "repo, read:user"},
+                )
             )
             client.post(
                 "/v1/auth/github/pat",
@@ -291,3 +299,95 @@ async def test_token_not_logged(
             assert raw_token not in str(record.args), (
                 f"Plaintext token found in log args: {record.args}"
             )
+
+
+# ---------------------------------------------------------------------------
+# 9. token_scopes column populated after PAT submit
+# ---------------------------------------------------------------------------
+
+
+async def test_pat_stores_token_scopes(
+    client: Any, db: Database, gh_user: Any
+) -> None:
+    """Successful PAT → UserGitHubIntegration.token_scopes populated."""
+    with respx.mock(assert_all_called=False) as mock:
+        mock.get("https://api.github.com/user").mock(
+            return_value=Response(
+                200,
+                json=_GH_USER_PAYLOAD,
+                headers={"X-GitHub-OAuthScopes": "repo, read:user"},
+            )
+        )
+        resp = client.post(
+            "/v1/auth/github/pat",
+            json={"token": "ghp_scope_test_token_abcdef"},
+            headers=_auth_headers(),
+        )
+
+    assert resp.status_code == 200
+
+    async with db.session() as session:
+        row = await session.scalar(
+            select(UserGitHubIntegration).where(UserGitHubIntegration.user_id == _USER_ID)
+        )
+    assert row is not None
+    assert row.token_scopes is not None
+    assert "repo" in row.token_scopes
+
+
+# ---------------------------------------------------------------------------
+# 10. scope_warnings returned in response for overbroad token
+# ---------------------------------------------------------------------------
+
+
+async def test_pat_scope_warnings_in_response(
+    client: Any, db: Database, gh_user: Any
+) -> None:
+    """Overbroad token → 200 with scope_warnings list."""
+    with respx.mock(assert_all_called=False) as mock:
+        mock.get("https://api.github.com/user").mock(
+            return_value=Response(
+                200,
+                json=_GH_USER_PAYLOAD,
+                headers={"X-GitHub-OAuthScopes": "repo, read:user, delete_repo"},
+            )
+        )
+        resp = client.post(
+            "/v1/auth/github/pat",
+            json={"token": "ghp_overbroad_token_abcdef"},
+            headers=_auth_headers(),
+        )
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert "scope_warnings" in body
+    assert isinstance(body["scope_warnings"], list)
+    assert len(body["scope_warnings"]) == 1
+    assert "delete repositories" in body["scope_warnings"][0]
+
+
+# ---------------------------------------------------------------------------
+# 11. Insufficient scope → 422
+# ---------------------------------------------------------------------------
+
+
+async def test_pat_insufficient_scope_returns_422(
+    client: Any, db: Database, gh_user: Any
+) -> None:
+    """Token with public_repo but not repo → 422 Unprocessable Entity."""
+    with respx.mock(assert_all_called=False) as mock:
+        mock.get("https://api.github.com/user").mock(
+            return_value=Response(
+                200,
+                json=_GH_USER_PAYLOAD,
+                headers={"X-GitHub-OAuthScopes": "read:user, public_repo"},
+            )
+        )
+        resp = client.post(
+            "/v1/auth/github/pat",
+            json={"token": "ghp_narrow_token_abcdef"},
+            headers=_auth_headers(),
+        )
+
+    assert resp.status_code == 422
+    assert "repo" in resp.json()["detail"]

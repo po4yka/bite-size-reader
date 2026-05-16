@@ -19,7 +19,7 @@ import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
-from app.adapters.github.exceptions import InvalidGitHubTokenError
+from app.adapters.github.exceptions import InsufficientScopeError, InvalidGitHubTokenError
 from app.api.routers.auth.dependencies import get_current_user
 from app.application.use_cases.manage_github_integration import (
     ManageGitHubIntegrationUseCase,
@@ -82,6 +82,7 @@ class PATSubmitResponse(BaseModel):
     github_user_id: int
     auth_method: str
     status: str
+    scope_warnings: list[str] | None = None
 
 
 class GitHubStatusResponse(BaseModel):
@@ -112,6 +113,7 @@ class DeviceFlowPollResponse(BaseModel):
     github_user_id: int | None = None
     auth_method: str | None = None
     integration_status: str | None = None
+    scope_warnings: list[str] | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -128,12 +130,14 @@ async def submit_pat(
 ) -> PATSubmitResponse:
     """Store and validate a GitHub Personal Access Token."""
     try:
-        integration = await use_case.validate_and_store(
+        integration, scope_warnings = await use_case.validate_and_store(
             body.token,
             GitHubAuthMethod.PAT,
             user["user_id"],
             correlation_id=correlation_id,
         )
+    except InsufficientScopeError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     except InvalidGitHubTokenError as exc:
         raise HTTPException(status_code=400, detail="Invalid or revoked GitHub token") from exc
     return PATSubmitResponse(
@@ -141,6 +145,7 @@ async def submit_pat(
         github_user_id=integration.github_user_id,
         auth_method="pat",
         status="active",
+        scope_warnings=scope_warnings or None,
     )
 
 
@@ -206,7 +211,7 @@ async def device_flow_start(
     async with httpx.AsyncClient() as client:
         gh_resp = await client.post(
             _GITHUB_DEVICE_CODE_URL,
-            data={"client_id": client_id, "scope": "read:user public_repo"},
+            data={"client_id": client_id, "scope": "read:user repo"},
             headers={"Accept": "application/json"},
             timeout=30.0,
         )
@@ -334,7 +339,7 @@ async def device_flow_poll(
     access_token: str = data["access_token"]
     await redis.delete(redis_key)
 
-    integration = await use_case.validate_and_store(
+    integration, scope_warnings = await use_case.validate_and_store(
         access_token,
         GitHubAuthMethod.OAUTH_DEVICE,
         user["user_id"],
@@ -347,4 +352,5 @@ async def device_flow_poll(
         github_user_id=integration.github_user_id,
         auth_method="oauth_device",
         integration_status="active",
+        scope_warnings=scope_warnings or None,
     )
