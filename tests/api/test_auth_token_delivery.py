@@ -310,4 +310,4 @@ async def test_refresh_token_delivery(db, user_factory, client_id, expect_cookie
         refresh = tokens["refreshToken"]
         assert isinstance(refresh, str) and refresh
         assert refresh != tokens["accessToken"]
-        assert refresh != tokens["accessToken"]
+        assert refresh != token
