@@ -339,12 +339,17 @@ async def device_flow_poll(
     access_token: str = data["access_token"]
     await redis.delete(redis_key)
 
-    integration, scope_warnings = await use_case.validate_and_store(
-        access_token,
-        GitHubAuthMethod.OAUTH_DEVICE,
-        user["user_id"],
-        correlation_id=correlation_id,
-    )
+    try:
+        integration, scope_warnings = await use_case.validate_and_store(
+            access_token,
+            GitHubAuthMethod.OAUTH_DEVICE,
+            user["user_id"],
+            correlation_id=correlation_id,
+        )
+    except InsufficientScopeError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except InvalidGitHubTokenError as exc:
+        raise HTTPException(status_code=400, detail="Invalid or revoked GitHub token") from exc
 
     return DeviceFlowPollResponse(
         status="ok",
