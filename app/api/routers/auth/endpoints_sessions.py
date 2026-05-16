@@ -46,7 +46,7 @@ def _format_dt_z(dt_value: Any) -> str:
     if dt_value is None:
         return ""
     if hasattr(dt_value, "isoformat"):
-        return dt_value.isoformat() + "Z"
+        return str(dt_value.isoformat()) + "Z"
     value = str(dt_value)
     return value if value.endswith("Z") else value + "Z"
 
@@ -57,7 +57,7 @@ async def refresh_access_token(
     response: Response,
     refresh_data: RefreshTokenRequest,
     auth_repo: Any = Depends(get_auth_repository),
-):
+) -> Any:
     """Refresh an expired access token using a refresh token."""
     from app.api.exceptions import TokenInvalidError, TokenRevokedError
 
@@ -160,9 +160,9 @@ async def logout(
     http_request: Request,
     response: Response,
     request: RefreshTokenRequest,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict[str, Any] = Depends(get_current_user),
     auth_repo: Any = Depends(get_auth_repository),
-):
+) -> Any:
     """Logout by revoking the specific refresh token."""
     token = request.refresh_token or http_request.cookies.get(REFRESH_COOKIE_NAME)
     if token:

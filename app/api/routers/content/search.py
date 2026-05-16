@@ -59,7 +59,7 @@ async def search_summaries(
     filters: SearchFilters = Depends(_search_filter_params),
     user: dict[str, Any] = Depends(get_current_user),
     search_service: SearchService = Depends(_get_search_service),
-):
+) -> Any:
     """
     Full-text search across all summaries using FTS5.
 
@@ -98,7 +98,7 @@ async def semantic_search_summaries(
     filters: SearchFilters = Depends(_search_filter_params),
     user: dict[str, Any] = Depends(get_current_user),
     search_service: SearchService = Depends(_get_search_service),
-):
+) -> Any:
     """Semantic search across summaries using Qdrant embeddings."""
     try:
         result = await search_service.semantic_search_summaries(
@@ -124,7 +124,7 @@ async def get_trending_topics(
     limit: int = Query(20, ge=1, le=100),
     days: int = Query(30, ge=1, le=365),
     user: dict[str, Any] = Depends(get_current_user),
-):
+) -> Any:
     """Get trending topic tags across recent summaries."""
     payload = await get_trending_payload(
         user["user_id"],
@@ -147,7 +147,7 @@ async def get_search_insights(
     limit: int = Query(20, ge=5, le=100),
     user: dict[str, Any] = Depends(get_current_user),
     search_service: SearchService = Depends(_get_search_service),
-):
+) -> Any:
     """Search analytics snapshot: trends, entities, diversity, mix and coverage gaps."""
     payload, pagination = await search_service.get_search_insights(
         user_id=user["user_id"],
@@ -164,7 +164,7 @@ async def get_related_summaries(
     offset: int = Query(0, ge=0),
     user: dict[str, Any] = Depends(get_current_user),
     search_service: SearchService = Depends(_get_search_service),
-):
+) -> Any:
     """Get summaries related to a specific topic tag."""
     payload = await search_service.get_related_summaries(
         user_id=user["user_id"],
@@ -181,7 +181,7 @@ async def check_duplicate(
     include_summary: bool = Query(False),
     user: dict[str, Any] = Depends(get_current_user),
     search_service: SearchService = Depends(_get_search_service),
-):
+) -> Any:
     """Check if a URL has already been summarized."""
     payload = await search_service.check_duplicate(
         user_id=user["user_id"],

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-from typing import TYPE_CHECKING, Any
+from typing import cast,  TYPE_CHECKING, Any
 
 from app.core.logging_utils import get_logger
 
@@ -181,11 +181,11 @@ class EmbeddingGenerationEventHandler:
 
         language = summary.get("lang") or summary.get("language")
         if language:
-            return language
+            return cast("str | None", language)
 
         request_data = summary.get("request") or {}
         if isinstance(request_data, dict):
-            return request_data.get("lang_detected")
+            return cast("str | None", request_data.get("lang_detected"))
         return None
 
     @staticmethod

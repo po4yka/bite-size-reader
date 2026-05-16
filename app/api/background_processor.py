@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from app.api.background import (
     BackgroundDbOverrideFactory,
@@ -161,7 +161,7 @@ class BackgroundProcessor:
         return self._summary_repo_factory(db)
 
     def _maybe_override_db(self, db_path: str | None) -> tuple[Database, Any]:
-        return self._db_override_factory.resolve(db_path)
+        return cast("tuple[Database, Any]", self._db_override_factory.resolve(db_path))
 
     async def _release_lock(self, handle: Any) -> None:
         await self._lock_manager.release(handle)
@@ -242,11 +242,11 @@ class BackgroundProcessor:
         *,
         metadata: dict[str, Any] | None = None,
     ) -> str:
-        return self._url_request_handler.resolve_request_language(
+        return cast(str, self._url_request_handler.resolve_request_language(
             request,
             content_text,
             metadata=metadata,
-        )
+        ))
 
     @staticmethod
     def _build_error_payload(stage: str, exc: Exception) -> dict[str, Any]:

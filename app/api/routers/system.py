@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import contextlib
-from typing import Any
+from typing import cast,  Any
 
 from fastapi import APIRouter, Depends, Request
 from starlette.background import BackgroundTask
@@ -39,7 +39,7 @@ def _extract_user_id(user: dict[str, Any]) -> int:
     raw_user_id = user.get("user_id")
     if isinstance(raw_user_id, bool) or not isinstance(raw_user_id, int):
         raise ValueError("Authenticated user payload is missing integer user_id")
-    return raw_user_id
+    return cast(int, raw_user_id)
 
 
 @router.get("/db-dump")
@@ -47,7 +47,7 @@ async def download_database(
     request: Request,
     user: dict[str, Any] = Depends(get_current_user),
     service: SystemMaintenanceService = Depends(get_system_maintenance_service),
-):
+) -> Any:
     """
     Download a consistent PostgreSQL backup dump.
 
@@ -74,7 +74,7 @@ async def head_database(
     request: Request,
     user: dict[str, Any] = Depends(get_current_user),
     service: SystemMaintenanceService = Depends(get_system_maintenance_service),
-):
+) -> Any:
     """HEAD variant for clients that only need headers before downloading."""
     await AuthService.require_owner(user)  # type: ignore[arg-type]
     user_id = _extract_user_id(user)
@@ -97,7 +97,7 @@ async def get_db_info(
     request: Request,
     user: dict[str, Any] = Depends(get_current_user),
     service: SystemMaintenanceService = Depends(get_system_maintenance_service),
-):
+) -> Any:
     """Get database information: table row counts and file size."""
     await AuthService.require_owner(user)  # type: ignore[arg-type]
     user_id = _extract_user_id(user)
@@ -111,7 +111,7 @@ async def clear_cache(
     request: Request,
     user: dict[str, Any] = Depends(get_current_user),
     service: SystemMaintenanceService = Depends(get_system_maintenance_service),
-):
+) -> Any:
     """Clear Redis URL cache."""
     await AuthService.require_owner(user)  # type: ignore[arg-type]
     user_id = _extract_user_id(user)

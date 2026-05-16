@@ -69,7 +69,7 @@ async def get_collections(
     limit: int = Query(20, ge=1, le=200),
     offset: int = Query(0, ge=0),
     user: dict[str, Any] = Depends(get_current_user),
-):
+) -> Any:
     """List collections for the current user (and collaborations) under a parent."""
     if not isinstance(parent_id, (int, type(None))):
         parent_id = None
@@ -97,7 +97,7 @@ async def get_collections(
 async def create_collection(
     body: CollectionCreateRequest,
     user: dict[str, Any] = Depends(get_current_user),
-):
+) -> Any:
     """Create a new collection."""
     try:
         collection = await CollectionService.create_collection(
@@ -120,7 +120,7 @@ async def create_collection(
 async def get_collection(
     collection_id: int,
     user: dict[str, Any] = Depends(get_current_user),
-):
+) -> Any:
     """Get collection details."""
     collection = await CollectionService.get_collection_with_auth(
         collection_id, user["user_id"], "viewer"
@@ -134,7 +134,7 @@ async def update_collection(
     collection_id: int,
     body: CollectionUpdateRequest,
     user: dict[str, Any] = Depends(get_current_user),
-):
+) -> Any:
     """Update a collection."""
     try:
         collection = await CollectionService.update_collection(
@@ -157,7 +157,7 @@ async def update_collection(
 async def delete_collection(
     collection_id: int,
     user: dict[str, Any] = Depends(get_current_user),
-):
+) -> Any:
     """Delete a collection (soft delete)."""
     await CollectionService.delete_collection(collection_id, user["user_id"])
     return success_response({"success": True})
@@ -168,7 +168,7 @@ async def add_collection_item(
     collection_id: int,
     body: CollectionItemCreateRequest,
     user: dict[str, Any] = Depends(get_current_user),
-):
+) -> Any:
     """Add a summary to a collection."""
     await CollectionService.add_item(collection_id, body.summary_id, user["user_id"])
     return success_response({"success": True})
@@ -180,7 +180,7 @@ async def list_collection_items(
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
     user: dict[str, Any] = Depends(get_current_user),
-):
+) -> Any:
     items = await CollectionService.list_items(collection_id, user["user_id"], limit, offset)
     payload = [
         CollectionItem(
@@ -207,7 +207,7 @@ async def reorder_collection_items(
     collection_id: int,
     body: CollectionItemReorderRequest,
     user: dict[str, Any] = Depends(get_current_user),
-):
+) -> Any:
     await CollectionService.reorder_items(collection_id, user["user_id"], body.items)
     return success_response({"success": True})
 
@@ -217,7 +217,7 @@ async def move_collection_items(
     collection_id: int,
     body: CollectionItemMoveRequest,
     user: dict[str, Any] = Depends(get_current_user),
-):
+) -> Any:
     moved = await CollectionService.move_items(
         source_collection_id=collection_id,
         user_id=user["user_id"],
@@ -233,7 +233,7 @@ async def remove_collection_item(
     collection_id: int,
     summary_id: int,
     user: dict[str, Any] = Depends(get_current_user),
-):
+) -> Any:
     """Remove a summary from a collection."""
     await CollectionService.remove_item(collection_id, summary_id, user["user_id"])
     return success_response({"success": True})
@@ -244,7 +244,7 @@ async def reorder_collections(
     collection_id: int,
     body: CollectionReorderRequest,
     user: dict[str, Any] = Depends(get_current_user),
-):
+) -> Any:
     await CollectionService.reorder_collections(
         parent_id=collection_id,
         user_id=user["user_id"],
@@ -258,7 +258,7 @@ async def move_collection(
     collection_id: int,
     body: CollectionMoveRequest,
     user: dict[str, Any] = Depends(get_current_user),
-):
+) -> Any:
     try:
         moved = await CollectionService.move_collection(
             collection_id=collection_id,
@@ -283,7 +283,7 @@ async def move_collection(
 async def get_collection_tree(
     max_depth: int = Query(3, ge=1, le=10),
     user: dict[str, Any] = Depends(get_current_user),
-):
+) -> Any:
     tree = await CollectionService.get_tree(user_id=user["user_id"], max_depth=max_depth)
 
     def to_response(col: dict) -> CollectionResponse:
@@ -297,7 +297,7 @@ async def get_collection_tree(
 
 
 @router.get("/{collection_id}/acl")
-async def get_collection_acl(collection_id: int, user: dict[str, Any] = Depends(get_current_user)):
+async def get_collection_acl(collection_id: int, user: dict[str, Any] = Depends(get_current_user)) -> Any:
     acl = await CollectionService.list_acl(collection_id, user["user_id"])
     payload = []
     for entry in acl:
@@ -337,7 +337,7 @@ async def add_collection_collaborator(
     collection_id: int,
     body: CollectionShareRequest,
     user: dict[str, Any] = Depends(get_current_user),
-):
+) -> Any:
     await CollectionService.add_collaborator(
         collection_id=collection_id,
         user_id=user["user_id"],
@@ -352,7 +352,7 @@ async def remove_collection_collaborator(
     collection_id: int,
     target_user_id: int,
     user: dict[str, Any] = Depends(get_current_user),
-):
+) -> Any:
     await CollectionService.remove_collaborator(
         collection_id=collection_id, user_id=user["user_id"], target_user_id=target_user_id
     )
@@ -364,7 +364,7 @@ async def create_collection_invite(
     collection_id: int,
     body: CollectionInviteRequest,
     user: dict[str, Any] = Depends(get_current_user),
-):
+) -> Any:
     expires = None
     if body.expires_at:
         try:
@@ -386,7 +386,7 @@ async def create_collection_invite(
 async def accept_collection_invite(
     token: str,
     user: dict[str, Any] = Depends(get_current_user),
-):
+) -> Any:
     await CollectionService.accept_invite(token=token, user_id=user["user_id"])
     return success_response({"success": True})
 
@@ -395,7 +395,7 @@ async def accept_collection_invite(
 async def evaluate_smart_collection(
     collection_id: int,
     user: dict[str, Any] = Depends(get_current_user),
-):
+) -> Any:
     """Force re-evaluation of a smart collection's items."""
     try:
         count = await CollectionService.evaluate_smart_collection(

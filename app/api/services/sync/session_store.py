@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Protocol
+from typing import cast,  Any, Protocol
 
 from app.core.json_utils import dumps as json_dumps, loads as json_loads
 from app.core.logging_utils import get_logger
@@ -82,7 +82,7 @@ class RedisSyncSessionStore:
         ttl = await redis_client.ttl(key)
         if payload_raw is None or ttl == -2:
             return None
-        return json_loads(payload_raw)
+        return cast("dict[str, Any] | None", json_loads(payload_raw))
 
     async def delete(self, session_id: str) -> None:
         redis_client = await self._get_redis(self._cfg)

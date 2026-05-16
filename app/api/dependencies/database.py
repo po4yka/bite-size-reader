@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import contextlib
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from app.application.use_cases.search_read_model import SearchReadModelUseCase
 from app.application.use_cases.summary_read_model import SummaryReadModelUseCase
@@ -294,7 +294,7 @@ def get_summary_read_model_use_case(
     with contextlib.suppress(RuntimeError):
         from app.di.api import resolve_api_runtime
 
-        return resolve_api_runtime(request).summary_read_model_use_case
+        return cast(SummaryReadModelUseCase, resolve_api_runtime(request).summary_read_model_use_case)
     manager = resolve_repository_session(session_manager, request)
     return SummaryReadModelUseCase(
         summary_repository=get_summary_repository(manager, request),
@@ -319,7 +319,7 @@ def get_search_read_model_use_case(
     with contextlib.suppress(RuntimeError):
         from app.di.api import resolve_api_runtime
 
-        return resolve_api_runtime(request).search_read_model_use_case
+        return cast(SearchReadModelUseCase, resolve_api_runtime(request).search_read_model_use_case)
     manager = resolve_repository_session(session_manager, request)
     return SearchReadModelUseCase(
         topic_search_repository=get_topic_search_repository(manager, request),

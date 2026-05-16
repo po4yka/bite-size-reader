@@ -242,7 +242,7 @@ def _get_circuit_breaker_states() -> dict[str, str]:
 
 
 @router.get("/health/detailed")
-async def detailed_health_check(request: Request, _: dict = Depends(get_current_user)):
+async def detailed_health_check(request: Request, _: dict = Depends(get_current_user)) -> Any:
     """Comprehensive health check with component status.
 
     Returns detailed status of all system components:
@@ -319,7 +319,7 @@ async def detailed_health_check(request: Request, _: dict = Depends(get_current_
 
 
 @router.get("/health/ready")
-async def readiness_check():
+async def readiness_check() -> Any:
     """Kubernetes readiness probe — intentionally unauthenticated.
 
     Returns 200 if the service is ready to handle requests.
@@ -350,7 +350,7 @@ async def readiness_check():
 
 
 @router.get("/health/live")
-async def liveness_check():
+async def liveness_check() -> Any:
     """Kubernetes liveness probe — intentionally unauthenticated.
 
     Returns 200 if the service is running. No auth required: probes

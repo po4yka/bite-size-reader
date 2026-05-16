@@ -41,7 +41,7 @@ router = APIRouter()
 def _get_request_service(request: Request) -> RequestService:
     """Resolve the shared request workflow service from API runtime."""
     with contextlib.suppress(RuntimeError):
-        return resolve_api_runtime(request).request_service
+        return cast(RequestService, resolve_api_runtime(request).request_service)
 
     from app.api.dependencies.database import (
         get_crawl_result_repository,

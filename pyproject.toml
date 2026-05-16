@@ -128,6 +128,12 @@ module = ["app.core.*", "app.domain.*", "app.models.*"]
 disallow_untyped_defs = true
 
 [[tool.mypy.overrides]]
+module = ["app.api.*", "app.infrastructure.*", "app.security.*", "app.config.*"]
+disallow_untyped_defs = true
+warn_return_any = true
+no_implicit_optional = true
+
+[[tool.mypy.overrides]]
 module = ["tests.test_telegram_retry_command"]
 ignore_errors = true
 

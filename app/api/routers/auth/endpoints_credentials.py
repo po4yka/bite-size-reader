@@ -66,7 +66,7 @@ def _coerce_naive(dt_value: datetime | None) -> datetime | None:
 async def credentials_login(
     payload: CredentialsLoginRequest,
     response: Response,
-):
+) -> Any:
     """Exchange nickname/email + password for JWT access + refresh tokens.
 
     Remember Me semantics:
@@ -207,7 +207,7 @@ async def credentials_login(
 async def change_password(
     payload: ChangePasswordRequest,
     user: dict[str, Any] = Depends(get_current_user),
-):
+) -> Any:
     """Change the current user's password (requires the current one)."""
     user_id = int(user["user_id"])
     ensure_user_allowed(user_id)

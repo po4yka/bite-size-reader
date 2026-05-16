@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any
+from typing import cast,  Any
 
 from app.api.models.responses import SyncEntityEnvelope
 from app.core.logging_utils import get_logger
@@ -23,12 +23,12 @@ class SyncEnvelopeSerializer:
         if isinstance(request_val, int):
             return request_val
         if isinstance(request_val, dict):
-            return request_val.get("id")
+            return cast("int | None", request_val.get("id"))
         return None
 
     def _coerce_iso(self, dt_value: Any) -> str:
         if hasattr(dt_value, "isoformat") and not isinstance(dt_value, str):
-            return dt_value.isoformat() + "Z"
+            return str(dt_value.isoformat()) + "Z"
         if isinstance(dt_value, str):
             try:
                 return datetime.fromisoformat(dt_value.replace("Z", "+00:00")).isoformat() + "Z"

@@ -8,7 +8,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import struct
-from typing import TYPE_CHECKING, Any
+from typing import cast,  TYPE_CHECKING, Any
 
 from app.core.logging_utils import get_logger
 
@@ -214,5 +214,5 @@ class EmbeddingCache:
 
         # Return as list
         if hasattr(embedding, "tolist"):
-            return embedding.tolist()
-        return list(embedding)
+            return cast(list[float], embedding.tolist())
+        return cast(list[float], list(embedding))

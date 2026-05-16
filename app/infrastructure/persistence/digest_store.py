@@ -577,7 +577,7 @@ class DigestStore:
         self, channel: Any, error: str, *, max_errors: int
     ) -> bool:
         new_count = channel.fetch_error_count + 1
-        disable = new_count >= max_errors
+        disable: bool = bool(new_count >= max_errors)
         values: dict[str, Any] = {
             "fetch_error_count": Channel.fetch_error_count + 1,
             "last_error": error,

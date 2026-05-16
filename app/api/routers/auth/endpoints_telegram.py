@@ -46,7 +46,7 @@ router = APIRouter()
 
 
 @router.post("/telegram-login")
-async def telegram_login(login_data: TelegramLoginRequest, response: Response):
+async def telegram_login(login_data: TelegramLoginRequest, response: Response) -> Any:
     """
     Exchange Telegram authentication data for JWT tokens.
 
@@ -112,14 +112,14 @@ async def telegram_login(login_data: TelegramLoginRequest, response: Response):
 
 
 @router.get("/me/telegram")
-async def get_telegram_link_status(user: dict[str, Any] = Depends(get_current_user)):
+async def get_telegram_link_status(user: dict[str, Any] = Depends(get_current_user)) -> Any:
     """Fetch current Telegram link status."""
     user_record = await AuthService.ensure_user(user["user_id"])
     return success_response(AuthService.build_link_status_payload(user_record))
 
 
 @router.post("/me/telegram/link")
-async def begin_telegram_link(user: dict[str, Any] = Depends(get_current_user)):
+async def begin_telegram_link(user: dict[str, Any] = Depends(get_current_user)) -> Any:
     """Begin linking by issuing a nonce."""
     await AuthService.ensure_user(user["user_id"])
     expires_at = datetime.now(UTC) + timedelta(minutes=15)
@@ -135,7 +135,7 @@ async def begin_telegram_link(user: dict[str, Any] = Depends(get_current_user)):
 @router.post("/me/telegram/complete")
 async def complete_telegram_link(
     payload: TelegramLinkCompleteRequest, user: dict[str, Any] = Depends(get_current_user)
-):
+) -> Any:
     """Complete Telegram linking by validating nonce and Telegram login payload."""
     user_id = user["user_id"]
     user_record = await AuthService.ensure_user(user_id)
@@ -195,7 +195,7 @@ async def complete_telegram_link(
 
 
 @router.delete("/me/telegram")
-async def unlink_telegram(user: dict[str, Any] = Depends(get_current_user)):
+async def unlink_telegram(user: dict[str, Any] = Depends(get_current_user)) -> Any:
     """Unlink Telegram account."""
     user_id = user["user_id"]
     await AuthService.unlink_telegram(user_id)

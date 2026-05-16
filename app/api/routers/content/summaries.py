@@ -171,7 +171,7 @@ async def get_summaries(
     sort: str = Query("created_at_desc", pattern="^(created_at_desc|created_at_asc)$"),
     user: dict[str, Any] = Depends(get_current_user),
     use_case: SummaryReadModelUseCase = Depends(_get_summary_use_case),
-):
+) -> Any:
     """
     Get paginated list of summaries.
 
@@ -223,7 +223,7 @@ async def get_summary_by_url(
     url: str = Query(..., description="Original URL of the article"),
     user: dict[str, Any] = Depends(get_current_user),
     use_case: SummaryReadModelUseCase = Depends(_get_summary_use_case),
-):
+) -> Any:
     """Get a single summary (article) by its original URL."""
     summary_id = await use_case.get_summary_id_by_url_for_user(user_id=user["user_id"], url=url)
     if not summary_id:
@@ -237,7 +237,7 @@ async def get_recommendations(
     limit: int = Query(10, ge=1, le=50),
     user: dict[str, Any] = Depends(get_current_user),
     use_case: SummaryReadModelUseCase = Depends(_get_summary_use_case),
-):
+) -> Any:
     """Get personalized summary recommendations based on reading history."""
     user_id = user["user_id"]
 
@@ -291,7 +291,7 @@ async def get_summary(
     summary_id: int,
     user: dict[str, Any] = Depends(get_current_user),
     use_case: SummaryReadModelUseCase = Depends(_get_summary_use_case),
-):
+) -> Any:
     """Get a single summary with full details."""
     context = await use_case.get_summary_context_for_user(
         user_id=user["user_id"],
@@ -415,7 +415,7 @@ async def get_summary_content(
     format: str = Query("markdown", pattern="^(markdown|text)$"),
     user: dict[str, Any] = Depends(get_current_user),
     use_case: SummaryReadModelUseCase = Depends(_get_summary_use_case),
-):
+) -> Any:
     """Get full article content for offline reading."""
     context = await use_case.get_summary_context_for_user(
         user_id=user["user_id"],
@@ -483,7 +483,7 @@ async def export_summary(
     format: str = Query("pdf", pattern="^(pdf|md|html)$"),
     user: dict[str, Any] = Depends(get_current_user),
     use_case: SummaryReadModelUseCase = Depends(_get_summary_use_case),
-):
+) -> Any:
     """Export a summary as PDF, Markdown, or HTML."""
     import os
 
@@ -535,7 +535,7 @@ async def update_summary(
     update: UpdateSummaryRequest,
     user: dict[str, Any] = Depends(get_current_user),
     use_case: SummaryReadModelUseCase = Depends(_get_summary_use_case),
-):
+) -> Any:
     """Update summary metadata (e.g., mark as read)."""
     updated_summary = await use_case.update_summary(
         user_id=user["user_id"],
@@ -562,7 +562,7 @@ async def save_reading_position(
     body: SaveReadingPositionRequest,
     user: dict[str, Any] = Depends(get_current_user),
     use_case: SummaryReadModelUseCase = Depends(_get_summary_use_case),
-):
+) -> Any:
     """Save the reading position (scroll progress) for a summary."""
     updated = await use_case.update_reading_progress(
         user_id=user["user_id"],
@@ -587,7 +587,7 @@ async def delete_summary(
     summary_id: int,
     user: dict[str, Any] = Depends(get_current_user),
     use_case: SummaryReadModelUseCase = Depends(_get_summary_use_case),
-):
+) -> Any:
     """Delete a summary (soft delete)."""
     deleted = await use_case.soft_delete_summary(user_id=user["user_id"], summary_id=summary_id)
     if not deleted:
@@ -606,7 +606,7 @@ async def toggle_favorite(
     summary_id: int,
     user: dict[str, Any] = Depends(get_current_user),
     use_case: SummaryReadModelUseCase = Depends(_get_summary_use_case),
-):
+) -> Any:
     """Toggle the favorite status of a summary."""
     is_favorited = await use_case.toggle_favorite(user_id=user["user_id"], summary_id=summary_id)
     if is_favorited is None:
@@ -620,7 +620,7 @@ async def submit_feedback(
     body: SubmitFeedbackRequest,
     user: dict[str, Any] = Depends(get_current_user),
     use_case: SummaryReadModelUseCase = Depends(_get_summary_use_case),
-):
+) -> Any:
     """Submit or update feedback for a summary."""
     feedback = await use_case.submit_feedback(
         user_id=user["user_id"],

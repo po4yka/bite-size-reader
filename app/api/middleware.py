@@ -5,7 +5,7 @@ from __future__ import annotations
 import threading
 import time
 from collections import defaultdict
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from fastapi.responses import JSONResponse
 
@@ -20,6 +20,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
     from fastapi import Request
+    from starlette.responses import Response
 
 logger = get_logger(__name__)
 
@@ -72,7 +73,7 @@ def _check_local_rate_limit(user_id: str, limit: int, window: int) -> tuple[bool
         return True, limit - len(requests)
 
 
-async def webapp_auth_middleware(request: Request, call_next: Callable):
+async def webapp_auth_middleware(request: Request, call_next: Callable) -> Response:
     """Validate Telegram WebApp initData and attach user to request.state.
 
     When X-Telegram-Init-Data header is present and no Authorization header,
@@ -91,10 +92,10 @@ async def webapp_auth_middleware(request: Request, call_next: Callable):
         except Exception as exc:
             request.state.webapp_auth_error = str(exc)
             logger.debug("webapp_auth_header_parse_failed", extra={"error": str(exc)})
-    return await call_next(request)
+    return cast("Response", await call_next(request))
 
 
-async def correlation_id_middleware(request: Request, call_next: Callable):
+async def correlation_id_middleware(request: Request, call_next: Callable) -> Response:
     """
     Add correlation ID to all requests for tracing.
 
@@ -133,7 +134,7 @@ async def correlation_id_middleware(request: Request, call_next: Callable):
         pass
 
     try:
-        response = await call_next(request)
+        response = cast("Response", await call_next(request))
         response.headers["X-Correlation-ID"] = correlation_id
         return response
     finally:
@@ -535,7 +536,7 @@ async def _enforce_client_limit_redis(
     )
 
 
-async def rate_limit_middleware(request: Request, call_next: Callable):
+async def rate_limit_middleware(request: Request, call_next: Callable) -> Response:
     """Redis-backed rate limiting middleware with graceful fallback."""
     cfg = _get_cfg()
     correlation_id = getattr(request.state, "correlation_id", None)

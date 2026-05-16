@@ -84,7 +84,7 @@ class CollectionService:
         collection = await repo.async_get_collection(collection_id)
         if not collection:
             raise ResourceNotFoundError("Collection", collection_id)
-        return collection
+        return cast(dict[str, Any], collection)
 
     @classmethod
     async def get_collection_with_auth(
@@ -119,7 +119,7 @@ class CollectionService:
     ) -> list[dict[str, Any]]:
         """List collections for a user with optional parent filter."""
         repo = cls._repo()
-        return await repo.async_list_collections(user_id, parent_id, limit, offset)
+        return cast(list[dict[str, Any]], await repo.async_list_collections(user_id, parent_id, limit, offset))
 
     @classmethod
     async def get_tree(cls, user_id: int, max_depth: int = 3) -> list[dict[str, Any]]:
@@ -347,7 +347,7 @@ class CollectionService:
         repo = cls._repo()
         await cls._get_collection_or_raise(repo, collection_id)
         await cls._require_role(repo, collection_id, user_id, "viewer")
-        return await repo.async_list_items(collection_id, limit, offset)
+        return cast(list[dict[str, Any]], await repo.async_list_items(collection_id, limit, offset))
 
     @classmethod
     async def reorder_items(
@@ -382,9 +382,9 @@ class CollectionService:
         await cls._require_role(repo, source_collection_id, user_id, "editor")
         await cls._require_role(repo, target_collection_id, user_id, "editor")
 
-        return await repo.async_move_items(
+        return cast(list[int], await repo.async_move_items(
             source_collection_id, target_collection_id, summary_ids, position
-        )
+        ))
 
     # ---- reorder / move collections ----
     @classmethod
@@ -420,7 +420,7 @@ class CollectionService:
         result = await repo.async_move_collection(collection_id, parent_id, pos)
         if result is None:
             raise ValueError("Cycle detected or collection not found")
-        return result
+        return cast(dict[str, Any], result)
 
     # ---- sharing ----
     @classmethod
@@ -486,7 +486,7 @@ class CollectionService:
         await cls._get_collection_or_raise(repo, collection_id)
         await cls._require_role(repo, collection_id, user_id, "owner")
 
-        return await repo.async_create_invite(collection_id, role, expires_at)
+        return cast(dict[str, Any], await repo.async_create_invite(collection_id, role, expires_at))
 
     @classmethod
     async def accept_invite(cls, token: str, user_id: int) -> None:
@@ -545,7 +545,7 @@ class CollectionService:
                     matching_ids.append(summary_id)
 
         # Replace collection items atomically
-        count = await repo.async_bulk_set_items(collection_id, matching_ids)
+        count = int(await repo.async_bulk_set_items(collection_id, matching_ids))
 
         # Update last_evaluated_at
         await repo.async_update_collection(collection_id, last_evaluated_at=dt.datetime.now(UTC))

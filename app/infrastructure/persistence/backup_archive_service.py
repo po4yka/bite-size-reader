@@ -243,7 +243,7 @@ async def async_create_backup_archive(
 
         zip_bytes = buf.getvalue()
         if cfg.is_encryption_enabled:
-            payload = encrypt_backup(zip_bytes, cfg.encryption_key)  # type: ignore[arg-type]
+            payload = encrypt_backup(zip_bytes, cfg.encryption_key)
             suffix = ".zip.enc"
         else:
             payload = zip_bytes

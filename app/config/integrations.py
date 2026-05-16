@@ -187,11 +187,11 @@ class McpConfig(BaseModel):
     def _validate_transport(cls, value: Any) -> str:
         if value in (None, ""):
             return "stdio"
-        value = str(value).strip().lower()
-        if value not in ("stdio", "sse"):
+        normalized: str = str(value).strip().lower()
+        if normalized not in ("stdio", "sse"):
             msg = "MCP transport must be 'stdio' or 'sse'"
             raise ValueError(msg)
-        return value
+        return normalized
 
     @field_validator("auth_mode", mode="before")
     @classmethod
@@ -353,11 +353,11 @@ class EmbeddingConfig(BaseModel):
     def _validate_provider(cls, value: Any) -> str:
         if value in (None, ""):
             return "local"
-        value = str(value).strip().lower()
-        if value not in ("local", "gemini"):
+        normalized: str = str(value).strip().lower()
+        if normalized not in ("local", "gemini"):
             msg = "EMBEDDING_PROVIDER must be 'local' or 'gemini'"
             raise ValueError(msg)
-        return value
+        return normalized
 
     @field_validator("gemini_dimensions", mode="before")
     @classmethod

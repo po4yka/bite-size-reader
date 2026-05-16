@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-from typing import TYPE_CHECKING, Any, Protocol
+from typing import cast,  TYPE_CHECKING, Any, Protocol
 
 from app.application.dto.topic_search import TopicArticle
 from app.core.logging_utils import get_logger
@@ -217,4 +217,4 @@ class HybridSearchService:
 
     @staticmethod
     def _vector_result_id(result: StoreVectorSearchResult) -> str | None:
-        return getattr(result, "url", None) or getattr(result, "chunk_id", None)
+        return cast("str | None", getattr(result, "url", None) or getattr(result, "chunk_id", None))

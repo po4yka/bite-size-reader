@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import time
 import uuid
-from typing import TYPE_CHECKING, Any
+from typing import cast,  TYPE_CHECKING, Any
 from uuid import uuid4
 
 from qdrant_client import QdrantClient
@@ -525,7 +525,7 @@ class QdrantVectorStore:
                 collection_name=self._collection_name,
                 exact=True,
             )
-            return result.count
+            return cast(int, result.count)
         except Exception:
             return 0
 

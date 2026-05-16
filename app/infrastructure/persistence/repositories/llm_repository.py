@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import cast,  TYPE_CHECKING, Any
 
 from sqlalchemy import desc, func, or_, select
 
@@ -82,9 +82,9 @@ async def _resolve_initial_trigger(session: Any, request_id: int | None) -> str 
     """
     if request_id is None:
         return None
-    return await session.scalar(
+    return cast("str | None", await session.scalar(
         select(Request.initial_attempt_trigger).where(Request.id == request_id)
-    )
+    ))
 
 
 class LLMRepositoryAdapter:

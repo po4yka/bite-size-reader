@@ -252,5 +252,5 @@ def isotime(dt_val: Any) -> str:
     if dt_val is None:
         return ""
     if hasattr(dt_val, "isoformat"):
-        return dt_val.isoformat() + "Z"
+        return str(dt_val.isoformat()) + "Z"
     return str(dt_val)

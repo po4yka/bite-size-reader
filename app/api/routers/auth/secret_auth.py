@@ -6,6 +6,7 @@ import hashlib
 import hmac
 import secrets
 from datetime import datetime
+from typing import Any, cast
 
 from app.api.dependencies.database import get_auth_repository
 from app.api.exceptions import (
@@ -33,7 +34,7 @@ def _get_cfg() -> AppConfig:
     return _cfg
 
 
-def _get_auth_config():
+def _get_auth_config() -> Any:
     """Get auth configuration."""
     cfg = _get_cfg()
     return cfg.auth
@@ -190,10 +191,13 @@ async def handle_failed_attempt(record: dict) -> dict:
     """Increment failed attempts and potentially lock the secret."""
     cfg = _get_auth_config()
     auth_repo = get_auth_repository()
-    return await auth_repo.async_increment_failed_attempts(
-        record["id"],
-        max_attempts=cfg.secret_max_failed_attempts,
-        lockout_minutes=cfg.secret_lockout_minutes,
+    return cast(
+        dict,
+        await auth_repo.async_increment_failed_attempts(
+            record["id"],
+            max_attempts=cfg.secret_max_failed_attempts,
+            lockout_minutes=cfg.secret_lockout_minutes,
+        ),
     )
 
 

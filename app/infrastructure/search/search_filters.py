@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import datetime as dt
 from dataclasses import dataclass
-from typing import Any
+from typing import cast,  Any
 
 from app.core.logging_utils import get_logger
 
@@ -124,7 +124,7 @@ class SearchFilters:
         try:
             from dateutil import parser  # type: ignore[import-untyped]
 
-            return parser.parse(date_str)
+            return cast("dt.datetime | None", parser.parse(date_str))
         except Exception as e:
             logger.debug(
                 "dateutil_parse_failed",

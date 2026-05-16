@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import contextlib
-from typing import Any
+from typing import cast,  Any
 
 from fastapi import APIRouter, BackgroundTasks, Depends, Request
 
@@ -29,7 +29,7 @@ def _get_request_service(request: Request) -> RequestService:
     from app.di.api import resolve_api_runtime
 
     with contextlib.suppress(RuntimeError):
-        return resolve_api_runtime(request).request_service
+        return cast(RequestService, resolve_api_runtime(request).request_service)
     # Fallback for tests
     from app.api.dependencies.database import (
         get_crawl_result_repository,
@@ -49,7 +49,7 @@ def _get_request_service(request: Request) -> RequestService:
     )
 
 
-def _get_tag_repo():
+def _get_tag_repo() -> Any:
     """Lazily obtain the tag repository from the current API runtime."""
     from app.di.api import get_current_api_runtime
 
@@ -63,7 +63,7 @@ async def quick_save(
     background_tasks: BackgroundTasks,
     user: dict[str, Any] = Depends(get_current_user),
     request_service: RequestService = Depends(_get_request_service),
-):
+) -> Any:
     """Save a page from the browser extension.
 
     Normalizes the URL, checks for duplicates, optionally triggers

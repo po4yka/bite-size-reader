@@ -9,6 +9,7 @@ import os
 from contextlib import asynccontextmanager
 from datetime import datetime
 from pathlib import Path as _Path
+from collections.abc import AsyncGenerator
 from typing import Any
 
 from fastapi import Depends, FastAPI, HTTPException, Request
@@ -76,7 +77,7 @@ logger = get_logger(__name__)
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     runtime = None
     broker = None
     coco_runtime = None
@@ -341,7 +342,7 @@ def health_check(request: Request) -> dict[str, Any]:
 
 
 @app.get("/metrics")
-async def metrics(user: dict = Depends(get_current_user)):
+async def metrics(user: dict[str, Any] = Depends(get_current_user)) -> Any:
     """Prometheus metrics endpoint (owner-only).
 
     Returns metrics in Prometheus text format for scraping.

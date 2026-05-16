@@ -20,7 +20,7 @@ class RedisCache:
 
     def __init__(self, cfg: AppConfig) -> None:
         self.cfg = cfg
-        self._client = None
+        self._client: Any = None
         self._lock = asyncio.Lock()
         timeout = cfg.redis.cache_timeout_sec or 0.3
         self._timeout = max(0.05, float(timeout))
@@ -29,7 +29,7 @@ class RedisCache:
     def enabled(self) -> bool:
         return bool(self.cfg.redis.enabled and self.cfg.redis.cache_enabled)
 
-    async def _get_client(self):
+    async def _get_client(self) -> Any:
         if not self.enabled:
             return None
 

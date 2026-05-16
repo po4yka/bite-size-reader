@@ -28,7 +28,7 @@ router = APIRouter()
 summary_tags_router = APIRouter()
 
 
-def _get_tag_repo():
+def _get_tag_repo() -> Any:
     """Lazily obtain the tag repository from the current API runtime."""
     from app.di.api import get_current_api_runtime
 

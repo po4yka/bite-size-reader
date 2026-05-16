@@ -293,7 +293,7 @@ class SyncSessionNotFoundError(APIException):
 class SyncSessionForbiddenError(APIException):
     """Raised when sync session belongs to another user/client."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__(
             message="Sync session does not belong to this user or client.",
             error_code=ErrorCode.SYNC_SESSION_FORBIDDEN,
@@ -401,7 +401,7 @@ class TokenInvalidError(APIException):
 class TokenRevokedError(APIException):
     """Raised when refresh token has been revoked (401)."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__(
             message="Token has been revoked. Please re-authenticate.",
             error_code=ErrorCode.AUTH_REVOKED,

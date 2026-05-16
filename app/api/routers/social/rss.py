@@ -19,7 +19,7 @@ logger = get_logger(__name__)
 router = APIRouter()
 
 
-def _get_rss_repo():
+def _get_rss_repo() -> Any:
     """Lazily obtain the RSS feed repository from the current API runtime."""
     from app.di.api import get_current_api_runtime
 

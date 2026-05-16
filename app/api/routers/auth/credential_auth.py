@@ -13,7 +13,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import unicodedata
-from typing import Literal
+from typing import Any,  Literal
 
 from argon2 import PasswordHasher
 from argon2.exceptions import (
@@ -55,7 +55,7 @@ def _get_cfg() -> AppConfig:
     return _cfg
 
 
-def _get_auth_config():
+def _get_auth_config() -> Any:
     return _get_cfg().auth
 
 
@@ -264,7 +264,7 @@ def run_decoy_verify(password: str) -> None:
         pass
 
 
-def lockout_seconds_remaining(locked_until, now) -> int:
+def lockout_seconds_remaining(locked_until: Any, now: Any) -> int:
     """Return seconds until lockout expiry; 0 if unlocked or already past."""
     if locked_until is None:
         return 0

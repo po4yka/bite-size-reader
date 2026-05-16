@@ -90,7 +90,7 @@ class PushNotificationEventHandler:
                 if isinstance(payload, dict):
                     tldr = payload.get("tldr")
                     if tldr and isinstance(tldr, str):
-                        return tldr[:100] + ("..." if len(tldr) > 100 else "")
+                        return str(tldr[:100]) + ("..." if len(tldr) > 100 else "")
         except Exception:
             logger.debug(
                 "push_body_tldr_failed", exc_info=True, extra={"summary_id": event.summary_id}
@@ -104,7 +104,7 @@ class PushNotificationEventHandler:
 
                 domain = urlparse(url).netloc
                 if domain:
-                    return domain
+                    return str(domain)
             except Exception:
                 logger.debug(
                     "push_body_url_parse_failed",

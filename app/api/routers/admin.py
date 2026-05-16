@@ -51,7 +51,7 @@ def _today_start() -> _dt.datetime:
 async def list_users(
     request: Request,
     user: AuthenticatedUser = Depends(get_current_user),
-):
+) -> Any:
     """List all users with per-user summary/request/tag/collection counts."""
     await AuthService.require_owner(user)
     user_id = _extract_user_id(user)
@@ -70,7 +70,7 @@ async def list_users(
 async def job_status(
     request: Request,
     user: AuthenticatedUser = Depends(get_current_user),
-):
+) -> Any:
     """Pipeline and import job status overview."""
     await AuthService.require_owner(user)
     user_id = _extract_user_id(user)
@@ -90,7 +90,7 @@ async def job_status(
 async def content_health(
     request: Request,
     user: AuthenticatedUser = Depends(get_current_user),
-):
+) -> Any:
     """Content pipeline health: totals, failure breakdown, recent errors."""
     await AuthService.require_owner(user)
     user_id = _extract_user_id(user)
@@ -109,7 +109,7 @@ async def content_health(
 async def system_metrics(
     request: Request,
     user: AuthenticatedUser = Depends(get_current_user),
-):
+) -> Any:
     """Database, LLM, and scraper metrics."""
     await AuthService.require_owner(user)
     user_id = _extract_user_id(user)
@@ -136,7 +136,7 @@ async def audit_log(
     since: str | None = Query(None, description="ISO datetime lower bound"),
     limit: int = Query(50, ge=1, le=500),
     offset: int = Query(0, ge=0),
-):
+) -> Any:
     """Paginated, filterable audit log."""
     await AuthService.require_owner(user)
     caller_id = _extract_user_id(user)

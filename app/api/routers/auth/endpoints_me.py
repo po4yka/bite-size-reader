@@ -26,12 +26,13 @@ def _format_dt_z(dt_value: Any) -> str:
     if isinstance(dt_value, str):
         return dt_value if dt_value.endswith("Z") else dt_value + "Z"
     if hasattr(dt_value, "isoformat"):
-        return dt_value.isoformat() + "Z"
-    return str(dt_value) if str(dt_value).endswith("Z") else str(dt_value) + "Z"
+        return str(dt_value.isoformat()) + "Z"
+    s = str(dt_value)
+    return s if s.endswith("Z") else s + "Z"
 
 
 @router.get("/me")
-async def get_current_user_info(user: dict[str, Any] = Depends(get_current_user)):
+async def get_current_user_info(user: dict[str, Any] = Depends(get_current_user)) -> Any:
     """Get current authenticated user information."""
     user_repo = get_user_repository()
     user_record, _ = await user_repo.async_get_or_create_user(
@@ -58,7 +59,7 @@ _CONFIRM_DELETE_VALUE = "DELETE-MY-ACCOUNT"
 async def delete_account(
     user: dict[str, Any] = Depends(get_current_user),
     x_confirm_delete: str | None = Header(None),
-):
+) -> Any:
     """Delete the current user account and all associated data.
 
     Requires the ``X-Confirm-Delete: DELETE-MY-ACCOUNT`` header as an

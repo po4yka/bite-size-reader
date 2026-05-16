@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-from typing import TYPE_CHECKING, Any
+from typing import cast,  TYPE_CHECKING, Any
 
 import orjson
 from fastapi import APIRouter, Depends, HTTPException, Request as FastAPIRequest, status
@@ -32,7 +32,7 @@ def _get_request_service(request: FastAPIRequest) -> RequestService:
     with contextlib.suppress(RuntimeError):
         from app.di.api import resolve_api_runtime
 
-        return resolve_api_runtime(request).request_service
+        return cast(RequestService, resolve_api_runtime(request).request_service)
 
     from app.api.dependencies.database import (
         get_crawl_result_repository,

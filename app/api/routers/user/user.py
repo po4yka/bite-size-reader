@@ -38,7 +38,7 @@ def safe_isoformat(dt_value: Any) -> str | None:
     if dt_value is None:
         return None
     if hasattr(dt_value, "isoformat") and not isinstance(dt_value, str):
-        return dt_value.isoformat() + "Z"
+        return str(dt_value.isoformat()) + "Z"
     if isinstance(dt_value, str):
         try:
             parsed = datetime.fromisoformat(dt_value.replace("Z", "+00:00"))
@@ -49,7 +49,7 @@ def safe_isoformat(dt_value: Any) -> str | None:
 
 
 @router.get("/preferences")
-async def get_user_preferences(user: dict[str, Any] = Depends(get_current_user)):
+async def get_user_preferences(user: dict[str, Any] = Depends(get_current_user)) -> Any:
     """Get user preferences."""
     user_repo = get_user_repository()
     user_record = await user_repo.async_get_user_by_telegram_id(user["user_id"])
@@ -96,7 +96,7 @@ async def get_user_preferences(user: dict[str, Any] = Depends(get_current_user))
 async def update_user_preferences(
     preferences: UpdatePreferencesRequest,
     user: dict[str, Any] = Depends(get_current_user),
-):
+) -> Any:
     """Update user preferences."""
     user_repo = get_user_repository()
 
@@ -142,7 +142,7 @@ async def update_user_preferences(
 
 
 @router.get("/stats")
-async def get_user_stats(user: dict[str, Any] = Depends(get_current_user)):
+async def get_user_stats(user: dict[str, Any] = Depends(get_current_user)) -> Any:
     """Get user statistics."""
     from collections import Counter
     from urllib.parse import urlparse
@@ -242,7 +242,7 @@ async def get_user_stats(user: dict[str, Any] = Depends(get_current_user)):
 
 
 @router.get("/goals")
-async def list_goals(user: dict[str, Any] = Depends(get_current_user)):
+async def list_goals(user: dict[str, Any] = Depends(get_current_user)) -> Any:
     """List all reading goals for the current user."""
     goal_dicts = await UserGoalService().list_goals(user_id=user["user_id"])
     return success_response({"goals": goal_dicts})
@@ -252,7 +252,7 @@ async def list_goals(user: dict[str, Any] = Depends(get_current_user)):
 async def upsert_goal(
     body: CreateGoalRequest,
     user: dict[str, Any] = Depends(get_current_user),
-):
+) -> Any:
     """Create or update a reading goal (one per goal_type+scope per user)."""
     payload = await UserGoalService().upsert_goal(user_id=user["user_id"], body=body)
     return success_response(payload)
@@ -262,7 +262,7 @@ async def upsert_goal(
 async def delete_goal(
     goal_type: str,
     user: dict[str, Any] = Depends(get_current_user),
-):
+) -> Any:
     """Remove a global reading goal by type (legacy endpoint)."""
     await UserGoalService().delete_global_goal(user_id=user["user_id"], goal_type=goal_type)
     return success_response({"deleted": True})
@@ -272,14 +272,14 @@ async def delete_goal(
 async def delete_goal_by_id(
     goal_id: str,
     user: dict[str, Any] = Depends(get_current_user),
-):
+) -> Any:
     """Remove a reading goal by its UUID."""
     await UserGoalService().delete_goal_by_id(user_id=user["user_id"], goal_id=goal_id)
     return success_response({"deleted": True})
 
 
 @router.get("/streak")
-async def get_streak(user: dict[str, Any] = Depends(get_current_user)):
+async def get_streak(user: dict[str, Any] = Depends(get_current_user)) -> Any:
     """Compute and return the user's reading streak data."""
     data = await UserActivityService().get_streak_data(user_id=user["user_id"])
     return success_response(
@@ -300,7 +300,7 @@ async def get_streak(user: dict[str, Any] = Depends(get_current_user)):
 
 
 @router.get("/goals/progress")
-async def get_goal_progress(user: dict[str, Any] = Depends(get_current_user)):
+async def get_goal_progress(user: dict[str, Any] = Depends(get_current_user)) -> Any:
     """Return each goal with current progress."""
     progress = await UserGoalService().get_goal_progress(user_id=user["user_id"])
     return success_response({"progress": progress})

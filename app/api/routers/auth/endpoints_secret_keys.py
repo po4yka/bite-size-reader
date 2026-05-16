@@ -7,7 +7,7 @@ from __future__ import annotations
 import hmac
 import secrets
 from datetime import datetime
-from typing import Any
+from typing import Any, cast
 
 from starlette.responses import Response  # noqa: TC002 - needed at runtime for FastAPI DI
 
@@ -62,11 +62,11 @@ router = APIRouter()
 def _extract_record_user_id(record: dict[str, Any]) -> int | None:
     record_user_id = record.get("user_id")
     if record_user_id is not None:
-        return record_user_id
+        return cast("int | None", record_user_id)
 
     user_field = record.get("user")
     if isinstance(user_field, dict):
-        return user_field.get("telegram_user_id")
+        return cast("int | None", user_field.get("telegram_user_id"))
     if isinstance(user_field, int):
         return user_field
     return None
@@ -86,7 +86,7 @@ def _parse_naive_dt(value: Any) -> datetime | None:
 
 
 @router.post("/secret-login")
-async def secret_login(login_data: SecretLoginRequest, response: Response):
+async def secret_login(login_data: SecretLoginRequest, response: Response) -> Any:
     """Exchange a pre-registered client secret for JWT tokens."""
     ensure_secret_login_enabled()
     validate_client_id(login_data.client_id)
@@ -189,7 +189,7 @@ async def secret_login(login_data: SecretLoginRequest, response: Response):
 @router.post("/secret-keys")
 async def create_secret_key(
     payload: SecretKeyCreateRequest, user: dict[str, Any] = Depends(get_current_user)
-):
+) -> Any:
     """Create or register a client secret for a user."""
     ensure_secret_login_enabled()
     validate_client_id(payload.client_id)
@@ -232,7 +232,7 @@ async def create_secret_key(
 @router.post("/secret-keys/{key_id}/rotate")
 async def rotate_secret_key(
     key_id: int, payload: SecretKeyRotateRequest, user: dict[str, Any] = Depends(get_current_user)
-):
+) -> Any:
     """Rotate an existing client secret."""
     ensure_secret_login_enabled()
 
@@ -300,7 +300,7 @@ async def revoke_secret_key(
     key_id: int,
     payload: SecretKeyRevokeRequest | None = None,
     user: dict[str, Any] = Depends(get_current_user),
-):
+) -> Any:
     """Revoke an existing client secret."""
     ensure_secret_login_enabled()
 
@@ -350,7 +350,7 @@ async def list_secret_keys(
     user_id: int | None = None,
     client_id: str | None = None,
     status: str | None = None,
-):
+) -> Any:
     """List stored client secrets visible to the current user."""
     ensure_secret_login_enabled()
     current_user = await AuthService.ensure_user(user["user_id"])

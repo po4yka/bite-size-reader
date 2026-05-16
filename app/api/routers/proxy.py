@@ -5,6 +5,7 @@ Proxy endpoints for external resources.
 import httpx
 from fastapi import APIRouter, Depends, Query
 from starlette.responses import Response
+from typing import Any
 
 from app.api.exceptions import (
     AuthorizationError,
@@ -43,7 +44,7 @@ async def _read_limited_content(response: httpx.Response, max_bytes: int) -> byt
 async def proxy_image(
     url: str = Query(..., description="URL of the image to proxy"),
     _user: dict = Depends(get_current_user),
-):
+) -> Any:
     """
     Proxy an image from a remote URL.
 

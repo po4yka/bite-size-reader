@@ -23,7 +23,7 @@ def _safe_isoformat(dt_value: Any) -> str | None:
     if dt_value is None:
         return None
     if hasattr(dt_value, "isoformat") and not isinstance(dt_value, str):
-        return dt_value.isoformat() + "Z"
+        return str(dt_value.isoformat()) + "Z"
     if isinstance(dt_value, str):
         try:
             parsed = datetime.fromisoformat(dt_value.replace("Z", "+00:00"))

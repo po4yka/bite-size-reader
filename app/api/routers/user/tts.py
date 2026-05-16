@@ -24,7 +24,7 @@ from app.infrastructure.audio.filesystem_storage import FileSystemAudioStorageAd
 router = APIRouter()
 
 
-def _get_tts_config():
+def _get_tts_config() -> Any:
     return load_config(allow_stub_telegram=True).tts
 
 
