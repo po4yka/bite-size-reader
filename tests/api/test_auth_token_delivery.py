@@ -1,6 +1,8 @@
 """Tests for refresh-token delivery policy: web cookie vs mobile/CLI body."""
 from __future__ import annotations
 
+from unittest.mock import AsyncMock, MagicMock, patch
+
 import pytest
 
 
@@ -24,9 +26,6 @@ def test_is_web_client(client_id, expected):
     assert is_web_client(client_id) is expected
 
 
-from unittest.mock import AsyncMock, MagicMock, patch
-
-
 # ---------------------------------------------------------------------------
 # /credentials-login
 # ---------------------------------------------------------------------------
@@ -34,13 +33,13 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
-    ("client_id", "expect_cookie", "expect_body_token"),
+    ("client_id", "expect_cookie"),
     [
-        ("webapp", True, False),
-        ("mobile-ios", False, True),
+        ("webapp", True),
+        ("mobile-ios", False),
     ],
 )
-async def test_credentials_login_token_delivery(client_id, expect_cookie, expect_body_token):
+async def test_credentials_login_token_delivery(client_id, expect_cookie):
     from app.api.models.auth import CredentialsLoginRequest
     from app.api.routers.auth.endpoints_credentials import credentials_login
 
@@ -123,13 +122,13 @@ async def test_credentials_login_token_delivery(client_id, expect_cookie, expect
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
-    ("client_id", "expect_cookie", "expect_body_token"),
+    ("client_id", "expect_cookie"),
     [
-        ("webapp", True, False),
-        ("mobile-ios", False, True),
+        ("webapp", True),
+        ("mobile-ios", False),
     ],
 )
-async def test_telegram_login_token_delivery(client_id, expect_cookie, expect_body_token):
+async def test_telegram_login_token_delivery(client_id, expect_cookie):
     from app.api.models.auth import TelegramLoginRequest
     from app.api.routers.auth.endpoints_telegram import telegram_login
 
@@ -182,13 +181,13 @@ async def test_telegram_login_token_delivery(client_id, expect_cookie, expect_bo
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
-    ("client_id", "expect_cookie", "expect_body_token"),
+    ("client_id", "expect_cookie"),
     [
-        ("webapp", True, False),
-        ("cli-1", False, True),
+        ("webapp", True),
+        ("cli-1", False),
     ],
 )
-async def test_secret_login_token_delivery(client_id, expect_cookie, expect_body_token):
+async def test_secret_login_token_delivery(client_id, expect_cookie):
     from app.api.models.auth import SecretLoginRequest
     from app.api.routers.auth.endpoints_secret_keys import secret_login
 
