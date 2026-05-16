@@ -7,9 +7,17 @@ Usage:
 Copy the output line into your .env file:
     GITHUB_TOKEN_ENCRYPTION_KEY=<generated-key>
 
-Notes:
-- Rotate by generating a new key, re-encrypting all existing tokens, then deleting the old key.
-- Future versions may support `MultiFernet` for staged rotation; for now, single-key only.
+Zero-downtime key rotation procedure:
+1. Generate a new key with this script.
+2. In your .env / secret store:
+   - Set GITHUB_TOKEN_ENCRYPTION_KEY=<new-key>
+   - Set GITHUB_TOKEN_PREVIOUS_KEYS=<old-key>   (comma-separate multiple old keys)
+3. Deploy (requires process restart) — existing ciphertexts still decrypt; new writes use the new key.
+4. Run the backfill CLI to re-encrypt all stored tokens under the new key:
+       python -m app.cli.rotate_github_tokens
+   Use --dry-run first to preview, then run without it to commit.
+5. Remove the old key from GITHUB_TOKEN_PREVIOUS_KEYS and redeploy.
+   Old-key ciphertexts no longer exist after a successful backfill.
 """
 
 from __future__ import annotations

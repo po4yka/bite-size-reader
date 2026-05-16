@@ -651,6 +651,7 @@ Generate the Fernet key with: `python tools/scripts/generate_github_encryption_k
 | `GITHUB_OAUTH_APP_CLIENT_ID` | _(none)_ | No — OAuth Device Flow only | GitHub OAuth App client ID; PAT path works without this | `app/api/routers/auth/github.py` |
 | `GITHUB_OAUTH_APP_CLIENT_SECRET` | _(none)_ | No — OAuth Device Flow only | GitHub OAuth App client secret; stored as `SecretStr`, never logged | `app/api/routers/auth/github.py` |
 | `GITHUB_TOKEN_ENCRYPTION_KEY` | _(none)_ | Yes — when any token is stored | 32-byte URL-safe base64 Fernet key for at-rest token encryption. Missing key raises `MissingEncryptionKeyError` at first use. | `app/security/token_crypto.py` |
+| `GITHUB_TOKEN_PREVIOUS_KEYS` | _(none)_ | No | Comma-separated previous Fernet keys kept during a rotation window. Each key must be the same format as `GITHUB_TOKEN_ENCRYPTION_KEY`. Decryption tries all keys; encryption always uses the primary. Remove old keys after running `python -m app.cli.rotate_github_tokens`. | `app/security/token_crypto.py` |
 | `GITHUB_SYNC_ENABLED` | `true` | No | Master switch for the Taskiq daily stars sync job; when `false`, the job is not registered with the scheduler | `app/tasks/scheduler.py` |
 | `GITHUB_SYNC_CRON` | `0 2 * * *` | No | UTC cron expression for the sync job (default: 02:00 UTC daily) | `app/tasks/scheduler.py` |
 | `GITHUB_SYNC_LLM_CONCURRENCY` | `2` | No | Maximum concurrent LLM analysis calls within a single sync run | `app/tasks/github_sync.py` |
@@ -659,6 +660,7 @@ Generate the Fernet key with: `python tools/scripts/generate_github_encryption_k
 **Notes:**
 
 - `GITHUB_TOKEN_ENCRYPTION_KEY` is the only hard requirement when the GitHub integration is used. Without it, `encrypt_token` and `decrypt_token` raise at call time, not at startup, so the rest of the API boots normally.
+- `GITHUB_TOKEN_PREVIOUS_KEYS` is optional and used only during key rotation. Set it to the old key value(s) while both keys are live, then remove it after running `python -m app.cli.rotate_github_tokens` to backfill all rows. See `tools/scripts/generate_github_encryption_key.py` for the full rotation procedure.
 - OAuth Device Flow additionally requires `GITHUB_OAUTH_APP_CLIENT_ID`, `GITHUB_OAUTH_APP_CLIENT_SECRET`, and a running Redis instance (`REDIS_URL`). `POST /v1/auth/github/device/start` returns 503 when Redis is unavailable.
 - `GITHUB_SYNC_ENABLED=false` disables only the scheduled Taskiq job. Manual ingestion via `POST /v1/repositories` and `python -m app.cli.repository` still work.
 - The `GITHUB_SYNC_LLM_DAILY_BUDGET` counter resets at the start of each sync run (not at midnight UTC). For owner-only deployments (N=1 user) the effective daily budget equals this value.
