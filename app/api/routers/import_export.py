@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import json
 from typing import Any
 
@@ -22,10 +21,10 @@ from app.domain.services.import_export import (
 )
 from app.domain.services.import_parsers import PARSER_REGISTRY
 from app.config.settings import load_config
+from app.tasks.import_tasks import process_import_job
 
 logger = get_logger(__name__)
 router = APIRouter()
-_background_import_tasks: set[asyncio.Task[None]] = set()
 
 _EXPORT_FORMAT_MAP: dict[str, tuple[type, str, str]] = {
     "json": (JsonExporter, "application/json", "bookmarks.json"),
@@ -55,24 +54,18 @@ async def _read_bounded(file: UploadFile, max_bytes: int) -> bytes:
     return b"".join(chunks)
 
 
-async def _run_import_task(
-    service: ImportExportService,
-    *,
-    job_id: int,
-    bookmarks: list[Any],
-    options: dict[str, Any],
-    user_id: int,
-) -> None:
-    """Execute bookmark import in the background and log failures."""
-    try:
-        await service.process_import(
-            job_id=job_id,
-            bookmarks=bookmarks,
-            options=options,
-            user_id=user_id,
-        )
-    except Exception as exc:
-        logger.error("import_processing_failed", extra={"job_id": job_id, "error": str(exc)})
+def _bookmark_to_dict(bookmark: Any) -> dict[str, Any]:
+    """Serialize a parsed bookmark for Taskiq JSON transport."""
+    return {
+        "url": bookmark.url,
+        "title": bookmark.title,
+        "tags": bookmark.tags,
+        "notes": bookmark.notes,
+        "created_at": bookmark.created_at.isoformat() if bookmark.created_at else None,
+        "collection_name": bookmark.collection_name,
+        "highlights": bookmark.highlights,
+        "extra": bookmark.extra,
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -149,17 +142,12 @@ async def import_bookmarks(
         options=opts,
     )
 
-    task = asyncio.create_task(
-        _run_import_task(
-            service,
-            job_id=job["id"],
-            bookmarks=bookmarks,
-            options=opts,
-            user_id=user["user_id"],
-        )
+    await process_import_job.kiq(
+        job_id=job["id"],
+        user_id=user["user_id"],
+        bookmarks_json=[_bookmark_to_dict(b) for b in bookmarks],
+        options=opts,
     )
-    _background_import_tasks.add(task)
-    task.add_done_callback(_background_import_tasks.discard)
 
     return success_response(job)
 

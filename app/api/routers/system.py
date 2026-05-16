@@ -6,13 +6,14 @@ import contextlib
 from typing import Any
 
 from fastapi import APIRouter, Depends, Request
+from starlette.background import BackgroundTask
 from starlette.responses import FileResponse
 
 from app.api.dependencies.database import get_session_manager
 from app.api.models.responses import success_response
 from app.api.routers.auth import get_current_user
 from app.api.services.auth_service import AuthService
-from app.api.services.system_maintenance_service import SystemMaintenanceService
+from app.api.services.system_maintenance_service import SystemMaintenanceService, _silent_unlink
 from app.core.logging_utils import get_logger
 from app.di.shared import build_async_audit_sink
 
@@ -55,10 +56,7 @@ async def download_database(
     await AuthService.require_owner(user)  # type: ignore[arg-type]
     user_id = _extract_user_id(user)
 
-    dump_file = service.build_db_dump_file(
-        request_headers=request.headers,
-        user_id=user_id,
-    )
+    dump_file = service.build_db_dump_file(user_id=user_id)
 
     audit = build_async_audit_sink(_resolve_db(request))
     audit("INFO", "admin.db_dump", {"user_id": user_id})
@@ -67,6 +65,7 @@ async def download_database(
         path=dump_file.path,
         filename=dump_file.filename,
         media_type=dump_file.media_type,
+        background=BackgroundTask(_silent_unlink, dump_file.path),
     )
 
 
@@ -80,10 +79,7 @@ async def head_database(
     await AuthService.require_owner(user)  # type: ignore[arg-type]
     user_id = _extract_user_id(user)
 
-    dump_file = service.build_db_dump_file(
-        request_headers=request.headers,
-        user_id=user_id,
-    )
+    dump_file = service.build_db_dump_file(user_id=user_id)
 
     audit = build_async_audit_sink(_resolve_db(request))
     audit("INFO", "admin.db_dump_head", {"user_id": user_id})
@@ -92,6 +88,7 @@ async def head_database(
         path=dump_file.path,
         filename=dump_file.filename,
         media_type=dump_file.media_type,
+        background=BackgroundTask(_silent_unlink, dump_file.path),
     )
 
 

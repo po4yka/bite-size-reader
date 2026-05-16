@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import threading
 import time
-import uuid
 from collections import defaultdict
 from typing import TYPE_CHECKING, Any
 
@@ -14,7 +13,7 @@ from app.api.context import correlation_id_ctx
 from app.api.exceptions import ErrorType
 from app.api.models.responses import error_response, make_error
 from app.config import AppConfig, load_config
-from app.core.logging_utils import get_logger
+from app.core.logging_utils import get_logger, sanitize_correlation_id
 from app.infrastructure.redis import get_redis, redis_key
 
 if TYPE_CHECKING:
@@ -99,12 +98,22 @@ async def correlation_id_middleware(request: Request, call_next: Callable):
     """
     Add correlation ID to all requests for tracing.
 
-    Checks for X-Correlation-ID header, generates one if missing.
+    Validates the incoming X-Correlation-ID header (allowed chars: A-Za-z0-9._:-,
+    max 128 chars). Generates a fresh ID when the header is absent or invalid so
+    that unsafe values never reach logs or response headers.
     """
-    correlation_id = request.headers.get("X-Correlation-ID")
+    raw = request.headers.get("X-Correlation-ID")
+    correlation_id, was_generated = sanitize_correlation_id(raw)
 
-    if not correlation_id:
-        correlation_id = f"api-{uuid.uuid4().hex[:16]}"
+    if not was_generated and raw != correlation_id:
+        # Should not happen (sanitize either keeps or replaces), but be explicit.
+        was_generated = True
+
+    if was_generated and raw:
+        logger.debug(
+            "correlation_id_sanitized",
+            extra={"reason": "invalid_chars_or_length", "path": request.url.path},
+        )
 
     # Store in request state and context for access in handlers/helpers
     request.state.correlation_id = correlation_id

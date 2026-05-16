@@ -9,6 +9,7 @@ correlation IDs and log levels are preserved.
 from __future__ import annotations
 
 import logging
+import re
 import sys
 import uuid
 from typing import Any
@@ -224,6 +225,23 @@ def generate_correlation_id() -> str:
     return uuid.uuid4().hex[:12]
 
 
+_CORRELATION_ID_RE = re.compile(r"[A-Za-z0-9._:\-]{1,128}")
+
+
+def sanitize_correlation_id(value: str | None) -> tuple[str, bool]:
+    """Validate and return a safe correlation ID.
+
+    Returns (id, was_generated) where was_generated=True means the incoming
+    value was absent or invalid and a fresh ID was substituted.
+
+    Allowed characters: A-Z a-z 0-9 . _ : -
+    Max length: 128
+    """
+    if value and _CORRELATION_ID_RE.fullmatch(value):
+        return value, False
+    return f"api-{uuid.uuid4().hex[:16]}", True
+
+
 def truncate_log_content(content: str | None, max_length: int = 1000) -> str | None:
     """Truncate large content for logging to avoid cluttering logs.
 
@@ -260,6 +278,7 @@ __all__ = [
     "generate_correlation_id",
     "get_logger",
     "log_exception",
+    "sanitize_correlation_id",
     "setup_json_logging",
     "truncate_log_content",
 ]

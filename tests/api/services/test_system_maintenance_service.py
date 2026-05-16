@@ -8,46 +8,85 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from app.api.exceptions import ProcessingError, ResourceNotFoundError
+from app.api.exceptions import ProcessingError
 from app.api.services.system_maintenance_service import SystemMaintenanceService
 
 
-def test_build_db_dump_file_creates_backup_and_reuses_for_range_requests(tmp_path) -> None:
+def _make_service(tmp_path, *, side_effect=None):
     database = MagicMock()
 
-    def create_backup(dest: str) -> Path:
-        path = Path(dest)
-        path.write_bytes(b"dump")
-        return path
+    if side_effect is not None:
+        database.create_backup_copy.side_effect = side_effect
+    else:
+        def create_backup(dest: str) -> Path:
+            path = Path(dest)
+            path.write_bytes(b"pgdump-content")
+            return path
 
-    database.create_backup_copy.side_effect = create_backup
-    service = SystemMaintenanceService(
-        database=database,
-        backup_dir=str(tmp_path),
-        backup_filename="service-backup.dump",
-    )
+        database.create_backup_copy.side_effect = create_backup
 
-    dump_file = service.build_db_dump_file(request_headers={}, user_id=1)
-    assert Path(dump_file.path).exists()
-    assert dump_file.filename.startswith("ratatoskr_backup_")
-    assert dump_file.filename.endswith(".dump")
-
-    with patch.object(service, "_create_backup") as create_backup:
-        reused = service.build_db_dump_file(request_headers={"Range": "bytes=0-9"}, user_id=1)
-
-    create_backup.assert_not_called()
-    assert reused.path == dump_file.path
+    return SystemMaintenanceService(database=database, backup_dir=str(tmp_path))
 
 
-def test_build_db_dump_file_raises_when_database_missing(tmp_path) -> None:
-    database = MagicMock()
-    service = SystemMaintenanceService(
-        database=database,
-        backup_dir=str(tmp_path),
-    )
+# ---------------------------------------------------------------------------
+# build_db_dump_file
+# ---------------------------------------------------------------------------
 
-    with pytest.raises(ResourceNotFoundError):
-        service.build_db_dump_file(request_headers={"Range": "bytes=0-9"}, user_id=1)
+
+def test_build_db_dump_file_returns_existing_file(tmp_path) -> None:
+    service = _make_service(tmp_path)
+    dump = service.build_db_dump_file(user_id=1)
+    assert Path(dump.path).exists()
+    assert dump.filename.startswith("ratatoskr_backup_")
+    assert dump.filename.endswith(".dump")
+
+
+def test_build_db_dump_file_generates_unique_path_per_request(tmp_path) -> None:
+    """Each call must produce a distinct file; no shared mutable path."""
+    service = _make_service(tmp_path)
+    dump1 = service.build_db_dump_file(user_id=1)
+    dump2 = service.build_db_dump_file(user_id=1)
+    assert dump1.path != dump2.path
+    assert Path(dump1.path).exists()
+    assert Path(dump2.path).exists()
+
+
+def test_build_db_dump_file_sets_owner_only_permissions(tmp_path) -> None:
+    service = _make_service(tmp_path)
+    dump = service.build_db_dump_file(user_id=1)
+    mode = oct(Path(dump.path).stat().st_mode)[-3:]
+    assert mode == "600"
+
+
+def test_build_db_dump_file_path_is_not_predictable(tmp_path) -> None:
+    """Path must not be a fixed well-known filename."""
+    service = _make_service(tmp_path)
+    dump = service.build_db_dump_file(user_id=1)
+    assert Path(dump.path).name != "ratatoskr_backup.dump"
+
+
+def test_build_db_dump_file_cleans_up_placeholder_on_backup_failure(tmp_path) -> None:
+    service = _make_service(tmp_path, side_effect=RuntimeError("pg_dump failed"))
+
+    with pytest.raises(ProcessingError):
+        service.build_db_dump_file(user_id=1)
+
+    # No stray ratatoskr_dump_* files should remain
+    leftover = list(tmp_path.glob("ratatoskr_dump_*"))
+    assert leftover == []
+
+
+def test_build_db_dump_file_concurrent_calls_do_not_collide(tmp_path) -> None:
+    """Simulate two concurrent calls; each gets its own file."""
+    service = _make_service(tmp_path)
+    dumps = [service.build_db_dump_file(user_id=i) for i in range(5)]
+    paths = [d.path for d in dumps]
+    assert len(set(paths)) == 5, "All dump paths must be unique"
+
+
+# ---------------------------------------------------------------------------
+# get_db_info
+# ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
@@ -83,6 +122,11 @@ async def test_get_db_info_handles_database_failures() -> None:
     assert table_counts["__error__"] == -1
 
 
+# ---------------------------------------------------------------------------
+# clear_url_cache
+# ---------------------------------------------------------------------------
+
+
 @pytest.mark.asyncio
 async def test_clear_url_cache_success_and_failure() -> None:
     service = SystemMaintenanceService(database=MagicMock())
@@ -112,13 +156,17 @@ async def test_clear_url_cache_success_and_failure() -> None:
             await service.clear_url_cache()
 
 
+# ---------------------------------------------------------------------------
+# _create_backup
+# ---------------------------------------------------------------------------
+
+
 def test_create_backup_raises_processing_error_when_backup_and_cleanup_fail(tmp_path) -> None:
     database = MagicMock()
     database.create_backup_copy.side_effect = RuntimeError("backup failed")
     service = SystemMaintenanceService(
         database=database,
         backup_dir=str(tmp_path),
-        backup_filename="broken.dump",
     )
     backup_path = os.path.join(str(tmp_path), "broken.dump")
 

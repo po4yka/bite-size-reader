@@ -4,12 +4,11 @@ from __future__ import annotations
 
 import os
 import tempfile
-import time
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
-from app.api.exceptions import ProcessingError, ResourceNotFoundError
+from app.api.exceptions import ProcessingError
 from app.config.settings import load_config
 from app.core.logging_utils import get_logger
 from app.db.model_registry import ALL_MODELS
@@ -35,17 +34,22 @@ class DatabaseDumpFile:
     media_type: str = "application/octet-stream"
 
 
+def _silent_unlink(path: str) -> None:
+    """Remove a file, suppressing any OS-level error."""
+    try:
+        os.unlink(path)
+    except OSError:
+        pass
+
+
 class SystemMaintenanceService:
     """Orchestrates DB/Redis maintenance tasks for API endpoints."""
-
-    _CACHE_STALE_SECONDS = 60
 
     def __init__(
         self,
         *,
         database: Database | None = None,
         backup_dir: str | None = None,
-        backup_filename: str = "ratatoskr_backup.dump",
     ) -> None:
         if database is None:
             from app.api.dependencies.database import get_session_manager
@@ -53,28 +57,33 @@ class SystemMaintenanceService:
             database = get_session_manager()
         self._database = database
         self._backup_dir = backup_dir or tempfile.gettempdir()
-        self._backup_filename = backup_filename
 
     def build_db_dump_file(
         self,
         *,
-        request_headers: Any,
         user_id: int,
     ) -> DatabaseDumpFile:
-        """Create/reuse a DB backup and return file metadata for download."""
-        backup_path = os.path.join(self._backup_dir, self._backup_filename)
+        """Create a unique per-request DB backup with owner-only permissions.
 
-        if self._should_regenerate_backup(request_headers=request_headers, backup_path=backup_path):
-            self._create_backup(backup_path=backup_path, user_id=user_id)
+        Each call creates a new temp file; callers are responsible for deleting it.
+        """
+        fd, unique_path = tempfile.mkstemp(
+            prefix="ratatoskr_dump_",
+            suffix=".dump",
+            dir=self._backup_dir,
+        )
+        os.close(fd)
 
-        if not os.path.exists(backup_path):
-            raise ResourceNotFoundError("Backup file", backup_path)
+        try:
+            self._create_backup(backup_path=unique_path, user_id=user_id)
+            os.chmod(unique_path, 0o600)
+        except Exception:
+            _silent_unlink(unique_path)
+            raise
 
-        mtime = os.path.getmtime(backup_path)
+        mtime = os.path.getmtime(unique_path)
         timestamp = datetime.fromtimestamp(mtime, tz=UTC).strftime("%Y%m%d_%H%M%S")
-        download_filename = f"ratatoskr_backup_{timestamp}.dump"
-
-        return DatabaseDumpFile(path=backup_path, filename=download_filename)
+        return DatabaseDumpFile(path=unique_path, filename=f"ratatoskr_backup_{timestamp}.dump")
 
     async def get_db_info(self) -> dict[str, object]:
         """Return PostgreSQL metadata and allowlisted table row counts."""
@@ -112,26 +121,6 @@ class SystemMaintenanceService:
         except Exception as exc:
             logger.error("clear_cache_failed", extra={"error": str(exc)})
             raise ProcessingError(f"Cache clear failed: {exc}") from exc
-
-    def _should_regenerate_backup(
-        self,
-        *,
-        request_headers: Any,
-        backup_path: str,
-    ) -> bool:
-        lower_headers = {name.lower() for name in request_headers}
-        if {"range", "if-match", "if-unmodified-since"} & lower_headers:
-            return False
-
-        if not os.path.exists(backup_path):
-            return True
-
-        try:
-            mtime = os.path.getmtime(backup_path)
-        except OSError:
-            return True
-
-        return (time.time() - mtime) >= self._CACHE_STALE_SECONDS
 
     def _create_backup(self, *, backup_path: str, user_id: int) -> None:
         temp_backup_path = backup_path + ".tmp"

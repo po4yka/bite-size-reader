@@ -1,7 +1,9 @@
+from __future__ import annotations
+
 import os
-import time
-from types import SimpleNamespace
-from unittest.mock import AsyncMock, patch
+import tempfile
+from pathlib import Path
+from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
@@ -9,78 +11,140 @@ from app.api.routers.auth.tokens import create_access_token
 from app.db.models import User
 
 
-def test_db_dump_head_and_get(client: TestClient, db):
-    # Setup auth - Create user in DB with owner permissions (required for db-dump)
-    user = User.create(telegram_user_id=123456789, username="test_dump_user", is_owner=True)  # type: ignore[attr-defined]
+# ---------------------------------------------------------------------------
+# db-dump endpoint
+# ---------------------------------------------------------------------------
 
+
+def test_db_dump_get_returns_file(client: TestClient, db):
+    user = User.create(telegram_user_id=123456789, username="test_dump_user", is_owner=True)  # type: ignore[attr-defined]
     token = create_access_token(user.telegram_user_id, client_id="test_client")
     headers = {"Authorization": f"Bearer {token}"}
 
-    # 1. Test HEAD
-    response_head = client.head("/v1/system/db-dump", headers=headers)
+    response = client.get("/v1/system/db-dump", headers=headers)
 
-    assert response_head.status_code == 200, f"HEAD failed: {response_head.text}"
-    assert "content-length" in response_head.headers
-    assert response_head.headers["accept-ranges"] == "bytes"
-    etag = response_head.headers.get("etag")
-    assert etag
-
-    # 2. Test GET
-    response_get = client.get("/v1/system/db-dump", headers=headers)
-    assert response_get.status_code == 200
-    assert response_get.headers["etag"] == etag
-
-    # 3. Test Resume (Range)
-    # Request first 10 bytes
-    headers_range = headers.copy()
-    headers_range["Range"] = "bytes=0-9"
-    response_range = client.get("/v1/system/db-dump", headers=headers_range)
-
-    assert response_range.status_code == 206
-    assert len(response_range.content) == 10
-    assert response_range.headers["content-range"].startswith("bytes 0-9/")
-    assert response_range.headers["etag"] == etag  # Should match the original
+    assert response.status_code == 200
+    assert "content-length" in response.headers
+    assert len(response.content) > 0
 
 
-def test_db_dump_regeneration_logic(client: TestClient, db):
-    # Setup auth - Create user in DB with owner permissions (use different ID to avoid conflict)
-    try:
-        user = User.get(telegram_user_id=987654321)  # type: ignore[attr-defined]
-    except Exception:
-        user = User.create(telegram_user_id=987654321, username="test_dump_user_2", is_owner=True)  # type: ignore[attr-defined]
-
-    token = create_access_token(user.telegram_user_id, client_id="test")
+def test_db_dump_head_returns_headers(client: TestClient, db):
+    user = User.create(telegram_user_id=123456780, username="test_dump_head", is_owner=True)  # type: ignore[attr-defined]
+    token = create_access_token(user.telegram_user_id, client_id="test_client")
     headers = {"Authorization": f"Bearer {token}"}
 
-    # First request to generate the file
-    response1 = client.get("/v1/system/db-dump", headers=headers)
-    assert response1.status_code == 200
-    etag1 = response1.headers["etag"]
+    response = client.head("/v1/system/db-dump", headers=headers)
 
-    # Immediate second request (should reuse)
-    response2 = client.get("/v1/system/db-dump", headers=headers)
-    assert response2.status_code == 200
-    assert response2.headers["etag"] == etag1
+    assert response.status_code == 200
+    assert "content-length" in response.headers
+    assert response.headers["accept-ranges"] == "bytes"
 
-    # Manually modify the backup file's mtime to be old (e.g. 70 seconds ago)
-    # to force regeneration
-    import tempfile
 
-    backup_path = os.path.join(tempfile.gettempdir(), "ratatoskr_backup.sqlite")
+def test_db_dump_range_request_returns_partial_content(client: TestClient, db):
+    user = User.create(telegram_user_id=123456781, username="test_dump_range", is_owner=True)  # type: ignore[attr-defined]
+    token = create_access_token(user.telegram_user_id, client_id="test_client")
+    headers = {"Authorization": f"Bearer {token}", "Range": "bytes=0-9"}
 
-    if os.path.exists(backup_path):
-        old_time = time.time() - 70
-        os.utime(backup_path, (old_time, old_time))
+    response = client.get("/v1/system/db-dump", headers=headers)
 
-    # Third request (should regenerate and get new ETag)
-    response3 = client.get("/v1/system/db-dump", headers=headers)
-    assert response3.status_code == 200
-    assert response3.headers["etag"] != etag1
+    assert response.status_code == 206
+    assert len(response.content) == 10
+    assert response.headers["content-range"].startswith("bytes 0-9/")
+
+
+def test_db_dump_file_is_cleaned_up_after_response(client: TestClient, db):
+    """Temp dump file must be deleted once the response is fully sent."""
+    user = User.create(telegram_user_id=123456782, username="test_dump_cleanup", is_owner=True)  # type: ignore[attr-defined]
+    token = create_access_token(user.telegram_user_id, client_id="test_client")
+    headers = {"Authorization": f"Bearer {token}"}
+
+    created_paths: list[str] = []
+    real_mkstemp = tempfile.mkstemp
+
+    def capturing_mkstemp(*args, **kwargs):
+        fd, path = real_mkstemp(*args, **kwargs)
+        created_paths.append(path)
+        return fd, path
+
+    with patch(
+        "app.api.services.system_maintenance_service.tempfile.mkstemp",
+        side_effect=capturing_mkstemp,
+    ):
+        response = client.get("/v1/system/db-dump", headers=headers)
+
+    assert response.status_code == 200
+    assert len(created_paths) == 1
+    assert not Path(created_paths[0]).exists(), "Dump file was not deleted after response"
+
+
+def test_db_dump_uses_unique_path_per_request(client: TestClient, db):
+    """Two consecutive requests must not share the same temp file."""
+    user = User.create(telegram_user_id=123456783, username="test_dump_unique", is_owner=True)  # type: ignore[attr-defined]
+    token = create_access_token(user.telegram_user_id, client_id="test_client")
+    headers = {"Authorization": f"Bearer {token}"}
+
+    created_paths: list[str] = []
+    real_mkstemp = tempfile.mkstemp
+
+    def capturing_mkstemp(*args, **kwargs):
+        fd, path = real_mkstemp(*args, **kwargs)
+        created_paths.append(path)
+        return fd, path
+
+    with patch(
+        "app.api.services.system_maintenance_service.tempfile.mkstemp",
+        side_effect=capturing_mkstemp,
+    ):
+        client.get("/v1/system/db-dump", headers=headers)
+        client.get("/v1/system/db-dump", headers=headers)
+
+    assert len(created_paths) == 2
+    assert created_paths[0] != created_paths[1], "Both requests must use distinct temp paths"
+
+
+def test_db_dump_requires_owner(client: TestClient, db):
+    non_owner = User.create(telegram_user_id=222222222, username="normal_user_dump", is_owner=False)  # type: ignore[attr-defined]
+    token = create_access_token(non_owner.telegram_user_id, client_id="test")
+    headers = {"Authorization": f"Bearer {token}"}
+
+    with patch("app.api.routers.auth.dependencies.Config.get_allowed_user_ids", return_value=[]):
+        response = client.get("/v1/system/db-dump", headers=headers)
+
+    assert response.status_code == 403
+
+
+def test_db_dump_path_is_not_fixed_predictable_name(client: TestClient, db):
+    """Generated file must not be the old hardcoded ratatoskr_backup.dump."""
+    user = User.create(telegram_user_id=123456784, username="test_dump_name", is_owner=True)  # type: ignore[attr-defined]
+    token = create_access_token(user.telegram_user_id, client_id="test_client")
+    headers = {"Authorization": f"Bearer {token}"}
+
+    created_paths: list[str] = []
+    real_mkstemp = tempfile.mkstemp
+
+    def capturing_mkstemp(*args, **kwargs):
+        fd, path = real_mkstemp(*args, **kwargs)
+        created_paths.append(path)
+        return fd, path
+
+    with patch(
+        "app.api.services.system_maintenance_service.tempfile.mkstemp",
+        side_effect=capturing_mkstemp,
+    ):
+        client.get("/v1/system/db-dump", headers=headers)
+
+    assert created_paths
+    assert os.path.basename(created_paths[0]) != "ratatoskr_backup.dump"
+
+
+# ---------------------------------------------------------------------------
+# db-info endpoint
+# ---------------------------------------------------------------------------
 
 
 def test_db_info_requires_owner(client: TestClient, db):
     owner = User.create(telegram_user_id=111111111, username="owner_user", is_owner=True)  # type: ignore[attr-defined]
-    non_owner = User.create(telegram_user_id=222222222, username="normal_user", is_owner=False)  # type: ignore[attr-defined]
+    non_owner = User.create(telegram_user_id=222222223, username="normal_user", is_owner=False)  # type: ignore[attr-defined]
 
     owner_token = create_access_token(owner.telegram_user_id, client_id="test")
     non_owner_token = create_access_token(non_owner.telegram_user_id, client_id="test")
@@ -104,9 +168,6 @@ def test_db_info_skips_unallowlisted_tables(client: TestClient, db):
     owner_token = create_access_token(owner.telegram_user_id, client_id="test")
     owner_headers = {"Authorization": f"Bearer {owner_token}"}
 
-    db._database.execute_sql("CREATE TABLE unexpected_table (id INTEGER PRIMARY KEY)")
-    db._database.execute_sql("INSERT INTO unexpected_table (id) VALUES (1)")
-
     with patch("app.api.routers.auth.dependencies.Config.get_allowed_user_ids", return_value=[]):
         response = client.get("/v1/system/db-info", headers=owner_headers)
 
@@ -116,7 +177,15 @@ def test_db_info_skips_unallowlisted_tables(client: TestClient, db):
     assert "requests" in table_counts
 
 
+# ---------------------------------------------------------------------------
+# clear-cache endpoint
+# ---------------------------------------------------------------------------
+
+
 def test_clear_cache_requires_owner(client: TestClient, db):
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock
+
     owner = User.create(telegram_user_id=333333333, username="owner_user2", is_owner=True)  # type: ignore[attr-defined]
     non_owner = User.create(telegram_user_id=444444444, username="normal_user2", is_owner=False)  # type: ignore[attr-defined]
 

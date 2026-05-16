@@ -111,6 +111,10 @@ def test_import_too_many_bookmarks(client: TestClient, db):
 
 
 def test_import_success(client: TestClient, db):
+    from unittest.mock import patch as _patch
+
+    from app.tasks.import_tasks import process_import_job
+
     user = _make_user(300004, "upload_limit_import_ok")
     headers = _auth(user.telegram_user_id)
 
@@ -118,25 +122,22 @@ def test_import_success(client: TestClient, db):
     mock_cfg.import_export.max_upload_bytes = 10_000
     mock_cfg.import_export.max_items = 100
 
-    fake_bookmarks = [{"url": "https://example.com/1"}]
+    fake_bookmarks = [MagicMock(url="https://example.com/1", created_at=None)]
     mock_parser_cls = MagicMock()
     mock_parser_cls.return_value.parse.return_value = fake_bookmarks
 
     mock_job = {"id": 99, "status": "pending", "total_items": 1}
 
     with (
-        patch("app.api.routers.import_export.load_config", return_value=mock_cfg),
-        patch("app.api.routers.import_export.FormatDetector.detect", return_value="html"),
-        patch("app.api.routers.import_export.PARSER_REGISTRY", {"html": mock_parser_cls}),
-        patch(
+        _patch("app.api.routers.import_export.load_config", return_value=mock_cfg),
+        _patch("app.api.routers.import_export.FormatDetector.detect", return_value="html"),
+        _patch("app.api.routers.import_export.PARSER_REGISTRY", {"html": mock_parser_cls}),
+        _patch(
             "app.api.routers.import_export.ImportExportService.create_import_job",
             new_callable=AsyncMock,
             return_value=mock_job,
         ),
-        patch(
-            "app.api.routers.import_export._run_import_task",
-            new_callable=AsyncMock,
-        ),
+        _patch.object(process_import_job, "kiq", new_callable=AsyncMock) as mock_kiq,
     ):
         response = client.post(
             "/v1/import",
@@ -147,3 +148,4 @@ def test_import_success(client: TestClient, db):
 
     assert response.status_code == 201
     assert response.json()["data"]["id"] == 99
+    mock_kiq.assert_awaited_once()
