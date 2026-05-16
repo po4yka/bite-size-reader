@@ -332,3 +332,29 @@ class GitHubAPIClient:
         """GET /user -> AuthenticatedUserDTO."""
         response = await self._request("GET", "/user")
         return AuthenticatedUserDTO.model_validate(response.json())
+
+    async def get_user_with_scopes(self) -> tuple[AuthenticatedUserDTO, list[str]]:
+        """GET /user and return (user, scopes).
+
+        Reads X-GitHub-OAuthScopes response header. GitHub omits this header for
+        fine-grained PATs, so an empty list signals a fine-grained PAT.
+        """
+        response = await self._request("GET", "/user")
+        user = AuthenticatedUserDTO.model_validate(response.json())
+        raw = response.headers.get("X-GitHub-OAuthScopes", "").strip()
+        if not raw:
+            return user, []
+        scopes = [s.strip() for s in raw.split(",") if s.strip()]
+        return user, scopes
+
+    async def probe_repository_access(self) -> bool:
+        """GET /user/starred?per_page=1 to test repository-read capability.
+
+        Returns True on 200, False on 403. Used for fine-grained PAT validation
+        because scope names are opaque for those tokens.
+        """
+        try:
+            await self._request("GET", "/user/starred", params={"per_page": "1"})
+            return True
+        except GitHubAuthError:
+            return False
