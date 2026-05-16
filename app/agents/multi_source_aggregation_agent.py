@@ -3,13 +3,32 @@
 from __future__ import annotations
 
 import json
-import re
 from collections import defaultdict
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, ConfigDict, model_validator
 
+from app.agents._aggregation_utils import (
+    _EVIDENCE_BASE_WEIGHTS,
+    _HASHTAG_RE,
+    _NUMBER_RE,
+    _SENTENCE_SPLIT_RE,
+    _canonical_sentence,
+    _clean_string_list,
+    _coerce_int,
+    _filter_source_item_ids,
+    _has_image_evidence,
+    _has_metadata_evidence,
+    _has_ocr_evidence,
+    _has_text_evidence,
+    _has_transcript_evidence,
+    _normalize_tags,
+    _numeric_sentence_base,
+    _parse_evidence_kinds,
+    _select_metadata,
+    _truncate,
+)
 from app.agents.base_agent import AgentResult, BaseAgent
 from app.application.dto.aggregation import (
     AggregatedClaim,
@@ -34,41 +53,6 @@ if TYPE_CHECKING:
     from app.application.ports.aggregation_sessions import AggregationSessionRepositoryPort
 
 _PROMPT_DIR = Path(__file__).parent.parent / "prompts"
-_SENTENCE_SPLIT_RE = re.compile(r"(?<=[.!?])\s+|\n+")
-_NON_WORD_RE = re.compile(r"[^a-z0-9\s]+")
-_NUMBER_RE = re.compile(r"\d+(?:[.,]\d+)?%?")
-_HASHTAG_RE = re.compile(r"(?<!\w)#([a-z0-9_-]+)", re.IGNORECASE)
-_STOPWORDS = {
-    "a",
-    "an",
-    "and",
-    "are",
-    "as",
-    "at",
-    "be",
-    "by",
-    "for",
-    "from",
-    "in",
-    "is",
-    "it",
-    "of",
-    "on",
-    "or",
-    "that",
-    "the",
-    "to",
-    "was",
-    "were",
-    "with",
-}
-_EVIDENCE_BASE_WEIGHTS: dict[AggregationEvidenceKind, float] = {
-    AggregationEvidenceKind.TEXT: 1.0,
-    AggregationEvidenceKind.TRANSCRIPT: 0.85,
-    AggregationEvidenceKind.IMAGE: 0.6,
-    AggregationEvidenceKind.OCR: 0.45,
-    AggregationEvidenceKind.METADATA: 0.35,
-}
 
 
 class _AggregationLLMResponse(BaseModel):
@@ -297,8 +281,8 @@ class MultiSourceAggregationAgent(
             for point in parsed.get("complementary_points", [])
             if str(point).strip()
         ]
-        entities = self._clean_string_list(parsed.get("entities"))
-        topic_tags = self._normalize_tags(parsed.get("topic_tags"))
+        entities = _clean_string_list(parsed.get("entities"))
+        topic_tags = _normalize_tags(parsed.get("topic_tags"))
 
         return MultiSourceAggregationOutput(
             session_id=input_data.session_id,
@@ -390,13 +374,13 @@ class MultiSourceAggregationAgent(
                     "text_blocks": [
                         {
                             "kind": block.kind.value,
-                            "text": self._truncate(block.text, 280),
+                            "text": _truncate(block.text, 280),
                             "confidence": block.confidence,
                         }
                         for block in document.text_blocks[:8]
                     ],
                     "media_count": len(document.media),
-                    "metadata": self._select_metadata(document.metadata),
+                    "metadata": _select_metadata(document.metadata),
                     "weight": weight.model_dump(mode="json"),
                 }
             )
@@ -425,7 +409,7 @@ class MultiSourceAggregationAgent(
             raise ValueError(msg)
 
         evidence_weights: list[AggregationEvidenceWeight] = []
-        if self._has_text_evidence(document):
+        if _has_text_evidence(document):
             evidence_weights.append(
                 AggregationEvidenceWeight(
                     kind=AggregationEvidenceKind.TEXT,
@@ -433,7 +417,7 @@ class MultiSourceAggregationAgent(
                     rationale="Primary article or caption/body text is present.",
                 )
             )
-        if self._has_transcript_evidence(document):
+        if _has_transcript_evidence(document):
             evidence_weights.append(
                 AggregationEvidenceWeight(
                     kind=AggregationEvidenceKind.TRANSCRIPT,
@@ -441,7 +425,7 @@ class MultiSourceAggregationAgent(
                     rationale="Transcript content can support time-based media claims.",
                 )
             )
-        if self._has_image_evidence(document):
+        if _has_image_evidence(document):
             evidence_weights.append(
                 AggregationEvidenceWeight(
                     kind=AggregationEvidenceKind.IMAGE,
@@ -449,7 +433,7 @@ class MultiSourceAggregationAgent(
                     rationale="Media or alt-text adds non-textual context.",
                 )
             )
-        if self._has_ocr_evidence(document):
+        if _has_ocr_evidence(document):
             evidence_weights.append(
                 AggregationEvidenceWeight(
                     kind=AggregationEvidenceKind.OCR,
@@ -457,7 +441,7 @@ class MultiSourceAggregationAgent(
                     rationale="OCR-derived text is lower confidence than authored text.",
                 )
             )
-        if self._has_metadata_evidence(document):
+        if _has_metadata_evidence(document):
             evidence_weights.append(
                 AggregationEvidenceWeight(
                     kind=AggregationEvidenceKind.METADATA,
@@ -546,13 +530,13 @@ class MultiSourceAggregationAgent(
             if not isinstance(raw_claim, dict):
                 continue
             text = str(raw_claim.get("claim") or raw_claim.get("text") or "").strip()
-            source_item_ids = self._filter_source_item_ids(
+            source_item_ids = _filter_source_item_ids(
                 raw_claim.get("source_item_ids"),
                 valid_source_ids,
             )
             if not text or not source_item_ids:
                 continue
-            evidence_kinds = self._parse_evidence_kinds(raw_claim.get("evidence_kinds"))
+            evidence_kinds = _parse_evidence_kinds(raw_claim.get("evidence_kinds"))
             confidence = raw_claim.get("confidence")
             claims.append(
                 AggregatedClaim(
@@ -577,7 +561,7 @@ class MultiSourceAggregationAgent(
         for raw_contradiction in raw_contradictions:
             if not isinstance(raw_contradiction, dict):
                 continue
-            source_item_ids = self._filter_source_item_ids(
+            source_item_ids = _filter_source_item_ids(
                 raw_contradiction.get("source_item_ids"),
                 valid_source_ids,
             )
@@ -608,7 +592,7 @@ class MultiSourceAggregationAgent(
         for raw_signal in raw_signals:
             if not isinstance(raw_signal, dict):
                 continue
-            source_item_ids = self._filter_source_item_ids(
+            source_item_ids = _filter_source_item_ids(
                 raw_signal.get("source_item_ids"),
                 valid_source_ids,
             )
@@ -672,11 +656,11 @@ class MultiSourceAggregationAgent(
             points.append(
                 "The bundle combines multiple source types, allowing text, media, and platform context to reinforce each other."
             )
-        if any(self._has_image_evidence(item.normalized_document) for item in extracted_items):
+        if any(_has_image_evidence(item.normalized_document) for item in extracted_items):
             points.append(
                 "Visual evidence supplements the authored text, which helps preserve context that a text-only summary would drop."
             )
-        if any(self._has_transcript_evidence(item.normalized_document) for item in extracted_items):
+        if any(_has_transcript_evidence(item.normalized_document) for item in extracted_items):
             points.append(
                 "Transcript evidence adds spoken context that can confirm or expand on captions and titles."
             )
@@ -692,7 +676,7 @@ class MultiSourceAggregationAgent(
             if document is None:
                 continue
             for sentence in self._document_sentences(document):
-                canonical = self._canonical_sentence(sentence)
+                canonical = _canonical_sentence(sentence)
                 if len(canonical.split()) < 6:
                     continue
                 sentence_sources[canonical].add(document.source_item_id)
@@ -704,7 +688,7 @@ class MultiSourceAggregationAgent(
                 continue
             duplicate_signals.append(
                 DuplicateSignal(
-                    summary=self._truncate(sentence_examples[canonical], 160),
+                    summary=_truncate(sentence_examples[canonical], 160),
                     source_item_ids=sorted(source_ids),
                 )
             )
@@ -723,7 +707,7 @@ class MultiSourceAggregationAgent(
                 numbers = tuple(sorted(_NUMBER_RE.findall(sentence)))
                 if len(numbers) == 0:
                     continue
-                base = self._numeric_sentence_base(sentence)
+                base = _numeric_sentence_base(sentence)
                 if len(base.split()) < 4:
                     continue
                 sentence_groups[base].append((document.source_item_id, sentence.strip(), numbers))
@@ -737,7 +721,7 @@ class MultiSourceAggregationAgent(
             if len(source_item_ids) < 2:
                 continue
             example_sentences = "; ".join(
-                self._truncate(entry[1], 120) for entry in grouped_sentences[:2]
+                _truncate(entry[1], 120) for entry in grouped_sentences[:2]
             )
             contradictions.append(
                 AggregatedContradiction(
@@ -768,7 +752,7 @@ class MultiSourceAggregationAgent(
             document = item.normalized_document
             if document is None:
                 continue
-            metadata_minutes = self._coerce_int(
+            metadata_minutes = _coerce_int(
                 document.metadata.get("estimated_reading_time_min")
                 or document.metadata.get("reading_time_min")
             )
@@ -803,7 +787,7 @@ class MultiSourceAggregationAgent(
                     entities.append(str(entity["name"]))
                 elif isinstance(entity, str):
                     entities.append(entity)
-        return self._clean_string_list(entities)
+        return _clean_string_list(entities)
 
     def _extract_tags_from_documents(
         self, extracted_items: list[SourceExtractionItemResult]
@@ -819,7 +803,7 @@ class MultiSourceAggregationAgent(
             tags.extend(
                 f"#{match.group(1).lower()}" for match in _HASHTAG_RE.finditer(document.text)
             )
-        return self._normalize_tags(tags)
+        return _normalize_tags(tags)
 
     def _document_sentences(self, document: NormalizedSourceDocument) -> list[str]:
         sentences: list[str] = []
@@ -841,9 +825,9 @@ class MultiSourceAggregationAgent(
 
     def _document_snippet(self, document: NormalizedSourceDocument) -> str:
         if document.text.strip():
-            return self._truncate(document.text, 900)
+            return _truncate(document.text, 900)
         snippets = [block.text for block in document.text_blocks if block.text.strip()]
-        return self._truncate(" ".join(snippets), 900)
+        return _truncate(" ".join(snippets), 900)
 
     def _best_claim_snippet(self, document: NormalizedSourceDocument) -> str:
         preferred_kinds = (
@@ -868,113 +852,10 @@ class MultiSourceAggregationAgent(
                     None,
                 )
                 if sentence:
-                    return self._truncate(sentence, 220)
+                    return _truncate(sentence, 220)
         if document.title:
-            return self._truncate(document.title, 220)
-        return self._truncate(document.text, 220)
-
-    def _parse_evidence_kinds(self, raw_kinds: Any) -> list[AggregationEvidenceKind]:
-        if not isinstance(raw_kinds, list):
-            return []
-        evidence_kinds: list[AggregationEvidenceKind] = []
-        for raw_kind in raw_kinds:
-            try:
-                evidence_kind = AggregationEvidenceKind(str(raw_kind).strip().lower())
-            except ValueError:
-                continue
-            if evidence_kind not in evidence_kinds:
-                evidence_kinds.append(evidence_kind)
-        return evidence_kinds
-
-    def _filter_source_item_ids(self, raw_source_ids: Any, valid_source_ids: set[str]) -> list[str]:
-        if not isinstance(raw_source_ids, list):
-            return []
-        source_item_ids: list[str] = []
-        for raw_source_id in raw_source_ids:
-            source_item_id = str(raw_source_id).strip()
-            if (
-                source_item_id
-                and source_item_id in valid_source_ids
-                and source_item_id not in source_item_ids
-            ):
-                source_item_ids.append(source_item_id)
-        return source_item_ids
-
-    def _clean_string_list(self, values: Any) -> list[str]:
-        if not isinstance(values, list):
-            return []
-        cleaned: list[str] = []
-        for value in values:
-            text = str(value).strip()
-            if text and text not in cleaned:
-                cleaned.append(text)
-        return cleaned
-
-    def _normalize_tags(self, values: Any) -> list[str]:
-        tags: list[str] = []
-        for value in self._clean_string_list(values):
-            normalized = value if value.startswith("#") else f"#{value}"
-            normalized = normalized.lower()
-            if normalized not in tags:
-                tags.append(normalized)
-        return tags[:15]
-
-    def _select_metadata(self, metadata: dict[str, Any]) -> dict[str, Any]:
-        keys = (
-            "author",
-            "channel",
-            "published_at",
-            "source",
-            "content_source",
-            "extraction_strategy",
-            "quality_tier",
-        )
-        selected = {key: metadata[key] for key in keys if key in metadata}
-        if "topic_tags" in metadata:
-            selected["topic_tags"] = metadata["topic_tags"]
-        if "entities" in metadata:
-            selected["entities"] = metadata["entities"]
-        return selected
-
-    def _has_text_evidence(self, document: NormalizedSourceDocument | None) -> bool:
-        if document is None:
-            return False
-        return any(
-            block.kind
-            in {ExtractedTextKind.BODY, ExtractedTextKind.CAPTION, ExtractedTextKind.TITLE}
-            for block in document.text_blocks
-        ) or bool(document.text.strip())
-
-    def _has_transcript_evidence(self, document: NormalizedSourceDocument | None) -> bool:
-        if document is None:
-            return False
-        return any(block.kind == ExtractedTextKind.TRANSCRIPT for block in document.text_blocks)
-
-    def _has_ocr_evidence(self, document: NormalizedSourceDocument | None) -> bool:
-        if document is None:
-            return False
-        return any(block.kind == ExtractedTextKind.OCR for block in document.text_blocks)
-
-    def _has_image_evidence(self, document: NormalizedSourceDocument | None) -> bool:
-        if document is None:
-            return False
-        return bool(document.media)
-
-    def _has_metadata_evidence(self, document: NormalizedSourceDocument | None) -> bool:
-        if document is None:
-            return False
-        return bool(document.metadata or document.title or document.provenance.external_id)
-
-    def _canonical_sentence(self, sentence: str) -> str:
-        lowered = sentence.lower()
-        lowered = _NON_WORD_RE.sub(" ", lowered)
-        return " ".join(lowered.split())
-
-    def _numeric_sentence_base(self, sentence: str) -> str:
-        without_numbers = _NUMBER_RE.sub(" ", sentence.lower())
-        without_numbers = _NON_WORD_RE.sub(" ", without_numbers)
-        tokens = [token for token in without_numbers.split() if token not in _STOPWORDS]
-        return " ".join(tokens)
+            return _truncate(document.title, 220)
+        return _truncate(document.text, 220)
 
     def _load_prompt(self, language: str) -> str:
         lang = language.lower() if language.lower() in ("en", "ru") else "en"
@@ -985,21 +866,6 @@ class MultiSourceAggregationAgent(
             return (_PROMPT_DIR / "multi_source_aggregation_system_en.txt").read_text(
                 encoding="utf-8"
             )
-
-    @staticmethod
-    def _truncate(value: str, max_length: int) -> str:
-        stripped = value.strip()
-        if len(stripped) <= max_length:
-            return stripped
-        return f"{stripped[: max_length - 1].rstrip()}…"
-
-    @staticmethod
-    def _coerce_int(value: Any) -> int | None:
-        try:
-            coerced = int(value)
-        except (TypeError, ValueError):
-            return None
-        return coerced if coerced >= 0 else None
 
 
 __all__ = [
