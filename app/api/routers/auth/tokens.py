@@ -292,6 +292,11 @@ def resolve_client_type(client_id: str | None) -> str:
     return "unknown"
 
 
+def is_web_client(client_id: str | None) -> bool:
+    """Return True when the client expects cookie-only refresh token delivery."""
+    return resolve_client_type(client_id) == "web"
+
+
 def is_self_service_secret_client(client_id: str | None) -> bool:
     """Return whether a client ID is eligible for self-service secret management."""
     return resolve_client_type(client_id) in _SELF_SERVICE_SECRET_CLIENT_TYPES
