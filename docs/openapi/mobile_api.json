@@ -426,6 +426,11 @@
         "summary": "Proxy Image",
         "description": "Proxy an image from a remote URL to bypass CORS/hotlink protection.",
         "operationId": "proxyImage",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "parameters": [
           {
             "name": "url",
@@ -4385,6 +4390,11 @@
         "summary": "Detailed Health Check",
         "description": "Comprehensive health check including database, Redis, and circuit breaker status. Has a 10-second timeout on component checks.",
         "operationId": "detailed_health_check_health_detailed_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "responses": {
           "200": {
             "description": "Detailed health status with component breakdown",
@@ -4395,6 +4405,12 @@
                 }
               }
             }
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
           }
         }
       }
@@ -4461,6 +4477,11 @@
         "summary": "Prometheus Metrics",
         "description": "Prometheus-compatible metrics endpoint for scraping.",
         "operationId": "metrics_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "responses": {
           "200": {
             "description": "Prometheus text metrics",
@@ -4472,6 +4493,12 @@
                 }
               }
             }
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
           }
         }
       }

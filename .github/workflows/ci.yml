@@ -203,7 +203,9 @@ jobs:
             (echo "mobile_api.json is out of sync with mobile_api.yaml — run 'make sync-openapi' and commit the result" && exit 1)
 
       - name: Check OpenAPI spec sync with code
-        run: pytest tests/api/test_openapi_sync.py -v --tb=short
+        run: |
+          pytest tests/api/test_openapi_sync.py tests/api/test_openapi_security.py \
+            -v --tb=short
 
       - name: Lint (ruff) - comprehensive
         run: ruff check .
