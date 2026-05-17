@@ -105,6 +105,16 @@ class SummaryRepositoryPort(Protocol):
         via crafted summary IDs from another user.
         """
 
+    async def async_bulk_set_summaries_favorite(
+        self, *, user_id: int, summary_ids: list[int], value: bool
+    ) -> int:
+        """Bulk set favorite state; return rows updated. User-scoped."""
+
+    async def async_bulk_soft_delete_summaries(
+        self, *, user_id: int, summary_ids: list[int]
+    ) -> int:
+        """Bulk soft-delete summaries; return rows updated. User-scoped."""
+
     async def async_mark_summary_as_unread(self, summary_id: int) -> None:
         """Mark summary as unread."""
 

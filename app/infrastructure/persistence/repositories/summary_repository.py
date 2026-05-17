@@ -333,6 +333,59 @@ class SummaryRepositoryAdapter:
             )
             return len(owned_ids)
 
+    async def async_bulk_set_summaries_favorite(
+        self, *, user_id: int, summary_ids: list[int], value: bool
+    ) -> int:
+        """Bulk set favorite scoped to *user_id*."""
+        if not summary_ids:
+            return 0
+        async with self._database.session() as session:
+            owned_rows = await session.execute(
+                select(Summary.id)
+                .join(Request, Summary.request_id == Request.id)
+                .where(
+                    Summary.id.in_(summary_ids),
+                    Request.user_id == user_id,
+                    Summary.is_deleted.is_(False),
+                )
+            )
+            owned_ids = [row[0] for row in owned_rows]
+            if not owned_ids:
+                return 0
+            await session.execute(
+                update(Summary)
+                .where(Summary.id.in_(owned_ids))
+                .values(is_favorited=value, updated_at=_utcnow())
+            )
+            return len(owned_ids)
+
+    async def async_bulk_soft_delete_summaries(
+        self, *, user_id: int, summary_ids: list[int]
+    ) -> int:
+        """Bulk soft-delete scoped to *user_id*."""
+        if not summary_ids:
+            return 0
+        now = _utcnow()
+        async with self._database.session() as session:
+            owned_rows = await session.execute(
+                select(Summary.id)
+                .join(Request, Summary.request_id == Request.id)
+                .where(
+                    Summary.id.in_(summary_ids),
+                    Request.user_id == user_id,
+                    Summary.is_deleted.is_(False),
+                )
+            )
+            owned_ids = [row[0] for row in owned_rows]
+            if not owned_ids:
+                return 0
+            await session.execute(
+                update(Summary)
+                .where(Summary.id.in_(owned_ids))
+                .values(is_deleted=True, deleted_at=now, updated_at=now)
+            )
+            return len(owned_ids)
+
     async def async_mark_summary_as_read(self, summary_id: int) -> None:
         """Mark a summary as read."""
         await self._set_summary_values(summary_id, is_read=True)

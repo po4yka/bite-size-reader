@@ -91,6 +91,47 @@ class SummaryReadModelUseCase:
             user_id=user_id, summary_ids=deduped
         )
 
+    async def bulk_set_favorite(
+        self, *, user_id: int, summary_ids: list[int], value: bool
+    ) -> int:
+        """Bulk set the favorite flag on summaries owned by *user_id*.
+
+        Same dedup + cap + empty-no-op semantics as :meth:`bulk_mark_as_read`.
+        """
+        if not summary_ids:
+            return 0
+        seen: dict[int, None] = {}
+        for sid in summary_ids:
+            seen.setdefault(sid, None)
+        deduped = list(seen)
+        if len(deduped) > self._BULK_MAX_IDS:
+            raise ValueError(
+                f"bulk_set_favorite accepts at most {self._BULK_MAX_IDS} ids; "
+                f"got {len(deduped)}"
+            )
+        return await self._summary_repo.async_bulk_set_summaries_favorite(
+            user_id=user_id, summary_ids=deduped, value=value
+        )
+
+    async def bulk_delete(
+        self, *, user_id: int, summary_ids: list[int]
+    ) -> int:
+        """Bulk soft-delete summaries owned by *user_id*."""
+        if not summary_ids:
+            return 0
+        seen: dict[int, None] = {}
+        for sid in summary_ids:
+            seen.setdefault(sid, None)
+        deduped = list(seen)
+        if len(deduped) > self._BULK_MAX_IDS:
+            raise ValueError(
+                f"bulk_delete accepts at most {self._BULK_MAX_IDS} ids; "
+                f"got {len(deduped)}"
+            )
+        return await self._summary_repo.async_bulk_soft_delete_summaries(
+            user_id=user_id, summary_ids=deduped
+        )
+
     async def get_summary_by_id_for_user(
         self, user_id: int, summary_id: int
     ) -> dict[str, Any] | None:

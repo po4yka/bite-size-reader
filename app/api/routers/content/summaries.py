@@ -618,6 +618,15 @@ class _BulkMarkReadResponse(_BulkBaseModel):
     updated: int
 
 
+class _BulkFavoriteRequest(_BulkBaseModel):
+    summary_ids: list[int]
+    value: bool = True
+
+
+class _BulkDeleteRequest(_BulkBaseModel):
+    summary_ids: list[int]
+
+
 @router.post("/bulk/mark-read")
 async def bulk_mark_read(
     body: _BulkMarkReadRequest,
@@ -637,6 +646,44 @@ async def bulk_mark_read(
     except ValueError as exc:
         raise ValidationError(str(exc), details={"field": "summary_ids"}) from exc
     return success_response(_BulkMarkReadResponse(updated=updated))
+
+
+@router.post("/bulk/favorite")
+async def bulk_favorite(
+    body: _BulkFavoriteRequest,
+    user: dict[str, Any] = Depends(get_current_user),
+    use_case: SummaryReadModelUseCase = Depends(_get_summary_use_case),
+) -> Any:
+    """Set or clear the favorite flag on multiple summaries.
+
+    Pass ``value=true`` to favorite, ``false`` to unfavorite. Same
+    user-scoping and 500-id cap as ``/bulk/mark-read``.
+    """
+    try:
+        updated = await use_case.bulk_set_favorite(
+            user_id=user["user_id"],
+            summary_ids=body.summary_ids,
+            value=body.value,
+        )
+    except ValueError as exc:
+        raise ValidationError(str(exc), details={"field": "summary_ids"}) from exc
+    return success_response(_BulkMarkReadResponse(updated=updated))
+
+
+@router.post("/bulk/delete")
+async def bulk_delete(
+    body: _BulkDeleteRequest,
+    user: dict[str, Any] = Depends(get_current_user),
+    use_case: SummaryReadModelUseCase = Depends(_get_summary_use_case),
+) -> Any:
+    """Soft-delete multiple summaries in one round-trip."""
+    try:
+        deleted = await use_case.bulk_delete(
+            user_id=user["user_id"], summary_ids=body.summary_ids
+        )
+    except ValueError as exc:
+        raise ValidationError(str(exc), details={"field": "summary_ids"}) from exc
+    return success_response(_BulkMarkReadResponse(updated=deleted))
 
 
 @router.post("/{summary_id}/favorite")
