@@ -2,14 +2,26 @@
 
 Classifies extracted content into tiers (DEFAULT, TECHNICAL, SOCIOPOLITICAL)
 using URL domain signals and keyword heuristics. No LLM call required.
+
+When the heuristic produces a tie (``tech_weight == socio_weight >= 1``)
+an optional :class:`LLMTierClassifier` can be consulted to resolve the
+ambiguity via a cheap single-label LLM call. The classifier is opt-in
+(disabled by default) and fails soft to ``None`` on any error so the
+caller falls through to ``DEFAULT``.
 """
 
 from __future__ import annotations
 
 import enum
+import hashlib
+from typing import TYPE_CHECKING
 from urllib.parse import urlparse
 
+from app.core.call_status import CallStatus
 from app.core.logging_utils import get_logger
+
+if TYPE_CHECKING:
+    from app.adapters.llm.protocol import LLMClientProtocol
 
 logger = get_logger(__name__)
 
@@ -221,6 +233,77 @@ def _content_signal(content_text: str) -> tuple[int, int]:
     return tech, socio
 
 
+def _heuristic_weights(
+    content_text: str, *, url: str | None
+) -> tuple[ContentTier, int, int, ContentTier | None, int, int]:
+    """Return ``(tier, tech_weight, socio_weight, domain_tier, tech_score, socio_score)``.
+
+    Pure function — no logging. Shared by sync ``classify_content`` and
+    async ``classify_content_async``.
+    """
+    tech_weight = 0
+    socio_weight = 0
+
+    domain_tier = _domain_signal(url)
+    if domain_tier == ContentTier.TECHNICAL:
+        tech_weight += 2
+    elif domain_tier == ContentTier.SOCIOPOLITICAL:
+        socio_weight += 2
+
+    tech_score, socio_score = _content_signal(content_text)
+    if tech_score >= _MIN_KEYWORD_MATCHES:
+        tech_weight += 1
+    if socio_score >= _MIN_KEYWORD_MATCHES:
+        socio_weight += 1
+
+    if tech_weight >= 2:
+        tier = ContentTier.TECHNICAL
+    elif socio_weight >= 2 and tech_weight < 2:
+        tier = ContentTier.SOCIOPOLITICAL
+    elif tech_weight >= 1 and socio_weight == 0:
+        tier = ContentTier.TECHNICAL
+    elif socio_weight >= 1 and tech_weight == 0:
+        tier = ContentTier.SOCIOPOLITICAL
+    else:
+        tier = ContentTier.DEFAULT
+
+    return tier, tech_weight, socio_weight, domain_tier, tech_score, socio_score
+
+
+def _is_tie(tier: ContentTier, tech_weight: int, socio_weight: int) -> bool:
+    """A tie is: heuristic returned DEFAULT yet both sides scored >= 1."""
+    return (
+        tier is ContentTier.DEFAULT and tech_weight >= 1 and socio_weight >= 1
+    )
+
+
+def _log_classification(
+    tier: ContentTier,
+    *,
+    url: str | None,
+    domain_tier: ContentTier | None,
+    tech_score: int,
+    socio_score: int,
+    tech_weight: int,
+    socio_weight: int,
+    resolved_by_llm: bool = False,
+) -> None:
+    domain = _extract_domain(url) if url else None
+    logger.info(
+        "content_tier_classified",
+        extra={
+            "tier": tier.value,
+            "domain_signal": domain_tier.value if domain_tier else None,
+            "technical_score": tech_score,
+            "sociopolitical_score": socio_score,
+            "tech_weight": tech_weight,
+            "socio_weight": socio_weight,
+            "url_domain": domain,
+            "resolved_by_llm": resolved_by_llm,
+        },
+    )
+
+
 def classify_content(
     content_text: str,
     *,
@@ -235,47 +318,197 @@ def classify_content(
     TECHNICAL wins ties over SOCIOPOLITICAL.
     Returns DEFAULT when signals are insufficient.
     """
-    tech_weight = 0
-    socio_weight = 0
+    tier, tech_w, socio_w, domain_tier, tech_score, socio_score = _heuristic_weights(
+        content_text, url=url
+    )
+    _log_classification(
+        tier,
+        url=url,
+        domain_tier=domain_tier,
+        tech_score=tech_score,
+        socio_score=socio_score,
+        tech_weight=tech_w,
+        socio_weight=socio_w,
+    )
+    return tier
 
-    # Domain signal (strong hint, weight 2)
-    domain_tier = _domain_signal(url)
-    if domain_tier == ContentTier.TECHNICAL:
-        tech_weight += 2
-    elif domain_tier == ContentTier.SOCIOPOLITICAL:
-        socio_weight += 2
 
-    # Content keyword signal (weight 1 if >= threshold)
-    tech_score, socio_score = _content_signal(content_text)
-    if tech_score >= _MIN_KEYWORD_MATCHES:
-        tech_weight += 1
-    if socio_score >= _MIN_KEYWORD_MATCHES:
-        socio_weight += 1
+async def classify_content_async(
+    content_text: str,
+    *,
+    url: str | None = None,
+    llm_classifier: LLMTierClassifier | None = None,
+) -> ContentTier:
+    """Async variant that consults *llm_classifier* on heuristic ties.
 
-    # Resolve: threshold of 2 to trigger, TECHNICAL wins ties
-    if tech_weight >= 2:
-        tier = ContentTier.TECHNICAL
-    elif socio_weight >= 2 and tech_weight < 2:
-        tier = ContentTier.SOCIOPOLITICAL
-    elif tech_weight >= 1 and socio_weight == 0:
-        tier = ContentTier.TECHNICAL
-    elif socio_weight >= 1 and tech_weight == 0:
-        tier = ContentTier.SOCIOPOLITICAL
-    else:
-        tier = ContentTier.DEFAULT
-
-    domain = _extract_domain(url) if url else None
-    logger.info(
-        "content_tier_classified",
-        extra={
-            "tier": tier.value,
-            "domain_signal": domain_tier.value if domain_tier else None,
-            "technical_score": tech_score,
-            "sociopolitical_score": socio_score,
-            "tech_weight": tech_weight,
-            "socio_weight": socio_weight,
-            "url_domain": domain,
-        },
+    Behaviour matches :func:`classify_content` for unambiguous inputs.
+    When the heuristic produces a tie (``tech_weight == socio_weight >= 1``
+    falling through to DEFAULT) and an enabled classifier is provided,
+    one cheap LLM call is issued to resolve the tier. Any failure or
+    disabled classifier falls through to DEFAULT.
+    """
+    tier, tech_w, socio_w, domain_tier, tech_score, socio_score = _heuristic_weights(
+        content_text, url=url
     )
 
+    resolved_by_llm = False
+    if llm_classifier is not None and _is_tie(tier, tech_w, socio_w):
+        llm_tier = await llm_classifier.resolve_tie(content_text, url=url)
+        if llm_tier is not None:
+            tier = llm_tier
+            resolved_by_llm = True
+
+    _log_classification(
+        tier,
+        url=url,
+        domain_tier=domain_tier,
+        tech_score=tech_score,
+        socio_score=socio_score,
+        tech_weight=tech_w,
+        socio_weight=socio_w,
+        resolved_by_llm=resolved_by_llm,
+    )
     return tier
+
+
+# ---------------------------------------------------------------------------
+# Optional LLM tier classifier (tie-break only)
+# ---------------------------------------------------------------------------
+
+_LABEL_TO_TIER: dict[str, ContentTier] = {
+    "technical": ContentTier.TECHNICAL,
+    "sociopolitical": ContentTier.SOCIOPOLITICAL,
+    "default": ContentTier.DEFAULT,
+}
+
+_CACHE_TTL_ENTRIES = 256  # in-process cap; cheap LRU-ish trimming
+
+
+class LLMTierClassifier:
+    """Resolve heuristic tier ties via a single cheap LLM call.
+
+    The classifier issues at most one short completion per resolved tie
+    and caches the result keyed on the URL (when present) or a sha256 of
+    the leading content slice. It is disabled by default; callers must
+    pass ``enabled=True`` (typically from configuration).
+
+    All failure modes — disabled, empty input, LLM error, malformed
+    label — return ``None`` so the caller can fall through to
+    ``ContentTier.DEFAULT`` without raising.
+    """
+
+    def __init__(
+        self,
+        *,
+        client: LLMClientProtocol,
+        model: str,
+        enabled: bool = False,
+        max_tokens: int = 8,
+    ) -> None:
+        self._client = client
+        self._model = model
+        self._enabled = enabled
+        self._max_tokens = max_tokens
+        self._cache: dict[str, ContentTier] = {}
+
+    async def resolve_tie(
+        self, content_text: str, *, url: str | None
+    ) -> ContentTier | None:
+        if not self._enabled:
+            return None
+        if not content_text or not content_text.strip():
+            return None
+
+        cache_key = self._cache_key(content_text, url)
+        cached = self._cache.get(cache_key)
+        if cached is not None:
+            return cached
+
+        prompt = (
+            "Classify the article below into exactly one tier and reply "
+            "with that single word and nothing else. "
+            "Allowed tiers: technical, sociopolitical, default.\n\n"
+            f"Article (first 512 chars):\n{content_text[:512]}"
+        )
+        messages = [
+            {
+                "role": "system",
+                "content": (
+                    "You are a content router. Reply with exactly one of: "
+                    "technical, sociopolitical, default."
+                ),
+            },
+            {"role": "user", "content": prompt},
+        ]
+
+        try:
+            result = await self._client.chat(
+                messages,
+                temperature=0.0,
+                max_tokens=self._max_tokens,
+                model_override=self._model,
+            )
+        except Exception as exc:
+            logger.warning(
+                "llm_tier_classifier_call_failed",
+                extra={"error": str(exc), "url_domain": _extract_domain(url)},
+            )
+            return None
+
+        if result.status is not CallStatus.OK or not result.response_text:
+            logger.info(
+                "llm_tier_classifier_non_ok",
+                extra={
+                    "status": result.status.value if result.status else None,
+                    "url_domain": _extract_domain(url),
+                },
+            )
+            return None
+
+        tier = _parse_tier_label(result.response_text)
+        if tier is None:
+            logger.info(
+                "llm_tier_classifier_unparseable",
+                extra={
+                    "reply_preview": result.response_text[:64],
+                    "url_domain": _extract_domain(url),
+                },
+            )
+            return None
+
+        # Bounded cap to avoid unbounded memory in long-running workers.
+        if len(self._cache) >= _CACHE_TTL_ENTRIES:
+            self._cache.clear()
+        self._cache[cache_key] = tier
+
+        logger.info(
+            "llm_tier_classifier_resolved",
+            extra={
+                "tier": tier.value,
+                "url_domain": _extract_domain(url),
+            },
+        )
+        return tier
+
+    @staticmethod
+    def _cache_key(content_text: str, url: str | None) -> str:
+        if url:
+            return f"url::{url}"
+        digest = hashlib.sha256(content_text[:512].encode("utf-8")).hexdigest()
+        return f"hash::{digest}"
+
+
+def _parse_tier_label(reply_text: str) -> ContentTier | None:
+    normalized = reply_text.strip().lower().rstrip(".!?")
+    # Direct match first.
+    if normalized in _LABEL_TO_TIER:
+        return _LABEL_TO_TIER[normalized]
+    # Substring match: scan for any allowed label as a whole word.
+    for label, tier in _LABEL_TO_TIER.items():
+        if label in normalized.split():
+            return tier
+    # Last resort: scan a 'tier: <label>' prefix or trailing punctuation.
+    for label, tier in _LABEL_TO_TIER.items():
+        if label in normalized:
+            return tier
+    return None

@@ -373,6 +373,22 @@ class ModelRoutingConfig(BaseModel):
         default=180000,
         validation_alias="MODEL_ROUTING_LONG_CONTEXT_THRESHOLD_TOKENS",
     )
+    llm_classifier_enabled: bool = Field(
+        default=False,
+        validation_alias="LLM_CLASSIFIER_ENABLED",
+        description=(
+            "Opt-in: consult a cheap LLM to break heuristic tier ties "
+            "(tech_weight == socio_weight >= 1). Default False."
+        ),
+    )
+    llm_classifier_model: str = Field(
+        default="qwen/qwen3.6-flash",
+        validation_alias="LLM_CLASSIFIER_MODEL",
+        description=(
+            "Model used by the tie-breaking classifier when enabled. "
+            "Must be a fast, cheap model — single-word reply, ~100 tokens."
+        ),
+    )
 
     @field_validator(
         "default_model",
