@@ -180,3 +180,25 @@ groups:
         annotations:
           summary: "Very high daily OpenRouter spending"
           description: "OpenRouter costs in the last 24 hours: ${{ $value | printf \"%.2f\" }}"
+
+  - name: ratatoskr_llm_retry_budget
+    rules:
+      # Retry-budget exhaustion: ratio of requests that burned through
+      # the entire fallback chain. >5% over 15m indicates an upstream
+      # outage or a prompt regression.
+      - alert: RatatoskrLLMRetryExhaustionHigh
+        expr: |
+          (
+            sum(rate(ratatoskr_llm_call_retry_exhaustion_total[15m]))
+            /
+            sum(rate(ratatoskr_llm_call_attempts_total{status="success"}[15m]))
+          ) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "LLM retry budget exhaustion exceeded 5%/15m"
+          description: |
+            More than 5% of LLM requests in the last 15 minutes burned
+            through the full fallback chain. Check OpenRouter status and
+            recent prompt changes. Current rate: {{ $value | humanizePercentage }}.

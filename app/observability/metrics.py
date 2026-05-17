@@ -97,6 +97,32 @@ if PROMETHEUS_AVAILABLE:
         registry=REGISTRY,
     )
 
+    # ---- LLM retry-budget telemetry -------------------------------------
+    # Per-attempt counter: tracks every LLM call we issue, including
+    # fallback-model retries, so OpenRouter outages and prompt regressions
+    # surface as visible spikes in retry rate.
+    LLM_CALL_ATTEMPTS_TOTAL = Counter(
+        "ratatoskr_llm_call_attempts_total",
+        "Total LLM call attempts across the retry loop",
+        ["provider", "model", "status"],
+        registry=REGISTRY,
+    )
+    # Triggered once per request when the entire fallback chain has been
+    # exhausted without success — paired with an alert recipe in docs.
+    LLM_CALL_RETRY_EXHAUSTION_TOTAL = Counter(
+        "ratatoskr_llm_call_retry_exhaustion_total",
+        "Total LLM requests that exhausted the full fallback chain",
+        ["model"],
+        registry=REGISTRY,
+    )
+    LLM_CALL_LATENCY_SECONDS = Histogram(
+        "ratatoskr_llm_call_latency_seconds",
+        "End-to-end latency of a single LLM call attempt in seconds",
+        ["model"],
+        buckets=[0.5, 1.0, 2.5, 5.0, 10.0, 30.0, 60.0, 120.0, 300.0],
+        registry=REGISTRY,
+    )
+
     # Circuit breaker metrics
     CIRCUIT_BREAKER_STATE = Gauge(
         "ratatoskr_circuit_breaker_state",
@@ -292,6 +318,9 @@ else:
     OPENROUTER_PER_MODEL_TIMEOUT = None
     OPENROUTER_PER_MODEL_LATENCY = None
     OPENROUTER_CIRCUIT_BREAKER_STATE = None
+    LLM_CALL_ATTEMPTS_TOTAL = None
+    LLM_CALL_RETRY_EXHAUSTION_TOTAL = None
+    LLM_CALL_LATENCY_SECONDS = None
 
 
 def get_metrics() -> bytes:
@@ -671,3 +700,49 @@ def record_aggregation_synthesis(
             bundle_profile=bundle_profile,
             status=status,
         ).inc(cost_usd)
+
+
+def record_llm_call_attempt(
+    *, provider: str, model: str, status: str
+) -> None:
+    """Record a single LLM call attempt.
+
+    Args:
+        provider: Upstream provider name (``openrouter``, ``openai``,
+            ``anthropic``, etc.) — distinct from the OpenRouter
+            ``metadata.provider_name`` which identifies the *upstream*
+            of OpenRouter.
+        model: Model identifier used for the call.
+        status: ``success`` | ``error`` | ``soft_failure`` |
+            ``timeout``. Free-form to allow callers to add finer
+            granularity without breaking the schema.
+    """
+    if not PROMETHEUS_AVAILABLE:
+        return
+    LLM_CALL_ATTEMPTS_TOTAL.labels(
+        provider=provider, model=model, status=status
+    ).inc()
+
+
+def record_llm_call_retry_exhaustion(*, model: str) -> None:
+    """Record that the entire LLM fallback chain was exhausted for a request.
+
+    Should be incremented once per request (not once per attempt) when
+    no model in the cascade produced a successful response.
+    """
+    if not PROMETHEUS_AVAILABLE:
+        return
+    LLM_CALL_RETRY_EXHAUSTION_TOTAL.labels(model=model).inc()
+
+
+def record_llm_call_latency(*, model: str, latency_seconds: float) -> None:
+    """Record per-attempt LLM call latency.
+
+    Negative values are silently dropped (prometheus rejects them
+    and a buggy caller should not crash the request hot-path).
+    """
+    if not PROMETHEUS_AVAILABLE:
+        return
+    if latency_seconds < 0:
+        return
+    LLM_CALL_LATENCY_SECONDS.labels(model=model).observe(latency_seconds)
