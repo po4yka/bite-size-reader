@@ -2,15 +2,14 @@
 
 from __future__ import annotations
 
-import threading
 import time
-from collections import defaultdict
 from typing import TYPE_CHECKING, Any, cast
 
 from fastapi.responses import JSONResponse
 
 from app.api.context import correlation_id_ctx
 from app.api.exceptions import ErrorType
+from app.api.local_rate_limiter import LocalRateLimiter as _LocalRateLimiter
 from app.api.models.responses import error_response, make_error
 from app.config import AppConfig, load_config
 from app.core.logging_utils import get_logger, sanitize_correlation_id
@@ -24,53 +23,33 @@ if TYPE_CHECKING:
 
 logger = get_logger(__name__)
 
-# Cached config for middleware usage.
-# Lazy-initialized on the first request rather than at startup because:
-# (1) middleware is loaded before lifespan runs, and (2) config only needs
-# to be read once. _get_cfg() below provides thread-safe lazy access.
-_cfg: AppConfig | None = None
+# Cached config for middleware usage. Lazy-initialized on the first
+# request rather than at startup because (1) middleware is loaded
+# before lifespan runs, and (2) config only needs to be read once.
+# Wrapped in a single-element list so the mutation site doesn't need
+# `global`.
+_cfg_holder: list[AppConfig | None] = [None]
 
-# One-time warning flag — intentionally global so the "Redis unavailable"
-# warning is emitted at most once per process, not once per request.
-_redis_warning_logged = False
+# One-time warning flag — emitted at most once per process. Wrapped in
+# a single-element list so the mutation site doesn't need `global`.
+_redis_warning_emitted: list[bool] = [False]
 
-# In-memory rate limiting fallback when Redis is unavailable
-_local_rate_limits: dict[str, list[float]] = defaultdict(list)
-_local_rate_lock = threading.Lock()
-_local_cleanup_last = 0.0
+# In-memory rate limiting fallback when Redis is unavailable. The
+# singleton lives at module scope so existing tests that import
+# `_local_rate_limits` continue to work; the underlying state is now
+# encapsulated in LocalRateLimiter so middleware no longer needs the
+# `global` keyword.
+_local_rate_limiter = _LocalRateLimiter()
+# Backward-compatible alias for tests that reach into module state.
+_local_rate_limits = _local_rate_limiter._buckets
 
 
 def _check_local_rate_limit(user_id: str, limit: int, window: int) -> tuple[bool, int]:
+    """In-memory rate limit check. Thread-safe.
+
+    Delegates to the module-level :class:`LocalRateLimiter` instance.
     """
-    In-memory rate limit check.
-
-    Returns (allowed, remaining) tuple.
-    Thread-safe with automatic cleanup of old entries.
-    """
-    global _local_cleanup_last
-    now = time.time()
-    window_start = int(now // window) * window
-    key = f"{user_id}:{window_start}"
-
-    with _local_rate_lock:
-        # Periodic cleanup of stale entries (every 60 seconds)
-        if now - _local_cleanup_last > 60:
-            stale_keys = [
-                k for k in _local_rate_limits if int(k.split(":")[-1]) < window_start - window
-            ]
-            for k in stale_keys:
-                del _local_rate_limits[k]
-            _local_cleanup_last = now
-
-        requests = _local_rate_limits[key]
-        # Remove old entries outside current window
-        requests[:] = [ts for ts in requests if ts >= window_start]
-
-        if len(requests) >= limit:
-            return False, 0
-
-        requests.append(now)
-        return True, limit - len(requests)
+    return _local_rate_limiter.check(user_id, limit=limit, window=window)
 
 
 async def webapp_auth_middleware(request: Request, call_next: Callable) -> Response:
@@ -142,10 +121,9 @@ async def correlation_id_middleware(request: Request, call_next: Callable) -> Re
 
 
 def _get_cfg() -> AppConfig:
-    global _cfg
-    if _cfg is None:
-        _cfg = load_config(allow_stub_telegram=True)
-    return _cfg
+    if _cfg_holder[0] is None:
+        _cfg_holder[0] = load_config(allow_stub_telegram=True)
+    return _cfg_holder[0]
 
 
 def _resolve_limit(_path: str, cfg: AppConfig) -> int:
@@ -309,8 +287,7 @@ def _compute_retry_after(now: int, window_start: int, window: int, cfg: AppConfi
 
 
 def _log_redis_unavailable_once(cfg: AppConfig, correlation_id: str | None, path: str) -> None:
-    global _redis_warning_logged
-    if _redis_warning_logged:
+    if _redis_warning_emitted[0]:
         return
     is_prod = cfg.deployment.is_production_mode
     extra: dict = {
@@ -326,7 +303,7 @@ def _log_redis_unavailable_once(cfg: AppConfig, correlation_id: str | None, path
             "workers or restarts. Set REDIS_REQUIRED=true in production."
         )
     logger.warning("rate_limit_redis_unavailable", extra=extra)
-    _redis_warning_logged = True
+    _redis_warning_emitted[0] = True
 
 
 async def _handle_local_rate_limit(
