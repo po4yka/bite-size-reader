@@ -169,6 +169,11 @@ async def get_summaries(
     start_date: str | None = Query(None),
     end_date: str | None = Query(None),
     sort: str = Query("created_at_desc", pattern="^(created_at_desc|created_at_asc)$"),
+    search: str | None = Query(
+        None,
+        max_length=200,
+        description="Case-insensitive substring match on the article title.",
+    ),
     user: dict[str, Any] = Depends(get_current_user),
     use_case: SummaryReadModelUseCase = Depends(_get_summary_use_case),
 ) -> Any:
@@ -183,6 +188,7 @@ async def get_summaries(
     - start_date: Filter by creation date (ISO 8601)
     - end_date: Filter by creation date (ISO 8601)
     - sort: Sort order (created_at_desc/created_at_asc)
+    - search: Case-insensitive substring match on the article title
     """
 
     # Use service layer for business logic
@@ -196,6 +202,7 @@ async def get_summaries(
         start_date=start_date,
         end_date=end_date,
         sort=sort,
+        search=search,
     )
 
     # Build response from dictionary data

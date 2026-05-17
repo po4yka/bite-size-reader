@@ -25,8 +25,13 @@ class SummaryRepositoryPort(Protocol):
         start_date: Any | None = None,
         end_date: Any | None = None,
         sort: str = "created_at_desc",
+        search: str | None = None,
     ) -> tuple[list[dict[str, Any]], int, int]:
-        """Return user summaries with pagination metadata."""
+        """Return user summaries with pagination metadata.
+
+        When *search* is provided, restrict to rows whose
+        ``Request.title`` matches the term case-insensitively.
+        """
 
     async def async_get_user_summaries_for_insights(
         self,

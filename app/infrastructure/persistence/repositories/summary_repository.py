@@ -97,6 +97,7 @@ class SummaryRepositoryAdapter:
         start_date: Any | None = None,
         end_date: Any | None = None,
         sort: str = "created_at_desc",
+        search: str | None = None,
     ) -> tuple[list[dict[str, Any]], int, int]:
         """Get paginated summaries for a user with filtering and stats."""
         async with self._database.session() as session:
@@ -111,6 +112,10 @@ class SummaryRepositoryAdapter:
                 conditions.append(Summary.created_at >= start_date)
             if end_date:
                 conditions.append(Summary.created_at <= end_date)
+            if search:
+                # Case-insensitive substring match on the article title.
+                # Title lives on the Request row already joined below.
+                conditions.append(Request.title.ilike(f"%{search}%"))
 
             total = int(
                 await session.scalar(

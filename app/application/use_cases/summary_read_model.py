@@ -42,7 +42,13 @@ class SummaryReadModelUseCase:
         start_date: str | None = None,
         end_date: str | None = None,
         sort: str = "created_at_desc",
+        search: str | None = None,
     ) -> tuple[list[dict[str, Any]], int, int]:
+        # Normalise empty / whitespace-only search to None so the repo
+        # does not run a wildcard ILIKE that matches every row.
+        cleaned_search = search.strip() if search else None
+        if not cleaned_search:
+            cleaned_search = None
         return await self._summary_repo.async_get_user_summaries(
             user_id=user_id,
             limit=limit,
@@ -53,6 +59,7 @@ class SummaryReadModelUseCase:
             start_date=start_date,
             end_date=end_date,
             sort=sort,
+            search=cleaned_search,
         )
 
     async def get_summary_by_id_for_user(
