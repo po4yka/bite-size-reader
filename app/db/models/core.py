@@ -469,6 +469,14 @@ class LLMCall(Base):
     structured_output_used: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     structured_output_mode: Mapped[str | None] = mapped_column(Text, nullable=True)
     error_context_json: Mapped[JSONValue] = _json_column()
+    # Retry-budget telemetry — populated by the OpenRouter chat
+    # response handler when wiring lands. Migration 0014 adds the
+    # backing DB columns. See docs/reference/llm-retry-telemetry.md.
+    fallback_model_used: Mapped[str | None] = mapped_column(Text, nullable=True)
+    retry_exhausted: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default="false", nullable=False
+    )
+    total_latency_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
     created_at: Mapped[dt.datetime] = mapped_column(
         DateTime(timezone=True), default=_utcnow, nullable=False
     )
