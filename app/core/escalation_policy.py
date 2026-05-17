@@ -23,8 +23,11 @@ than chaining indefinitely through expensive ceiling models.
 from __future__ import annotations
 
 import enum
-from collections.abc import Callable
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 
 class SoftFailureReason(enum.StrEnum):
