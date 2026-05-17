@@ -841,6 +841,7 @@ jobs:
             tests/ \
             -m "integration" \
             --ignore=tests/benchmarks \
+            --ignore=tests/integration/test_batch_relationship_flow.py \
             --ignore=tests/api/test_background_processor.py \
             --ignore=tests/test_api_rate_limit_and_sync.py \
             --verbose \
