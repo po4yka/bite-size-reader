@@ -789,6 +789,14 @@ class RefreshToken(Base):
     is_revoked: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     remember_me: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     expires_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    # Token-family rotation: every refresh token belongs to a family;
+    # rotation issues a new token in the same family; reuse of a
+    # retired token revokes the whole family (see
+    # app/security/token_family_policy.py). Migration 0016 adds the
+    # backing DB columns; existing rows backfill family_id with each
+    # row's own uuid so the constraint stays NOT NULL.
+    family_id: Mapped[str] = mapped_column(Text, nullable=False)
+    parent_token_hash: Mapped[str | None] = mapped_column(Text, nullable=True)
     last_used_at: Mapped[dt.datetime] = mapped_column(
         DateTime(timezone=True), default=_utcnow, nullable=False
     )
