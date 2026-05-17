@@ -34,7 +34,7 @@ source-of-truth pointers on **both** sides of the wire.
 | Secret-key CRUD | `GET/POST /v1/auth/secret-keys`, `…/rotate`, `…/revoke` | `endpoints_secret_keys.py` | not yet wired client-side per code search |
 | Credentials change-password | `POST /v1/auth/credentials/change-password` | `endpoints_credentials.py` | `feature/auth/.../data/repository/CredentialsRepositoryImpl.kt` |
 | Me / Telegram linkage | `GET /v1/auth/me`, `GET /v1/auth/me/telegram` | `endpoints_me.py`, `endpoints_telegram.py` | `feature/auth/.../data/repository/UserRepositoryImpl.kt` |
-| GitHub OAuth / PAT | `/v1/auth/github`, `…/device/start|poll`, `…/pat` | `app/api/routers/auth/github.py` (Fernet-encrypted at rest) | not yet wired client-side per code search |
+| GitHub OAuth / PAT | `/v1/auth/github`, `.../device/start\|poll`, `.../pat` | `app/api/routers/auth/github.py` (Fernet-encrypted at rest) | not yet wired client-side per code search |
 
 ### Summaries / articles
 

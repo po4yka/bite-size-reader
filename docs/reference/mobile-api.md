@@ -59,12 +59,14 @@ The mobile API surface is contract-locked against `docs/openapi/mobile_api.yaml`
 ### When to bump `api_version`
 
 Bump the major version when **any** of the following changes:
+
 - Removing or renaming a path or HTTP method
 - Removing a required field from a response or request
 - Tightening a field type (e.g. `string` → `integer`)
 - Changing the envelope shape (`success`, `data`, `error`, `meta`)
 
 Bump the minor version when:
+
 - Adding a new path / method
 - Adding a non-required response field
 

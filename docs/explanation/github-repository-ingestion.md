@@ -163,6 +163,7 @@ not the 35-field `Summary` contract.
 user both stars a repo and manually ingests it; the upsert path converges.
 
 **Indexes:**
+
 - `ix_repositories_user_starred` on `(user_id, is_starred)` — list endpoint filter
 - `ix_repositories_user_language` on `(user_id, primary_language)` — language filter
 - `ix_repositories_user_pushed_desc` on `(user_id, pushed_at DESC)` — sort by activity
@@ -386,6 +387,7 @@ repo metadata + README excerpt) and 300-800 output tokens. At $0.01-0.03 per
 1000 tokens with typical OpenRouter models, a single analysis costs $0.01-0.05.
 
 For a user with 1000 starred repositories on first sync:
+
 - Default `GITHUB_LLM_DAILY_BUDGET=100` means 100 repos analyzed per day.
 - Full analysis of 1000 repos takes 10 days.
 - Total first-sync cost: approximately $10-50, spread over 10 days.

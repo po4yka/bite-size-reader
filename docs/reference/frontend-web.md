@@ -161,6 +161,7 @@ The canonical route and side-nav manifest lives in `src/routes/manifest.tsx`.
 **Feature directory:** `src/features/repositories/`
 
 **API client modules:**
+
 - `src/api/repositories.ts` -- `GET /v1/repositories`, `POST /v1/repositories`, `GET /v1/repositories/{id}`, `POST /v1/repositories/{id}/reanalyze`, `DELETE /v1/repositories/{id}`
 - `src/api/github.ts` -- `GET /v1/auth/github/status`, `POST /v1/auth/github/pat`, `POST /v1/auth/github/device/start`, `POST /v1/auth/github/device/poll`, `DELETE /v1/auth/github`
 
@@ -175,6 +176,7 @@ The list route (`/web/repositories`) uses `@tanstack/react-virtual` for row virt
 The SubmitPage opens a Server-Sent Events stream against `GET /v1/requests/{id}/stream` whenever a request is in flight. As `phase` events land it advances the progress indicator (`extracting → summarizing → validating → persisting → done`), and `section` events progressively populate the summary card before the final `fetchSummary` call resolves.
 
 **Modules:**
+
 - `src/api/streamRequest.ts` -- `subscribeToRequest(requestId, handlers)` helper. Uses `@microsoft/fetch-event-source` so it can attach `Authorization: Bearer <token>` (native `EventSource` cannot). Performs single-shot 401 → `refreshAccessToken` → reconnect using the same `getStoredTokens` / `setStoredTokens` chain as `client.ts`. Exponential backoff 250ms → 5s.
 - `src/hooks/useRequestStream.ts` -- `useRequestStream(requestId)` returns `{ phase, sectionsBySlug, isStreaming, error, fellBack }`. After two consecutive fatal closes the hook flips `fellBack=true` so the page can switch to the existing `useRequestStatus` polling path.
 - `src/features/submit/SubmitPage.tsx` -- consumes `useRequestStream`; falls back to polling when `fellBack`.
@@ -303,11 +305,13 @@ Migrate them incrementally — highest traffic first:
 ### How to migrate a module
 
 1. Find the matching schema name in `generated.ts`:
+
    ```bash
    grep -n "YourTypeName\|YourSchemaName" src/api/generated.ts
    ```
 
 2. In `types.ts`, replace (or add) the hand-written interface with a type alias:
+
    ```ts
    import type { components } from "./generated";
 

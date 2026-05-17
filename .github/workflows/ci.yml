@@ -677,15 +677,31 @@ jobs:
           POSTGRES_PASSWORD: ci-smoke
         run: |
           config=$(docker compose -f ops/docker/docker-compose.yml config)
-          for svc_cmd in \
-            "python -m bot" \
-            "python -m app.cli.migrate_db" \
-            "taskiq worker" \
-            "taskiq scheduler" \
-            "app.tasks.import_tasks"; do
-            echo "$config" | grep -q "$svc_cmd" \
-              || { echo "MISSING command: $svc_cmd"; exit 1; }
-          done
+          grep -Fq 'CMD ["python", "-m", "bot"]' ops/docker/Dockerfile \
+            || { echo "MISSING Dockerfile bot command"; exit 1; }
+          CONFIG="$config" python - <<'PY'
+          import os
+          import sys
+          import yaml
+
+          services = yaml.safe_load(os.environ["CONFIG"])["services"]
+
+          expected_commands = {
+              "migrate": ["python", "-m", "app.cli.migrate_db"],
+              "worker": ["taskiq", "worker"],
+              "scheduler": ["taskiq", "scheduler", "app.tasks.scheduler:scheduler"],
+          }
+          for service_name, expected in expected_commands.items():
+              command = services[service_name].get("command", [])
+              if isinstance(command, str):
+                  command = command.split()
+              if command[: len(expected)] != expected:
+                  raise SystemExit(f"MISSING command for {service_name}: {' '.join(expected)}")
+
+          worker_command = services["worker"].get("command", [])
+          if "app.tasks.import_tasks" not in worker_command:
+              raise SystemExit("MISSING worker task module: app.tasks.import_tasks")
+          PY
           echo "All expected service commands found."
 
       - name: Verify all core services are listed
