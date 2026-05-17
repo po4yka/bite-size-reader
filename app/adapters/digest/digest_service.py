@@ -327,6 +327,14 @@ def _deduplicate_posts(posts: list[dict[str, Any]]) -> list[dict[str, Any]]:
     Posts are sorted by relevance desc; the first occurrence of a topic is
     kept, later posts with SequenceMatcher ratio > 0.75 are dropped.
     """
+    if len(posts) <= 64:
+        return _deduplicate_posts_pairwise(posts)
+
+    return _deduplicate_posts_bucketed(posts)
+
+
+def _deduplicate_posts_pairwise(posts: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Preserve the original all-pairs fuzzy dedupe for small digests."""
     kept: list[dict[str, Any]] = []
     for post in sorted(posts, key=lambda p: p.get("relevance_score", 0), reverse=True):
         topic = post.get("real_topic", "").lower()
@@ -337,6 +345,52 @@ def _deduplicate_posts(posts: list[dict[str, Any]]) -> list[dict[str, Any]]:
         if not is_dup:
             kept.append(post)
     return kept
+
+
+def _deduplicate_posts_bucketed(posts: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Fuzzy-dedupe large digests against likely duplicate buckets only."""
+    kept: list[dict[str, Any]] = []
+    buckets: dict[str, list[dict[str, Any]]] = {}
+
+    for post in sorted(posts, key=lambda p: p.get("relevance_score", 0), reverse=True):
+        topic = str(post.get("real_topic") or "").casefold().strip()
+        keys = _topic_bucket_keys(topic)
+        candidates_by_id: dict[int, dict[str, Any]] = {}
+        for key in keys:
+            for candidate in buckets.get(key, []):
+                candidates_by_id[id(candidate)] = candidate
+
+        is_dup = any(
+            SequenceMatcher(
+                None,
+                topic,
+                str(candidate.get("real_topic") or "").casefold().strip(),
+            ).ratio()
+            > 0.75
+            for candidate in candidates_by_id.values()
+        )
+        if is_dup:
+            continue
+
+        kept.append(post)
+        for key in keys:
+            buckets.setdefault(key, []).append(post)
+
+    return kept
+
+
+def _topic_bucket_keys(topic: str) -> set[str]:
+    tokens = [token for token in topic.split() if token]
+    if not tokens:
+        return {""}
+
+    keys = {f"prefix:{topic[:3]}", f"first:{tokens[0]}"}
+    if len(tokens) > 1:
+        keys.add(f"pair:{tokens[0]}:{tokens[1]}")
+    for token in tokens[:5]:
+        if len(token) >= 4:
+            keys.add(f"token:{token}")
+    return keys
 
 
 def _build_inline_keyboard(

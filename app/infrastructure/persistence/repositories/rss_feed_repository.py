@@ -258,6 +258,58 @@ class RSSFeedRepositoryAdapter:
             item = await session.scalar(stmt)
             return self._feed_item_dict(item) if item is not None else None
 
+    async def async_create_feed_items(
+        self,
+        feed_id: int,
+        items: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        """Insert feed items in bulk, ignoring duplicates by feed and GUID."""
+        if not items:
+            return []
+
+        values: list[dict[str, Any]] = []
+        seen_guids: set[str] = set()
+        for item in items:
+            guid = str(item["guid"])
+            if guid in seen_guids:
+                continue
+            seen_guids.add(guid)
+            values.append(
+                {
+                    "feed_id": feed_id,
+                    "guid": guid,
+                    "title": item.get("title"),
+                    "url": item.get("url"),
+                    "content": item.get("content"),
+                    "author": item.get("author"),
+                    "published_at": item.get("published_at"),
+                }
+            )
+
+        if not values:
+            return []
+
+        async with self._database.transaction() as session:
+            stmt = (
+                insert(RSSFeedItem)
+                .values(values)
+                .on_conflict_do_nothing(
+                    index_elements=[
+                        RSSFeedItem.feed_id,
+                        RSSFeedItem.guid,
+                    ]
+                )
+                .returning(RSSFeedItem)
+            )
+            inserted = list((await session.execute(stmt)).scalars())
+
+        inserted_by_guid = {item.guid: self._feed_item_dict(item) for item in inserted}
+        return [
+            inserted_by_guid[record["guid"]]
+            for record in values
+            if record["guid"] in inserted_by_guid
+        ]
+
     async def async_list_feed_items(
         self,
         feed_id: int,
@@ -324,6 +376,35 @@ class RSSFeedRepositoryAdapter:
             await session.execute(
                 insert(RSSItemDelivery)
                 .values(user_id=user_id, item_id=item_id)
+                .on_conflict_do_nothing(
+                    index_elements=[
+                        RSSItemDelivery.user_id,
+                        RSSItemDelivery.item_id,
+                    ]
+                )
+            )
+
+    async def async_mark_items_delivered(self, deliveries: list[tuple[int, int]]) -> None:
+        """Create RSS delivery records for user/item pairs in bulk."""
+        if not deliveries:
+            return
+
+        values: list[dict[str, int]] = []
+        seen: set[tuple[int, int]] = set()
+        for user_id, item_id in deliveries:
+            key = (int(user_id), int(item_id))
+            if key in seen:
+                continue
+            seen.add(key)
+            values.append({"user_id": key[0], "item_id": key[1]})
+
+        if not values:
+            return
+
+        async with self._database.transaction() as session:
+            await session.execute(
+                insert(RSSItemDelivery)
+                .values(values)
                 .on_conflict_do_nothing(
                     index_elements=[
                         RSSItemDelivery.user_id,

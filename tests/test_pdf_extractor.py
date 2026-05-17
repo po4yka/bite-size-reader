@@ -154,6 +154,43 @@ def test_top_n_embedded_images_respects_config(tmp_path: Path) -> None:
     assert len(result.embedded_images) <= 4
 
 
+def test_embedded_image_extraction_decodes_only_configured_top_n(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Large embedded-image sets should be ranked before expensive image decoding."""
+    path, doc = _make_pdf(tmp_path)
+    page = doc.new_page(width=2000, height=2000)
+    for i in range(6):
+        x0, y0 = 50 + i * 220, 50
+        img_bytes = _make_png_bytes(180 + i, 180 + i, color=(i * 30 % 256, 80, 120))
+        page.insert_image(fitz.Rect(x0, y0, x0 + 180 + i, y0 + 180 + i), stream=img_bytes)
+    _save(doc, path)
+
+    calls = 0
+    original_extract = PDFExtractor._extract_top_embedded_images
+
+    def counted_extract(**kwargs: Any) -> list[Any]:
+        nonlocal calls
+        selected = sorted(
+            kwargs["candidates"],
+            key=lambda candidate: (-candidate.area, candidate.page_idx, candidate.xref),
+        )[: kwargs["max_embedded_images"]]
+        calls = len(selected)
+        return original_extract(**kwargs)
+
+    monkeypatch.setattr(PDFExtractor, "_extract_top_embedded_images", staticmethod(counted_extract))
+
+    result = PDFExtractor.extract(
+        str(path),
+        min_image_dimension=100,
+        max_embedded_images=2,
+    )
+
+    assert calls == 2
+    assert len(result.embedded_images) <= 2
+
+
 def test_table_detected_and_inlined_as_markdown(tmp_path: Path) -> None:
     """A page with a drawn table grid should produce Markdown table rows in the text."""
     path, doc = _make_pdf(tmp_path)

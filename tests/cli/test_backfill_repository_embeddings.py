@@ -2,14 +2,19 @@
 
 from __future__ import annotations
 
-import types
 import re
+import types
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from sqlalchemy.dialects import postgresql
 
 from app.cli import backfill_repository_embeddings as cli_mod
+from app.infrastructure.embedding.repository_embedding import (
+    RepositoryEmbeddingBatchFailure,
+    RepositoryEmbeddingBatchResult,
+    RepositoryEmbeddingBatchSuccess,
+)
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -208,10 +213,18 @@ def _patch_infra(monkeypatch, mock_db, embedding_gen):
 class StubEmbeddingGenerator:
     """Records calls; optionally raises on a specific repository_id."""
 
-    def __init__(self, raise_on_id: int | None = None, on_success=None) -> None:
+    def __init__(
+        self,
+        raise_on_id: int | None = None,
+        on_success=None,
+        *,
+        raise_batch: bool = False,
+    ) -> None:
         self.calls: list[int] = []
+        self.batch_calls: list[list[int]] = []
         self._raise_on_id = raise_on_id
         self._on_success = on_success
+        self._raise_batch = raise_batch
 
     async def regenerate(self, repository, *, analysis, correlation_id):
         self.calls.append(repository.id)
@@ -221,7 +234,41 @@ class StubEmbeddingGenerator:
             self._on_success(repository.id)
         result = MagicMock()
         result.id = repository.id * 100
+        result.repository_id = repository.id
         return result
+
+    async def regenerate_batch(self, items) -> RepositoryEmbeddingBatchResult:
+        self.batch_calls.append([item.repository.id for item in items])
+        if self._raise_batch:
+            raise RuntimeError("Forced batch error")
+
+        successes: list[RepositoryEmbeddingBatchSuccess] = []
+        failures: list[RepositoryEmbeddingBatchFailure] = []
+        for item in items:
+            try:
+                embedding = await self.regenerate(
+                    item.repository,
+                    analysis=item.analysis,
+                    correlation_id=item.correlation_id,
+                )
+            except Exception as exc:
+                failures.append(
+                    RepositoryEmbeddingBatchFailure(
+                        repository_id=item.repository.id,
+                        full_name=item.repository.full_name,
+                        error=exc,
+                    )
+                )
+                continue
+
+            successes.append(
+                RepositoryEmbeddingBatchSuccess(
+                    repository_id=item.repository.id,
+                    embedding=embedding,
+                )
+            )
+
+        return RepositoryEmbeddingBatchResult(successes=successes, failures=failures)
 
 
 # ---------------------------------------------------------------------------
@@ -242,6 +289,7 @@ async def test_dry_run_no_writes(monkeypatch: pytest.MonkeyPatch) -> None:
     summary = await cli_mod.backfill_repository_embeddings(dry_run=True)
 
     assert gen.calls == [], "no regenerate calls in dry-run"
+    assert gen.batch_calls == [], "no batch regenerate calls in dry-run"
     assert summary["would_create"] == 3
     assert summary["embeddings_created"] == 0
     assert summary["embeddings_refreshed"] == 0
@@ -261,6 +309,7 @@ async def test_creates_missing_embeddings(monkeypatch: pytest.MonkeyPatch) -> No
 
     summary = await cli_mod.backfill_repository_embeddings(dry_run=False)
 
+    assert gen.batch_calls == [[1, 2, 3]]
     assert sorted(gen.calls) == [1, 2, 3]
     assert summary["embeddings_created"] == 3
     assert summary["embeddings_refreshed"] == 0
@@ -281,6 +330,7 @@ async def test_backfill_uses_keyset_pagination_when_rows_stop_matching(
 
     summary = await cli_mod.backfill_repository_embeddings(dry_run=False, batch_size=2)
 
+    assert gen.batch_calls == [[1, 2], [3, 4]]
     assert gen.calls == [1, 2, 3, 4]
     assert summary["processed"] == 4
     assert summary["embeddings_created"] == 4
@@ -327,6 +377,7 @@ async def test_refreshes_when_model_version_target_mismatches(
         dry_run=False, model_version_target="2.0"
     )
 
+    assert gen.batch_calls == [[1, 2, 3]]
     assert sorted(gen.calls) == [1, 2, 3]
     assert summary["embeddings_refreshed"] == 3
     assert summary["embeddings_created"] == 0
@@ -345,6 +396,7 @@ async def test_user_id_filter(monkeypatch: pytest.MonkeyPatch) -> None:
 
     summary = await cli_mod.backfill_repository_embeddings(dry_run=False, user_id=2)
 
+    assert gen.batch_calls == [[10, 11, 12]]
     assert summary["processed"] == 3
     assert summary["embeddings_created"] == 3
 
@@ -377,9 +429,29 @@ async def test_error_in_one_row_does_not_abort(monkeypatch: pytest.MonkeyPatch) 
 
     summary = await cli_mod.backfill_repository_embeddings(dry_run=False)
 
+    assert gen.batch_calls == [[1, 2, 3]]
     assert 1 in gen.calls
     assert 2 in gen.calls
     assert 3 in gen.calls
+    assert summary["errors"] == 1
+    assert summary["embeddings_created"] == 2
+    assert summary["processed"] == 3
+
+
+@pytest.mark.asyncio
+async def test_batch_error_falls_back_to_per_row(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Unexpected batch failure falls back to row-level regenerate accounting."""
+    repos = [_make_repo(i) for i in [1, 2, 3]]
+    rows: list[tuple[MagicMock, MagicMock | None]] = [(r, None) for r in repos]
+
+    gen = StubEmbeddingGenerator(raise_on_id=2, raise_batch=True)
+    db = _make_db_with_rows([rows, []])
+    _patch_infra(monkeypatch, db, gen)
+
+    summary = await cli_mod.backfill_repository_embeddings(dry_run=False)
+
+    assert gen.batch_calls == [[1, 2, 3]]
+    assert gen.calls == [1, 2, 3]
     assert summary["errors"] == 1
     assert summary["embeddings_created"] == 2
     assert summary["processed"] == 3

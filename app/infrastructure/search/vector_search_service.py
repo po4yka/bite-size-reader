@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import asyncio
+import heapq
+import math
 from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -114,19 +116,24 @@ class VectorSearchService:
         if filters and filters.has_filters():
             filtered = [result for result in filtered if filters.matches(result)]
 
-        filtered.sort(key=lambda result: result.similarity_score, reverse=True)
+        filtered_count = len(filtered)
+        top_results = heapq.nlargest(
+            self._max_results,
+            filtered,
+            key=lambda result: result.similarity_score,
+        )
         logger.info(
             "vector_search_completed",
             extra={
                 "cid": correlation_id,
                 "query_length": len(query),
                 "total_candidates": len(candidates),
-                "filtered_results": len(filtered),
-                "returned_results": min(len(filtered), self._max_results),
+                "filtered_results": filtered_count,
+                "returned_results": len(top_results),
                 "filters": str(filters) if filters else "none",
             },
         )
-        return filtered[: self._max_results]
+        return top_results
 
     async def _fetch_embeddings_by_request_ids(
         self, request_ids: list[int]
@@ -190,13 +197,65 @@ class VectorSearchService:
         query_embedding: Any,
         candidates: list[dict[str, Any]],
     ) -> list[VectorSearchResult]:
+        try:
+            return self._compute_similarities_vectorized(query_embedding, candidates)
+        except (ImportError, ValueError, TypeError):
+            logger.debug("vectorized_similarity_failed", exc_info=True)
+            return self._compute_similarities_scalar(query_embedding, candidates)
+
+    def _compute_similarities_vectorized(
+        self,
+        query_embedding: Any,
+        candidates: list[dict[str, Any]],
+    ) -> list[VectorSearchResult]:
+        import numpy as np
+
+        if not candidates:
+            return []
+
+        query_vector = np.asarray(query_embedding, dtype=np.float32)
+        matrix = np.asarray([candidate["embedding"] for candidate in candidates], dtype=np.float32)
+        if matrix.ndim != 2 or query_vector.ndim != 1 or matrix.shape[1] != query_vector.shape[0]:
+            msg = "Embedding dimensions do not match"
+            raise ValueError(msg)
+
+        query_norm = float(np.linalg.norm(query_vector))
+        row_norms = np.linalg.norm(matrix, axis=1)
+        denominators = row_norms * query_norm
+        dots = matrix @ query_vector
+
+        results: list[VectorSearchResult] = []
+        for candidate, dot, denominator in zip(candidates, dots, denominators, strict=True):
+            if denominator <= 0 or not math.isfinite(float(denominator)):
+                similarity = 0.0
+            else:
+                similarity = float(dot / denominator)
+            results.append(
+                VectorSearchResult(
+                    request_id=candidate["request_id"],
+                    summary_id=candidate["summary_id"],
+                    similarity_score=max(0.0, min(1.0, similarity)),
+                    url=candidate.get("url"),
+                    title=candidate.get("title"),
+                    snippet=candidate.get("snippet"),
+                    source=candidate.get("source"),
+                    published_at=candidate.get("published_at"),
+                )
+            )
+        return results
+
+    def _compute_similarities_scalar(
+        self,
+        query_embedding: Any,
+        candidates: list[dict[str, Any]],
+    ) -> list[VectorSearchResult]:
         from scipy.spatial.distance import cosine
 
         results = []
         for candidate in candidates:
             try:
                 distance = cosine(query_embedding, candidate["embedding"])
-                similarity = 1.0 - distance
+                similarity = max(0.0, min(1.0, 1.0 - float(distance)))
                 results.append(
                     VectorSearchResult(
                         request_id=candidate["request_id"],

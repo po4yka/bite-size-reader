@@ -110,6 +110,35 @@ def test_materialize_candidates_skips_invalid_rows() -> None:
     assert results[0]["source"] == "example.com"
 
 
+def test_compute_similarities_vectorized_scores_all_candidates() -> None:
+    service = _build_service()
+    results = service._compute_similarities(
+        [1.0, 0.0],
+        [
+            {
+                "request_id": 1,
+                "summary_id": 10,
+                "embedding": [1.0, 0.0],
+                "url": "https://example.com/one",
+                "title": "One",
+                "snippet": "one",
+            },
+            {
+                "request_id": 2,
+                "summary_id": 20,
+                "embedding": [0.0, 1.0],
+                "url": "https://example.com/two",
+                "title": "Two",
+                "snippet": "two",
+            },
+        ],
+    )
+
+    assert [result.summary_id for result in results] == [10, 20]
+    assert results[0].similarity_score == pytest.approx(1.0)
+    assert results[1].similarity_score == pytest.approx(0.0)
+
+
 @pytest.mark.asyncio
 async def test_search_returns_empty_for_blank_query() -> None:
     service = _build_service()

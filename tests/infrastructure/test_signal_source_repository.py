@@ -7,7 +7,7 @@ import os
 from typing import TYPE_CHECKING
 
 import pytest
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select
 
 from app.config.database import DatabaseConfig
 from app.core.time_utils import UTC
@@ -281,6 +281,75 @@ async def test_signal_repository_updates_feedback_and_hides_source(
     reloaded = await repo.async_get_source(source["id"])
     assert reloaded is not None
     assert reloaded["is_active"] is False
+
+
+@pytest.mark.asyncio
+async def test_signal_repository_bulk_feed_items_and_subscriptions(
+    database: Database,
+    repo: SignalSourceRepositoryAdapter,
+) -> None:
+    await _user(database, 1001, "owner")
+    await _user(database, 1002, "other")
+    source = await repo.async_upsert_source(kind="rss", external_id="https://example.com/feed.xml")
+
+    await repo.async_subscribe_many(
+        source_id=int(source["id"]),
+        user_ids=[1001, 1002, 1001],
+    )
+    await repo.async_subscribe_many(
+        source_id=int(source["id"]),
+        user_ids=[1002],
+        topic_constraints={"topic": "infra"},
+    )
+    subscriptions = await repo.async_list_user_subscriptions(1002)
+    assert len(subscriptions) == 1
+    assert subscriptions[0]["is_active"] is True
+    assert subscriptions[0]["topic_constraints_json"] == {"topic": "infra"}
+
+    first_items = await repo.async_upsert_feed_items(
+        source_id=int(source["id"]),
+        items=[
+            {
+                "external_id": "guid-1",
+                "canonical_url": "https://example.com/one",
+                "title": "One",
+                "content_text": "First",
+                "published_at": dt.datetime(2026, 5, 1, tzinfo=UTC),
+                "metadata": {"legacy_rss_item_id": 11},
+            },
+            {
+                "external_id": "guid-2",
+                "canonical_url": "https://example.com/two",
+                "title": "Two",
+                "content_text": "Second",
+                "published_at": dt.datetime(2026, 5, 2, tzinfo=UTC),
+                "metadata": {"legacy_rss_item_id": 12},
+            },
+        ],
+    )
+    assert [item["external_id"] for item in first_items] == ["guid-1", "guid-2"]
+
+    updated_items = await repo.async_upsert_feed_items(
+        source_id=int(source["id"]),
+        items=[
+            {
+                "external_id": "guid-2",
+                "canonical_url": "https://example.com/two-updated",
+                "title": "Two updated",
+                "content_text": "Updated",
+                "published_at": dt.datetime(2026, 5, 3, tzinfo=UTC),
+                "metadata": {"legacy_rss_item_id": 12},
+            }
+        ],
+    )
+    assert len(updated_items) == 1
+    assert updated_items[0]["canonical_url"] == "https://example.com/two-updated"
+
+    async with database.session() as session:
+        item_count = await session.scalar(select(func.count()).select_from(FeedItem))
+        subscription_count = await session.scalar(select(func.count()).select_from(Subscription))
+    assert item_count == 2
+    assert subscription_count == 2
 
 
 @pytest.mark.asyncio

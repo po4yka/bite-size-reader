@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from sqlalchemy.dialects.postgresql import insert as pg_insert
@@ -12,12 +13,57 @@ from app.db.models.repository import Repository, RepositoryEmbedding
 from app.infrastructure.vector.point_ids import repository_point_id
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
     from app.core.repo_analysis_schema import RepoAnalysis
     from app.db.session import Database
     from app.infrastructure.embedding.embedding_protocol import EmbeddingServiceProtocol
     from app.infrastructure.vector.qdrant_store import QdrantVectorStore
 
 logger = get_logger(__name__)
+
+
+@dataclass(frozen=True, slots=True)
+class RepositoryEmbeddingBatchItem:
+    """Input row for a repository embedding batch regeneration."""
+
+    repository: Repository
+    analysis: RepoAnalysis | None
+    correlation_id: str
+
+
+@dataclass(frozen=True, slots=True)
+class RepositoryEmbeddingBatchSuccess:
+    """Successful row from a repository embedding batch regeneration."""
+
+    repository_id: int
+    embedding: RepositoryEmbedding
+
+
+@dataclass(frozen=True, slots=True)
+class RepositoryEmbeddingBatchFailure:
+    """Failed row from a repository embedding batch regeneration."""
+
+    repository_id: int
+    full_name: str
+    error: Exception
+
+
+@dataclass(frozen=True, slots=True)
+class RepositoryEmbeddingBatchResult:
+    """Per-row result for a repository embedding batch regeneration."""
+
+    successes: list[RepositoryEmbeddingBatchSuccess]
+    failures: list[RepositoryEmbeddingBatchFailure]
+
+
+@dataclass(frozen=True, slots=True)
+class _PreparedRepositoryEmbedding:
+    repository: Repository
+    analysis: RepoAnalysis | None
+    correlation_id: str
+    text: str
+    topics: list[str]
 
 
 class RepositoryEmbeddingGenerator:
@@ -57,30 +103,19 @@ class RepositoryEmbeddingGenerator:
 
         Returns the persisted RepositoryEmbedding row.
         """
-        languages: list[str] = (
-            list(repository.languages_json.keys())
-            if isinstance(repository.languages_json, dict)
-            else []
-        )
-        topics: list[str] = (
-            list(repository.topics_json) if isinstance(repository.topics_json, list) else []
-        )
-
-        text = self.compose_embedding_text(
-            full_name=repository.full_name,
-            description=repository.description,
-            topics=topics,
-            primary_language=repository.primary_language,
-            languages=languages,
-            analysis=analysis,
-            readme_excerpt=repository.readme_excerpt,
+        prepared = self._prepare_embedding(
+            RepositoryEmbeddingBatchItem(
+                repository=repository,
+                analysis=analysis,
+                correlation_id=correlation_id,
+            )
         )
 
         model_name = self._embedding_service.get_model_name(None)
         dimensions = self._embedding_service.get_dimensions(None)
 
         embedding = await self._embedding_service.generate_embedding(
-            text,
+            prepared.text,
             language=None,
             task_type="document",
         )
@@ -98,8 +133,8 @@ class RepositoryEmbeddingGenerator:
         )
 
         await self._upsert_qdrant(
-            repository=repository,
-            topics=topics,
+            repository=prepared.repository,
+            topics=prepared.topics,
             embedding=embedding,
             correlation_id=correlation_id,
         )
@@ -117,6 +152,79 @@ class RepositoryEmbeddingGenerator:
         )
 
         return db_row
+
+    async def regenerate_batch(
+        self,
+        items: Sequence[RepositoryEmbeddingBatchItem],
+    ) -> RepositoryEmbeddingBatchResult:
+        """Regenerate repository embeddings using batched provider, DB, and Qdrant calls.
+
+        If any batch step fails, the method falls back to the single-row path so
+        callers can keep row-level success/error accounting.
+        """
+        if not items:
+            return RepositoryEmbeddingBatchResult(successes=[], failures=[])
+
+        prepared = [self._prepare_embedding(item) for item in items]
+        model_name = self._embedding_service.get_model_name(None)
+        dimensions = self._embedding_service.get_dimensions(None)
+        model_version = "1.0"
+
+        try:
+            embeddings = await self._embedding_service.generate_embeddings_batch(
+                [item.text for item in prepared],
+                language=None,
+                task_type="document",
+            )
+            if len(embeddings) != len(prepared):
+                msg = (
+                    "Embedding batch provider returned "
+                    f"{len(embeddings)} vectors for {len(prepared)} texts"
+                )
+                raise ValueError(msg)
+
+            embedding_blobs = [
+                self._embedding_service.serialize_embedding(embedding) for embedding in embeddings
+            ]
+            db_rows = await self._upsert_db_rows(
+                prepared=prepared,
+                model_name=model_name,
+                model_version=model_version,
+                embedding_blobs=embedding_blobs,
+                dimensions=dimensions,
+                language=None,
+            )
+
+            await self._upsert_qdrant_batch(prepared=prepared, embeddings=embeddings)
+        except Exception:
+            logger.exception(
+                "repository_embedding_batch_regenerate_failed",
+                extra={"count": len(items)},
+            )
+            return await self._regenerate_individually(items)
+
+        successes = [
+            RepositoryEmbeddingBatchSuccess(
+                repository_id=embedding.repository_id,
+                embedding=embedding,
+            )
+            for embedding in db_rows
+        ]
+
+        for item in prepared:
+            logger.info(
+                "repository_embedding_regenerated",
+                extra={
+                    "event": "repository_embedding_regenerated",
+                    "correlation_id": item.correlation_id,
+                    "repository_id": item.repository.id,
+                    "full_name": item.repository.full_name,
+                    "model_name": model_name,
+                    "dimensions": dimensions,
+                },
+            )
+
+        return RepositoryEmbeddingBatchResult(successes=successes, failures=[])
 
     @staticmethod
     def compose_embedding_text(
@@ -195,6 +303,70 @@ class RepositoryEmbeddingGenerator:
     # Private helpers
     # ------------------------------------------------------------------
 
+    def _prepare_embedding(
+        self,
+        item: RepositoryEmbeddingBatchItem,
+    ) -> _PreparedRepositoryEmbedding:
+        repository = item.repository
+        languages: list[str] = (
+            list(repository.languages_json.keys())
+            if isinstance(repository.languages_json, dict)
+            else []
+        )
+        topics: list[str] = (
+            list(repository.topics_json) if isinstance(repository.topics_json, list) else []
+        )
+
+        text = self.compose_embedding_text(
+            full_name=repository.full_name,
+            description=repository.description,
+            topics=topics,
+            primary_language=repository.primary_language,
+            languages=languages,
+            analysis=item.analysis,
+            readme_excerpt=repository.readme_excerpt,
+        )
+        return _PreparedRepositoryEmbedding(
+            repository=repository,
+            analysis=item.analysis,
+            correlation_id=item.correlation_id,
+            text=text,
+            topics=topics,
+        )
+
+    async def _regenerate_individually(
+        self,
+        items: Sequence[RepositoryEmbeddingBatchItem],
+    ) -> RepositoryEmbeddingBatchResult:
+        successes: list[RepositoryEmbeddingBatchSuccess] = []
+        failures: list[RepositoryEmbeddingBatchFailure] = []
+
+        for item in items:
+            try:
+                embedding = await self.regenerate(
+                    item.repository,
+                    analysis=item.analysis,
+                    correlation_id=item.correlation_id,
+                )
+            except Exception as exc:
+                failures.append(
+                    RepositoryEmbeddingBatchFailure(
+                        repository_id=item.repository.id,
+                        full_name=item.repository.full_name,
+                        error=exc,
+                    )
+                )
+                continue
+
+            successes.append(
+                RepositoryEmbeddingBatchSuccess(
+                    repository_id=item.repository.id,
+                    embedding=embedding,
+                )
+            )
+
+        return RepositoryEmbeddingBatchResult(successes=successes, failures=failures)
+
     async def _upsert_db_row(
         self,
         *,
@@ -232,6 +404,52 @@ class RepositoryEmbeddingGenerator:
             result = await session.execute(stmt)
             return result.scalar_one()
 
+    async def _upsert_db_rows(
+        self,
+        *,
+        prepared: Sequence[_PreparedRepositoryEmbedding],
+        model_name: str,
+        model_version: str,
+        embedding_blobs: Sequence[bytes],
+        dimensions: int,
+        language: str | None,
+    ) -> list[RepositoryEmbedding]:
+        """Upsert RepositoryEmbedding rows keyed by repository_id in one transaction."""
+        if len(prepared) != len(embedding_blobs):
+            msg = "prepared rows and embedding blobs must have the same length"
+            raise ValueError(msg)
+
+        values = [
+            {
+                "repository_id": item.repository.id,
+                "model_name": model_name,
+                "model_version": model_version,
+                "embedding_blob": embedding_blob,
+                "dimensions": dimensions,
+                "language": language,
+            }
+            for item, embedding_blob in zip(prepared, embedding_blobs, strict=True)
+        ]
+
+        insert_stmt = pg_insert(RepositoryEmbedding).values(values)
+        stmt = insert_stmt.on_conflict_do_update(
+            index_elements=["repository_id"],
+            set_={
+                "model_name": insert_stmt.excluded.model_name,
+                "model_version": insert_stmt.excluded.model_version,
+                "embedding_blob": insert_stmt.excluded.embedding_blob,
+                "dimensions": insert_stmt.excluded.dimensions,
+                "language": insert_stmt.excluded.language,
+            },
+        ).returning(RepositoryEmbedding)
+
+        async with self._db.transaction() as session:
+            result = await session.execute(stmt)
+            rows = list(result.scalars().all())
+
+        rows_by_repository_id = {row.repository_id: row for row in rows}
+        return [rows_by_repository_id[item.repository.id] for item in prepared]
+
     async def _upsert_qdrant(
         self,
         *,
@@ -257,11 +475,71 @@ class RepositoryEmbeddingGenerator:
             repository.id,
         )
 
+        metadata = self._build_qdrant_metadata(repository=repository, topics=topics)
+
+        vector: list[float] = (
+            embedding.tolist() if hasattr(embedding, "tolist") else list(embedding)
+        )
+
+        await asyncio.to_thread(
+            self._qdrant.upsert_notes,
+            [vector],
+            [metadata],
+            [point_id],
+        )
+
+    async def _upsert_qdrant_batch(
+        self,
+        *,
+        prepared: Sequence[_PreparedRepositoryEmbedding],
+        embeddings: Sequence[Any],
+    ) -> None:
+        if self._qdrant is None or not self._qdrant.available:
+            logger.debug(
+                "repository_embedding_qdrant_skipped",
+                extra={"reason": "not_available", "count": len(prepared)},
+            )
+            return
+
+        vectors: list[list[float]] = []
+        metadatas: list[dict[str, Any]] = []
+        point_ids: list[str] = []
+
+        for item, embedding in zip(prepared, embeddings, strict=True):
+            repository = item.repository
+            vectors.append(embedding.tolist() if hasattr(embedding, "tolist") else list(embedding))
+            metadatas.append(
+                self._build_qdrant_metadata(
+                    repository=repository,
+                    topics=item.topics,
+                )
+            )
+            point_ids.append(
+                repository_point_id(
+                    self._environment,
+                    self._user_scope,
+                    repository.id,
+                )
+            )
+
+        await asyncio.to_thread(
+            self._qdrant.upsert_notes,
+            vectors,
+            metadatas,
+            point_ids,
+        )
+
+    def _build_qdrant_metadata(
+        self,
+        *,
+        repository: Repository,
+        topics: list[str],
+    ) -> dict[str, Any]:
         created_at_iso = (
             repository.created_at.isoformat() if repository.created_at is not None else None
         )
 
-        metadata: dict[str, Any] = {
+        return {
             "entity_type": "repository",
             "repository_id": repository.id,
             "user_id": repository.user_id,
@@ -278,14 +556,3 @@ class RepositoryEmbeddingGenerator:
             "user_scope": self._user_scope,
             "language": "en",
         }
-
-        vector: list[float] = (
-            embedding.tolist() if hasattr(embedding, "tolist") else list(embedding)
-        )
-
-        await asyncio.to_thread(
-            self._qdrant.upsert_notes,
-            [vector],
-            [metadata],
-            [point_id],
-        )

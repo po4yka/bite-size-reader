@@ -17,6 +17,7 @@ class _FakeRSSRepo:
     def __init__(self, _db) -> None:
         self.items: list[dict] = []
         self.feed_errors: list[dict] = []
+        self.delivery_target_queries: list[list[int]] = []
         _FakeRSSRepo.instance = self
 
     async def async_list_active_feeds(self):
@@ -36,7 +37,15 @@ class _FakeRSSRepo:
         self.items.append(kwargs)
         return {"id": 100, **kwargs}
 
+    async def async_create_feed_items(self, *, feed_id, items):
+        self.items.extend({"feed_id": feed_id, **item} for item in items)
+        return [
+            {"id": 100 + index, "feed": feed_id, "feed_id": feed_id, **item}
+            for index, item in enumerate(items)
+        ]
+
     async def async_list_delivery_targets(self, new_item_ids):
+        self.delivery_target_queries.append(new_item_ids)
         return [{"id": 100, "subscriber_ids": [1001]}]
 
     async def async_update_feed_fetch_success(self, **kwargs):
@@ -53,6 +62,7 @@ class _FakeSignalRepo:
         self.sources: list[dict] = []
         self.items: list[dict] = []
         self.subscriptions: list[dict] = []
+        self.bulk_subscriptions: list[dict] = []
         self.successes: list[int] = []
         self.errors: list[dict] = []
         _FakeSignalRepo.instance = self
@@ -65,9 +75,20 @@ class _FakeSignalRepo:
         self.items.append(kwargs)
         return {"id": 300, **kwargs}
 
+    async def async_upsert_feed_items(self, *, source_id, items):
+        self.items.extend({"source_id": source_id, **item} for item in items)
+        return [
+            {"id": 300 + index, "source_id": source_id, **item} for index, item in enumerate(items)
+        ]
+
     async def async_subscribe(self, **kwargs):
         self.subscriptions.append(kwargs)
         return {"id": 400, **kwargs}
+
+    async def async_subscribe_many(self, **kwargs):
+        self.bulk_subscriptions.append(kwargs)
+        for user_id in kwargs["user_ids"]:
+            self.subscriptions.append({"user_id": user_id, "source_id": kwargs["source_id"]})
 
     async def async_record_source_fetch_success(self, source_id: int):
         self.successes.append(source_id)
@@ -105,10 +126,13 @@ async def test_rss_poll_mirrors_new_items_into_signal_sources(monkeypatch):
 
     stats = await feed_poller.poll_all_feeds(SimpleNamespace())
 
+    rss_repo = _FakeRSSRepo.instance
     signal_repo = _FakeSignalRepo.instance
     assert stats["new_item_ids"] == [100]
+    assert rss_repo.delivery_target_queries == [[100]]
     assert signal_repo.sources[0]["kind"] == "rss"
     assert signal_repo.items[0]["external_id"] == "guid-1"
+    assert signal_repo.bulk_subscriptions == [{"source_id": 200, "user_ids": [1001]}]
     assert signal_repo.subscriptions == [{"user_id": 1001, "source_id": 200}]
     assert signal_repo.successes == [200]
 

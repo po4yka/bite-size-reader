@@ -12,6 +12,7 @@ class _FakeRSSRepository:
     def __init__(self, targets: list[dict[str, Any]]) -> None:
         self.targets = targets
         self.marked: list[tuple[int, int]] = []
+        self.bulk_marked: list[list[tuple[int, int]]] = []
 
     async def async_list_delivery_targets(
         self, new_item_ids: list[int] | None
@@ -20,6 +21,10 @@ class _FakeRSSRepository:
 
     async def async_mark_item_delivered(self, *, user_id: int, item_id: int) -> None:
         self.marked.append((user_id, item_id))
+
+    async def async_mark_items_delivered(self, deliveries: list[tuple[int, int]]) -> None:
+        self.bulk_marked.append(deliveries)
+        self.marked.extend(deliveries)
 
 
 class _FakePureSummaryService:
@@ -102,4 +107,40 @@ async def test_rss_delivery_marks_short_unscrapable_item_skipped_for_each_subscr
     assert stats == {"delivered": 0, "errors": 0, "skipped": 2}
     assert pure.requests == []
     assert sent == []
+    assert repo.bulk_marked == [[(201, 6), (202, 6)]]
     assert repo.marked == [(201, 6), (202, 6)]
+
+
+@pytest.mark.asyncio
+async def test_rss_delivery_keeps_partial_send_failures_per_user() -> None:
+    repo = _FakeRSSRepository(
+        [
+            {
+                "id": 7,
+                "title": "Shared item",
+                "url": "https://example.com/shared",
+                "content": "Long enough RSS content for one shared summary.",
+                "subscriber_ids": [301, 302, 303],
+            }
+        ]
+    )
+    pure = _FakePureSummaryService()
+    service = RSSDeliveryService(
+        cfg=RSSConfig(enabled=True, min_content_length=10, concurrency=2),
+        pure_summary_service=pure,  # type: ignore[arg-type]
+        system_prompt_loader=lambda lang: f"prompt:{lang}",
+        rss_repository=repo,  # type: ignore[arg-type]
+    )
+    sent: list[int] = []
+
+    async def send_func(user_id: int, text: str) -> None:
+        sent.append(user_id)
+        if user_id == 302:
+            raise RuntimeError("send failed")
+
+    stats = await service.deliver_new_items(send_func, new_item_ids=[7])
+
+    assert stats == {"delivered": 2, "errors": 1, "skipped": 0}
+    assert len(pure.requests) == 1
+    assert sorted(sent) == [301, 302, 303]
+    assert repo.marked == [(301, 7), (303, 7)]

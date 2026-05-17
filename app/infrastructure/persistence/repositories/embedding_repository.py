@@ -48,6 +48,21 @@ class EmbeddingRepositoryAdapter:
             )
             return [_embedding_row(row[0], row[1], row[2]) for row in rows]
 
+    async def async_get_summary_embeddings(
+        self,
+        summary_ids: list[int],
+    ) -> list[dict[str, Any]]:
+        """Fetch embeddings scoped to specific summary IDs."""
+        if not summary_ids:
+            return []
+        async with self._database.session() as session:
+            rows = await session.scalars(
+                select(SummaryEmbedding)
+                .where(SummaryEmbedding.summary_id.in_(summary_ids))
+                .order_by(SummaryEmbedding.summary_id)
+            )
+            return [model_to_dict(embedding) for embedding in rows if embedding is not None]
+
     async def async_get_recent_embeddings(self, *, limit: int) -> list[dict[str, Any]]:
         """Fetch the most recent embeddings bounded by a hard limit."""
         if limit <= 0:

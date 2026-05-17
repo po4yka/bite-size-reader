@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from app.adapters.rss.feed_fetcher import fetch_feed
 from app.adapters.rss.signal_ingester import RssSignalIngester
@@ -22,6 +22,160 @@ logger = get_logger(__name__)
 
 MAX_FETCH_ERRORS = 10
 SIGNAL_SOURCE_BASE_BACKOFF_SECONDS = 300
+
+
+def _feed_item_payload(item_result: Any) -> dict[str, Any]:
+    return {
+        "guid": item_result.external_id,
+        "title": item_result.title,
+        "url": item_result.canonical_url,
+        "content": item_result.content_text,
+        "author": item_result.author,
+        "published_at": item_result.published_at,
+    }
+
+
+async def _create_feed_items(
+    repo: RSSFeedRepositoryAdapter,
+    *,
+    feed_id: int,
+    item_results: list[Any],
+) -> list[tuple[dict[str, Any], Any]]:
+    payloads = [_feed_item_payload(item_result) for item_result in item_results]
+    item_result_by_guid: dict[str, Any] = {}
+    for item_result in item_results:
+        item_result_by_guid.setdefault(item_result.external_id, item_result)
+
+    try:
+        items = await repo.async_create_feed_items(feed_id=feed_id, items=payloads)
+    except Exception:
+        logger.warning(
+            "rss_bulk_item_create_failed",
+            extra={"feed_id": feed_id, "item_count": len(payloads)},
+            exc_info=True,
+        )
+        items = []
+        for item_result in item_results:
+            try:
+                item = await repo.async_create_feed_item(
+                    feed_id=feed_id,
+                    guid=item_result.external_id,
+                    title=item_result.title,
+                    url=item_result.canonical_url,
+                    content=item_result.content_text,
+                    author=item_result.author,
+                    published_at=item_result.published_at,
+                )
+                if item is not None:
+                    items.append(item)
+            except Exception:
+                logger.warning(
+                    "rss_item_create_failed",
+                    extra={"feed_id": feed_id, "guid": item_result.external_id},
+                    exc_info=True,
+                )
+
+    return [
+        (item, item_result_by_guid[str(item["guid"])])
+        for item in items
+        if str(item["guid"]) in item_result_by_guid
+    ]
+
+
+async def _mirror_signal_feed_items(
+    signal_repo: SignalSourceRepositoryAdapter,
+    *,
+    source_id: int,
+    feed_items: list[tuple[dict[str, Any], Any]],
+) -> None:
+    payloads = [
+        {
+            "external_id": item_result.external_id,
+            "canonical_url": item_result.canonical_url,
+            "title": item_result.title,
+            "content_text": item_result.content_text,
+            "author": item_result.author,
+            "published_at": item_result.published_at,
+            "engagement": item_result.engagement,
+            "metadata": {**item_result.metadata, "legacy_rss_item_id": item["id"]},
+        }
+        for item, item_result in feed_items
+    ]
+    try:
+        await signal_repo.async_upsert_feed_items(source_id=source_id, items=payloads)
+    except Exception:
+        logger.warning(
+            "rss_bulk_signal_item_upsert_failed",
+            extra={"source_id": source_id, "item_count": len(payloads)},
+            exc_info=True,
+        )
+        for item, item_result in feed_items:
+            try:
+                await signal_repo.async_upsert_feed_item(
+                    source_id=source_id,
+                    external_id=item_result.external_id,
+                    canonical_url=item_result.canonical_url,
+                    title=item_result.title,
+                    content_text=item_result.content_text,
+                    author=item_result.author,
+                    published_at=item_result.published_at,
+                    engagement=item_result.engagement,
+                    metadata={**item_result.metadata, "legacy_rss_item_id": item["id"]},
+                )
+            except Exception:
+                logger.warning(
+                    "rss_signal_item_upsert_failed",
+                    extra={"source_id": source_id, "guid": item_result.external_id},
+                    exc_info=True,
+                )
+
+
+async def _sync_signal_subscriptions(
+    repo: RSSFeedRepositoryAdapter,
+    signal_repo: SignalSourceRepositoryAdapter,
+    *,
+    source_id: int,
+    item_ids: list[int],
+) -> None:
+    if not item_ids:
+        return
+
+    try:
+        targets = await repo.async_list_delivery_targets(item_ids)
+    except Exception:
+        logger.warning(
+            "rss_delivery_target_lookup_failed",
+            extra={"source_id": source_id, "item_count": len(item_ids)},
+            exc_info=True,
+        )
+        return
+
+    subscriber_ids: list[int] = []
+    for target in targets:
+        for subscriber_id in target.get("subscriber_ids", []):
+            subscriber_ids.append(int(subscriber_id))
+
+    try:
+        await signal_repo.async_subscribe_many(source_id=source_id, user_ids=subscriber_ids)
+    except Exception:
+        logger.warning(
+            "rss_bulk_signal_subscribe_failed",
+            extra={"source_id": source_id, "subscriber_count": len(subscriber_ids)},
+            exc_info=True,
+        )
+        seen: set[int] = set()
+        for subscriber_id in subscriber_ids:
+            if subscriber_id in seen:
+                continue
+            seen.add(subscriber_id)
+            try:
+                await signal_repo.async_subscribe(user_id=subscriber_id, source_id=source_id)
+            except Exception:
+                logger.warning(
+                    "rss_signal_subscribe_failed",
+                    extra={"source_id": source_id, "user_id": subscriber_id},
+                    exc_info=True,
+                )
 
 
 async def poll_all_feeds(db: Database) -> dict:
@@ -68,45 +222,24 @@ async def poll_all_feeds(db: Database) -> dict:
                 continue
 
             # Store new items
-            new_count = 0
-            for item_result in result.items:
-                try:
-                    item = await repo.async_create_feed_item(
-                        feed_id=int(feed["id"]),
-                        guid=item_result.external_id,
-                        title=item_result.title,
-                        url=item_result.canonical_url,
-                        content=item_result.content_text,
-                        author=item_result.author,
-                        published_at=item_result.published_at,
-                    )
-                    if item is not None:
-                        new_count += 1
-                        new_item_ids.append(int(item["id"]))
-                        await signal_repo.async_upsert_feed_item(
-                            source_id=int(signal_source["id"]),
-                            external_id=item_result.external_id,
-                            canonical_url=item_result.canonical_url,
-                            title=item_result.title,
-                            content_text=item_result.content_text,
-                            author=item_result.author,
-                            published_at=item_result.published_at,
-                            engagement=item_result.engagement,
-                            metadata={**item_result.metadata, "legacy_rss_item_id": item["id"]},
-                        )
-                        targets = await repo.async_list_delivery_targets([int(item["id"])])
-                        for target in targets:
-                            for subscriber_id in target.get("subscriber_ids", []):
-                                await signal_repo.async_subscribe(
-                                    user_id=int(subscriber_id),
-                                    source_id=int(signal_source["id"]),
-                                )
-                except Exception:
-                    logger.warning(
-                        "rss_item_create_failed",
-                        extra={"feed_id": feed["id"], "guid": item_result.external_id},
-                        exc_info=True,
-                    )
+            created_items = await _create_feed_items(
+                repo,
+                feed_id=int(feed["id"]),
+                item_results=list(result.items),
+            )
+            created_item_ids = [int(item["id"]) for item, _item_result in created_items]
+            new_item_ids.extend(created_item_ids)
+            await _mirror_signal_feed_items(
+                signal_repo,
+                source_id=int(signal_source["id"]),
+                feed_items=created_items,
+            )
+            await _sync_signal_subscriptions(
+                repo,
+                signal_repo,
+                source_id=int(signal_source["id"]),
+                item_ids=created_item_ids,
+            )
 
             # Update feed metadata
             await repo.async_update_feed_fetch_success(
@@ -120,7 +253,7 @@ async def poll_all_feeds(db: Database) -> dict:
             await signal_repo.async_record_source_fetch_success(int(signal_source["id"]))
 
             stats["polled"] += 1
-            stats["new_items"] += new_count
+            stats["new_items"] += len(created_items)
 
         except Exception as exc:
             stats["errors"] += 1

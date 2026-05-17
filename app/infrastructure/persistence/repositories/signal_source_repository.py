@@ -89,6 +89,50 @@ class SignalSourceRepositoryAdapter:
             )
             return self._subscription_dict(subscription)
 
+    async def async_subscribe_many(
+        self,
+        *,
+        source_id: int,
+        user_ids: list[int],
+        topic_constraints: dict[str, Any] | None = None,
+    ) -> None:
+        if not user_ids:
+            return
+
+        values: list[dict[str, Any]] = []
+        seen_user_ids: set[int] = set()
+        for user_id in user_ids:
+            normalized_user_id = int(user_id)
+            if normalized_user_id in seen_user_ids:
+                continue
+            seen_user_ids.add(normalized_user_id)
+            values.append(
+                {
+                    "user_id": normalized_user_id,
+                    "source_id": source_id,
+                    "topic_constraints_json": topic_constraints,
+                    "is_active": True,
+                    "updated_at": _utcnow(),
+                }
+            )
+
+        if not values:
+            return
+
+        async with self._database.transaction() as session:
+            now = _utcnow()
+            stmt = insert(Subscription).values(values)
+            await session.execute(
+                stmt.on_conflict_do_update(
+                    index_elements=[Subscription.user_id, Subscription.source_id],
+                    set_={
+                        "topic_constraints_json": stmt.excluded.topic_constraints_json,
+                        "is_active": True,
+                        "updated_at": now,
+                    },
+                )
+            )
+
     async def async_get_source(self, source_id: int) -> dict[str, Any] | None:
         async with self._database.session() as session:
             source = await session.get(Source, source_id)
@@ -250,6 +294,77 @@ class SignalSourceRepositoryAdapter:
                 ).returning(FeedItem)
             )
             return self._feed_item_dict(item)
+
+    async def async_upsert_feed_items(
+        self,
+        *,
+        source_id: int,
+        items: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        if not items:
+            return []
+
+        values: list[dict[str, Any]] = []
+        seen_external_ids: set[str] = set()
+        for item in items:
+            external_id = str(item["external_id"])
+            if external_id in seen_external_ids:
+                continue
+            seen_external_ids.add(external_id)
+            engagement = item.get("engagement") or {}
+            values.append(
+                {
+                    "source_id": source_id,
+                    "external_id": external_id,
+                    "canonical_url": item.get("canonical_url"),
+                    "title": item.get("title"),
+                    "content_text": item.get("content_text"),
+                    "author": item.get("author"),
+                    "published_at": item.get("published_at"),
+                    "views": engagement.get("views"),
+                    "forwards": engagement.get("forwards"),
+                    "comments": engagement.get("comments"),
+                    "engagement_score": engagement.get("score"),
+                    "metadata_json": item.get("metadata"),
+                    "updated_at": _utcnow(),
+                }
+            )
+
+        if not values:
+            return []
+
+        async with self._database.transaction() as session:
+            now = _utcnow()
+            stmt = insert(FeedItem).values(values)
+            rows = list(
+                (
+                    await session.execute(
+                        stmt.on_conflict_do_update(
+                            index_elements=[FeedItem.source_id, FeedItem.external_id],
+                            set_={
+                                "canonical_url": stmt.excluded.canonical_url,
+                                "title": stmt.excluded.title,
+                                "content_text": stmt.excluded.content_text,
+                                "author": stmt.excluded.author,
+                                "published_at": stmt.excluded.published_at,
+                                "views": stmt.excluded.views,
+                                "forwards": stmt.excluded.forwards,
+                                "comments": stmt.excluded.comments,
+                                "engagement_score": stmt.excluded.engagement_score,
+                                "metadata_json": stmt.excluded.metadata_json,
+                                "updated_at": now,
+                            },
+                        ).returning(FeedItem)
+                    )
+                ).scalars()
+            )
+
+        rows_by_external_id = {row.external_id: self._feed_item_dict(row) for row in rows}
+        return [
+            rows_by_external_id[record["external_id"]]
+            for record in values
+            if record["external_id"] in rows_by_external_id
+        ]
 
     async def async_upsert_topic(
         self,

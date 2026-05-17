@@ -51,6 +51,68 @@ async def _fetch_summaries(db: Database, limit: int | None) -> list[dict[str, An
         return results
 
 
+def _summary_ids(summaries: list[dict[str, Any]]) -> list[int]:
+    ids: list[int] = []
+    for summary in summaries:
+        summary_id = summary.get("id")
+        if isinstance(summary_id, int):
+            ids.append(summary_id)
+    return ids
+
+
+async def _fetch_embeddings_by_summary_id(
+    embedding_repo: EmbeddingRepositoryAdapter,
+    summary_ids: list[int],
+) -> dict[int, dict[str, Any]]:
+    embeddings = await embedding_repo.async_get_summary_embeddings(summary_ids)
+    by_summary_id: dict[int, dict[str, Any]] = {}
+    for embedding in embeddings:
+        summary_id = embedding.get("summary_id")
+        if isinstance(summary_id, int):
+            by_summary_id[summary_id] = embedding
+    return by_summary_id
+
+
+def _as_vector(embedding: Any) -> list[float]:
+    return embedding.tolist() if hasattr(embedding, "tolist") else list(embedding)
+
+
+async def _generate_chunk_window_vectors(
+    embedding_service: Any,
+    chunk_windows: list[tuple[str, dict[str, Any]]],
+) -> tuple[list[list[float]], list[dict[str, Any]]]:
+    vectors: list[list[float] | None] = [None] * len(chunk_windows)
+    batches_by_language: dict[str | None, list[tuple[int, str]]] = {}
+
+    for index, (text, metadata) in enumerate(chunk_windows):
+        raw_language = metadata.get("language")
+        language = raw_language if isinstance(raw_language, str) else None
+        batches_by_language.setdefault(language, []).append((index, text))
+
+    for language, batch in batches_by_language.items():
+        embeddings = await embedding_service.generate_embeddings_batch(
+            [text for _, text in batch],
+            language=language,
+            task_type="document",
+        )
+        if len(embeddings) != len(batch):
+            msg = (
+                f"Embedding batch returned {len(embeddings)} vectors for {len(batch)} chunk windows"
+            )
+            raise RuntimeError(msg)
+        for (index, _text), embedding in zip(batch, embeddings, strict=True):
+            vectors[index] = _as_vector(embedding)
+
+    ordered_vectors: list[list[float]] = []
+    for vector in vectors:
+        if vector is None:
+            msg = "Embedding batch did not fill every chunk-window vector"
+            raise RuntimeError(msg)
+        ordered_vectors.append(vector)
+
+    return ordered_vectors, [metadata for _text, metadata in chunk_windows]
+
+
 async def backfill_vector_store(
     database_dsn: str | None,
     qdrant_cfg: QdrantConfig,
@@ -80,6 +142,10 @@ async def backfill_vector_store(
 
         summaries = await _fetch_summaries(db, limit)
         logger.info("vector_backfill_summaries_found", extra={"count": len(summaries)})
+        existing_embeddings = await _fetch_embeddings_by_summary_id(
+            embedding_repo,
+            _summary_ids(summaries),
+        )
 
         vector_store = QdrantVectorStore(
             url=qdrant_cfg.url,
@@ -118,6 +184,34 @@ async def backfill_vector_store(
             pending_requests.clear()
             pending_vector_count = 0
 
+        generated_summary_ids: list[int] = []
+        for summary in summaries:
+            summary_id = summary.get("id")
+            request_id = summary.get("request_id")
+            payload = summary.get("json_payload")
+            language = summary.get("lang")
+
+            if not summary_id or not request_id or not payload:
+                continue
+
+            if existing_embeddings.get(summary_id) and not force:
+                continue
+
+            await generator.generate_embedding_for_summary(
+                summary_id=summary_id,
+                payload=payload,
+                language=language,
+                force=force,
+            )
+            generated_summary_ids.append(summary_id)
+
+        if generated_summary_ids:
+            refreshed_embeddings = await _fetch_embeddings_by_summary_id(
+                embedding_repo,
+                generated_summary_ids,
+            )
+            existing_embeddings.update(refreshed_embeddings)
+
         for summary in summaries:
             summary_id = summary.get("id")
             request_id = summary.get("request_id")
@@ -139,16 +233,7 @@ async def backfill_vector_store(
                 deleted += 1
                 continue
 
-            existing = await embedding_repo.async_get_summary_embedding(summary_id)
-            if not existing or force:
-                await generator.generate_embedding_for_summary(
-                    summary_id=summary_id,
-                    payload=payload,
-                    language=language,
-                    force=force,
-                )
-                existing = await embedding_repo.async_get_summary_embedding(summary_id)
-
+            existing = existing_embeddings.get(summary_id)
             if not existing:
                 logger.warning(
                     "vector_backfill_no_embedding",
@@ -171,13 +256,10 @@ async def backfill_vector_store(
             request_metadata: list[dict[str, Any]] = []
 
             if chunk_windows:
-                for text, metadata in chunk_windows:
-                    embedding = await embedding_service.generate_embedding(
-                        text, language=metadata.get("language"), task_type="document"
-                    )
-                    vector = embedding.tolist() if hasattr(embedding, "tolist") else list(embedding)
-                    request_vectors.append(vector)
-                    request_metadata.append(metadata)
+                request_vectors, request_metadata = await _generate_chunk_window_vectors(
+                    embedding_service,
+                    chunk_windows,
+                )
             else:
                 text, metadata = MetadataBuilder.prepare_for_upsert(
                     request_id=request_id,
@@ -201,7 +283,7 @@ async def backfill_vector_store(
                     continue
 
                 embedding = embedding_service.deserialize_embedding(existing["embedding_blob"])
-                vector = embedding.tolist() if hasattr(embedding, "tolist") else list(embedding)
+                vector = _as_vector(embedding)
 
                 request_vectors.append(vector)
                 request_metadata.append(metadata)

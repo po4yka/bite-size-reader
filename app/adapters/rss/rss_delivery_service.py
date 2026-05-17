@@ -125,33 +125,33 @@ class RSSDeliveryService:
                 continue
 
             if prepared.skipped:
-                for user_id in subscriber_ids:
-                    try:
-                        await self._rss_repo.async_mark_item_delivered(
-                            user_id=user_id, item_id=int(item["id"])
-                        )
-                        stats["skipped"] += 1
-                    except Exception:
-                        logger.exception(
-                            "rss_delivery_skip_mark_failed",
-                            extra={"item_id": item.get("id"), "user_id": user_id},
-                        )
-                        stats["errors"] += 1
+                try:
+                    await self._rss_repo.async_mark_items_delivered(
+                        [(int(user_id), int(item["id"])) for user_id in subscriber_ids]
+                    )
+                    stats["skipped"] += len(subscriber_ids)
+                except Exception:
+                    logger.exception(
+                        "rss_delivery_skip_mark_failed",
+                        extra={
+                            "item_id": item.get("id"),
+                            "subscriber_count": len(subscriber_ids),
+                        },
+                    )
+                    stats["errors"] += len(subscriber_ids)
                 continue
 
             if prepared.text is None:
                 continue
 
-            for user_id in subscriber_ids:
-                try:
-                    await self._send_prepared_item(item, user_id, prepared.text, send_func)
-                    stats["delivered"] += 1
-                except Exception:
-                    logger.exception(
-                        "rss_delivery_item_failed",
-                        extra={"item_id": item.get("id"), "user_id": user_id},
-                    )
-                    stats["errors"] += 1
+            results = await self._send_to_subscribers(
+                item,
+                subscriber_ids,
+                prepared.text,
+                send_func,
+            )
+            stats["delivered"] += results["delivered"]
+            stats["errors"] += results["errors"]
 
         logger.info("rss_delivery_complete", extra=stats)
         return stats
@@ -247,6 +247,32 @@ class RSSDeliveryService:
                 "user_id": user_id,
             },
         )
+
+    async def _send_to_subscribers(
+        self,
+        item: dict[str, Any],
+        subscriber_ids: list[int],
+        text: str,
+        send_func: Callable[[int, str], Awaitable[None]],
+    ) -> dict[str, int]:
+        """Send one prepared RSS message to subscribers with bounded concurrency."""
+        sem = asyncio.Semaphore(self._cfg.concurrency)
+
+        async def send_one(user_id: int) -> bool:
+            async with sem:
+                try:
+                    await self._send_prepared_item(item, user_id, text, send_func)
+                    return True
+                except Exception:
+                    logger.exception(
+                        "rss_delivery_item_failed",
+                        extra={"item_id": item.get("id"), "user_id": user_id},
+                    )
+                    return False
+
+        results = await asyncio.gather(*(send_one(int(user_id)) for user_id in subscriber_ids))
+        delivered = sum(1 for result in results if result)
+        return {"delivered": delivered, "errors": len(results) - delivered}
 
     async def _try_scrape_url(self, url: str, correlation_id: str) -> str | None:
         """Attempt to scrape full article content when RSS inline content is too short.

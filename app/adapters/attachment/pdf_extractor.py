@@ -31,6 +31,18 @@ class PDFContent:
     figure_page_count: int = 0
 
 
+@dataclass(frozen=True)
+class _EmbeddedImageCandidate:
+    xref: int
+    page_idx: int
+    width: int
+    height: int
+
+    @property
+    def area(self) -> int:
+        return self.width * self.height
+
+
 class PDFExtractor:
     """Stateless utility for extracting text and images from PDF files."""
 
@@ -42,6 +54,7 @@ class PDFExtractor:
         sparse_threshold: int,
         min_image_dimension: int,
         image_max_dimension: int,
+        max_embedded_images: int,
         vector_draw_threshold: int,
         on_progress: Callable[[str], Any] | None,
         fitz_module: Any,
@@ -51,7 +64,7 @@ class PDFExtractor:
         sparse_page_indices: list[int] = []
         figure_page_indices: list[int] = []
         links: list[str] = []
-        embedded_images: list[ImageContent] = []
+        embedded_image_candidates: list[_EmbeddedImageCandidate] = []
         seen_image_xrefs: set[int] = set()
 
         for page_idx in range(pages_to_process):
@@ -96,21 +109,14 @@ class PDFExtractor:
                     continue
                 seen_image_xrefs.add(xref)
                 page_has_raster = True
-
-                try:
-                    pix = fitz_module.Pixmap(doc, xref)
-                    if pix.n - pix.alpha < 4:
-                        pix = fitz_module.Pixmap(fitz_module.csRGB, pix)
-                    img_bytes = pix.tobytes("png")
-                    image_content = ImageExtractor.extract_from_bytes(
-                        img_bytes, max_dimension=image_max_dimension
+                embedded_image_candidates.append(
+                    _EmbeddedImageCandidate(
+                        xref=xref,
+                        page_idx=page_idx,
+                        width=width,
+                        height=height,
                     )
-                    embedded_images.append(image_content)
-                except Exception as exc:
-                    logger.warning(
-                        "pdf_embedded_image_extract_failed",
-                        extra={"xref": xref, "error": str(exc)},
-                    )
+                )
 
             # Detect vector-drawn figures (charts, diagrams) on text-rich pages.
             # page.get_drawings() returns path/fill operations; a high count indicates
@@ -128,7 +134,52 @@ class PDFExtractor:
                 # Text-rich page with a figure: needs vision rendering
                 figure_page_indices.append(page_idx)
 
+        embedded_images = PDFExtractor._extract_top_embedded_images(
+            doc=doc,
+            candidates=embedded_image_candidates,
+            max_embedded_images=max_embedded_images,
+            image_max_dimension=image_max_dimension,
+            fitz_module=fitz_module,
+        )
         return text_parts, sparse_page_indices, figure_page_indices, links, embedded_images
+
+    @staticmethod
+    def _extract_top_embedded_images(
+        *,
+        doc: Any,
+        candidates: list[_EmbeddedImageCandidate],
+        max_embedded_images: int,
+        image_max_dimension: int,
+        fitz_module: Any,
+    ) -> list[ImageContent]:
+        """Decode only the largest embedded-image candidates."""
+        if max_embedded_images <= 0 or not candidates:
+            return []
+
+        selected = sorted(
+            candidates,
+            key=lambda candidate: (-candidate.area, candidate.page_idx, candidate.xref),
+        )[:max_embedded_images]
+
+        embedded_images: list[ImageContent] = []
+        for candidate in selected:
+            try:
+                pix = fitz_module.Pixmap(doc, candidate.xref)
+                if pix.n - pix.alpha < 4:
+                    pix = fitz_module.Pixmap(fitz_module.csRGB, pix)
+                img_bytes = pix.tobytes("png")
+                image_content = ImageExtractor.extract_from_bytes(
+                    img_bytes, max_dimension=image_max_dimension
+                )
+                embedded_images.append(image_content)
+            except Exception as exc:
+                logger.warning(
+                    "pdf_embedded_image_extract_failed",
+                    extra={"xref": candidate.xref, "error": str(exc)},
+                )
+
+        embedded_images.sort(key=lambda img: img.file_size_bytes, reverse=True)
+        return embedded_images
 
     @staticmethod
     def _render_sparse_pages(
@@ -229,15 +280,12 @@ class PDFExtractor:
                     sparse_threshold=sparse_threshold,
                     min_image_dimension=min_image_dimension,
                     image_max_dimension=image_max_dimension,
+                    max_embedded_images=max_embedded_images,
                     vector_draw_threshold=vector_draw_threshold,
                     on_progress=on_progress,
                     fitz_module=fitz,
                 )
             )
-
-            # Limit embedded images to top N largest by file size to avoid overloading context
-            embedded_images.sort(key=lambda img: img.file_size_bytes, reverse=True)
-            embedded_images = embedded_images[:max_embedded_images]
 
             # De-duplicate links while preserving order
             unique_links: list[str] = []

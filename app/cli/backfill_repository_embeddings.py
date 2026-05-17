@@ -16,7 +16,10 @@ from app.core.repo_analysis_schema import RepoAnalysis
 from app.db.models.repository import Repository, RepositoryEmbedding
 from app.db.session import Database
 from app.infrastructure.embedding.embedding_factory import create_embedding_service
-from app.infrastructure.embedding.repository_embedding import RepositoryEmbeddingGenerator
+from app.infrastructure.embedding.repository_embedding import (
+    RepositoryEmbeddingBatchItem,
+    RepositoryEmbeddingGenerator,
+)
 
 if TYPE_CHECKING:
     from app.infrastructure.vector.qdrant_store import QdrantVectorStore
@@ -118,6 +121,9 @@ async def backfill_repository_embeddings(
 
             last_seen_id = rows[-1][0].id
 
+            batch_items: list[RepositoryEmbeddingBatchItem] = []
+            missing_by_repository_id: dict[int, bool] = {}
+
             for repo, existing_embedding in rows:
                 repo_id = repo.id
                 is_missing = existing_embedding is None
@@ -135,7 +141,7 @@ async def backfill_repository_embeddings(
                     processed += 1
                     continue
 
-                # Deserialize analysis_json → RepoAnalysis | None
+                # Deserialize analysis_json -> RepoAnalysis | None
                 analysis: RepoAnalysis | None = None
                 if repo.analysis_json is not None:
                     try:
@@ -147,26 +153,62 @@ async def backfill_repository_embeddings(
                         )
 
                 correlation_id = str(uuid.uuid4())
-                try:
-                    await embedding_gen.regenerate(
-                        repo,
+                batch_items.append(
+                    RepositoryEmbeddingBatchItem(
+                        repository=repo,
                         analysis=analysis,
                         correlation_id=correlation_id,
                     )
-                    if is_missing:
-                        embeddings_created += 1
-                    else:
-                        embeddings_refreshed += 1
+                )
+                missing_by_repository_id[repo_id] = is_missing
+
+            if batch_items:
+                try:
+                    batch_result = await embedding_gen.regenerate_batch(batch_items)
                 except Exception:
                     logger.exception(
-                        "repo_embedding_backfill_row_error",
-                        extra={"repository_id": repo_id, "full_name": repo.full_name},
+                        "repo_embedding_backfill_batch_error",
+                        extra={"count": len(batch_items)},
                     )
-                    errors += 1
-                    processed += 1
-                    continue
+                    for item in batch_items:
+                        repo = item.repository
+                        try:
+                            await embedding_gen.regenerate(
+                                repo,
+                                analysis=item.analysis,
+                                correlation_id=item.correlation_id,
+                            )
+                        except Exception:
+                            logger.exception(
+                                "repo_embedding_backfill_row_error",
+                                extra={"repository_id": repo.id, "full_name": repo.full_name},
+                            )
+                            errors += 1
+                            continue
 
-                processed += 1
+                        if missing_by_repository_id.get(repo.id, False):
+                            embeddings_created += 1
+                        else:
+                            embeddings_refreshed += 1
+                else:
+                    for success in batch_result.successes:
+                        if missing_by_repository_id.get(success.repository_id, False):
+                            embeddings_created += 1
+                        else:
+                            embeddings_refreshed += 1
+
+                    for failure in batch_result.failures:
+                        logger.error(
+                            "repo_embedding_backfill_row_error",
+                            exc_info=failure.error,
+                            extra={
+                                "repository_id": failure.repository_id,
+                                "full_name": failure.full_name,
+                            },
+                        )
+                        errors += 1
+
+                processed += len(batch_items)
 
             if len(rows) < batch_size:
                 break
