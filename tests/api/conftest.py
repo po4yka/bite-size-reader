@@ -87,12 +87,14 @@ async def db(monkeypatch):
 
     # Register as the runtime cache so FastAPI dependencies (and any
     # internal `get_or_create_runtime_database_from_env()` lookup) use it.
-    _di_database._cached_runtime_db = database
+    # Post-#9 (eliminate-module-globals) the cache is a 1-element holder list,
+    # not a bare attribute.
+    _di_database._cached_runtime_db_holder[0] = database
 
     try:
         yield database
     finally:
-        _di_database._cached_runtime_db = None
+        _di_database._cached_runtime_db_holder[0] = None
         clear_session_manager()
         await database.dispose()
 
