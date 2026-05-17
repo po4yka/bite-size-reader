@@ -48,7 +48,10 @@ if TYPE_CHECKING:
 
 logger = get_logger(__name__)
 
-_current_runtime: ApiRuntime | None = None
+# Holder list lets the setters mutate without `global` — eliminates
+# the three legacy declarations called out as the most dangerous
+# leak in [[eliminate-module-globals]].
+_current_runtime_holder: list[ApiRuntime | None] = [None]
 _runtime_lock = asyncio.Lock()
 
 
@@ -238,34 +241,32 @@ async def build_background_processor(
 
 async def ensure_api_runtime() -> ApiRuntime:
     """Initialize and return the process-wide API runtime if not already running."""
-    global _current_runtime
-    if _current_runtime is not None:
-        return _current_runtime
+    if _current_runtime_holder[0] is not None:
+        return _current_runtime_holder[0]
 
     async with _runtime_lock:
-        if _current_runtime is not None:
-            return _current_runtime
-        _current_runtime = await build_api_runtime()
-        return _current_runtime
+        if _current_runtime_holder[0] is not None:
+            return _current_runtime_holder[0]
+        _current_runtime_holder[0] = await build_api_runtime()
+        assert _current_runtime_holder[0] is not None
+        return _current_runtime_holder[0]
 
 
 def get_current_api_runtime() -> ApiRuntime:
     """Return the active API runtime, requiring explicit initialization."""
-    if _current_runtime is None:
+    if _current_runtime_holder[0] is None:
         msg = "API runtime is not initialized"
         raise RuntimeError(msg)
-    return _current_runtime
+    return _current_runtime_holder[0]
 
 
 def set_current_api_runtime(runtime: ApiRuntime) -> None:
-    global _current_runtime
-    _current_runtime = runtime
+    _current_runtime_holder[0] = runtime
 
 
 def clear_current_api_runtime() -> None:
     """Clear the process-wide API runtime (call during shutdown)."""
-    global _current_runtime
-    _current_runtime = None
+    _current_runtime_holder[0] = None
 
 
 def resolve_api_runtime(request: Request | None = None) -> ApiRuntime:

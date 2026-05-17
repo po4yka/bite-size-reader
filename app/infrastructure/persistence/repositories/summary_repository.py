@@ -113,9 +113,11 @@ class SummaryRepositoryAdapter:
             if end_date:
                 conditions.append(Summary.created_at <= end_date)
             if search:
-                # Case-insensitive substring match on the article title.
-                # Title lives on the Request row already joined below.
-                conditions.append(Request.title.ilike(f"%{search}%"))
+                # Case-insensitive substring match on the article URL.
+                # The Summary's title lives in Summary.json_payload (JSONB)
+                # and needs a JSON-extract expression — defer that to a
+                # follow-up. URL match covers the URL-paste search path.
+                conditions.append(Request.input_url.ilike(f"%{search}%"))
 
             total = int(
                 await session.scalar(
