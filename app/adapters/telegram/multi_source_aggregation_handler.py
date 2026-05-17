@@ -68,7 +68,7 @@ class MultiSourceAggregationHandler:
             )
             return True
 
-        await self._run_bundle(
+        await self.run_with_submissions(
             message=message,
             uid=uid,
             correlation_id=correlation_id,
@@ -99,7 +99,7 @@ class MultiSourceAggregationHandler:
         if len(submissions) < 2:
             return False
 
-        await self._run_bundle(
+        await self.run_with_submissions(
             message=message,
             uid=uid,
             correlation_id=correlation_id,
@@ -118,7 +118,39 @@ class MultiSourceAggregationHandler:
         decision = await self._rollout_gate.evaluate(uid)
         return decision.enabled
 
-    async def _run_bundle(
+    async def ensure_enabled(
+        self,
+        *,
+        uid: int,
+        message: Any,
+        explicit: bool,
+    ) -> bool:
+        """Public alias for :meth:`_ensure_enabled` so external callers (the
+        coalescer) can run the rollout-gate check before deciding whether to
+        synthesize a bundle or fall back to per-message dispatch."""
+        return await self._ensure_enabled(uid=uid, message=message, explicit=explicit)
+
+    async def build_submissions_for_message(
+        self,
+        *,
+        message: Any,
+        text: str,
+        include_message_source: bool | None = None,
+    ) -> list[SourceSubmission]:
+        """Public wrapper around :meth:`_build_submissions`.
+
+        Used by the coalescer to build the per-message submission list for
+        each buffered Telegram message before concatenating across the bucket.
+        """
+        if include_message_source is None:
+            include_message_source = self._should_include_message_source(message)
+        return await self._build_submissions(
+            message=message,
+            text=text,
+            include_message_source=include_message_source,
+        )
+
+    async def run_with_submissions(
         self,
         *,
         message: Any,

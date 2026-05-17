@@ -7,6 +7,7 @@ import logging
 import time
 from typing import TYPE_CHECKING
 
+from app.adapters.telegram.coalescer import MessageCoalescer
 from app.adapters.telegram.routing import (
     MessageContentRouter,
     MessageInteractionRecorder,
@@ -105,11 +106,28 @@ class MessageRouter:
             aggregation_default_mode=cfg.runtime.aggregation_default_mode,
             forward_link_bundle_prose_threshold=(cfg.runtime.forward_link_bundle_prose_threshold),
         )
+        self._coalescer = MessageCoalescer(
+            window_sec=cfg.runtime.aggregate_coalesce_window_sec,
+            enabled=cfg.runtime.aggregate_coalesce_enabled,
+            content_router=self._content_router,
+            aggregation_handler=aggregation_handler,
+            rate_limit_coordinator=self._rate_limit_coordinator,
+            response_formatter=response_formatter,
+            callback_handler=callback_handler,
+            url_handler=url_handler,
+            send_chat_action=getattr(response_formatter, "send_chat_action", None),
+        )
+        self._content_router.set_coalescer(self._coalescer)
         self._failure_handler = MessageRouteFailureHandler(
             response_formatter=response_formatter,
             audit_func=audit_func,
             interaction_recorder=self._interaction_recorder,
         )
+
+    @property
+    def coalescer(self) -> MessageCoalescer:
+        """Public accessor — wired into bot shutdown to drain pending buffers."""
+        return self._coalescer
 
     @property
     def callback_handler(self) -> CallbackHandler | None:
@@ -178,6 +196,17 @@ class MessageRouter:
                         interaction_id=interaction_id,
                         start_time=start_time,
                     )
+                    return
+
+                if await self._coalescer.try_buffer(
+                    prepared=route_context,
+                    message=message,
+                    interaction_id=interaction_id,
+                    correlation_id=correlation_id,
+                    start_time=start_time,
+                ):
+                    # Buffered for time-window coalescing; the flush task will
+                    # acquire its own slot and typing indicator when it fires.
                     return
 
                 if not await self._rate_limit_coordinator.acquire_concurrent_slot(limiter, uid):

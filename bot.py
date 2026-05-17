@@ -83,6 +83,10 @@ async def main() -> None:
     try:
         await bot.start()
     finally:
+        try:
+            await bot.message_handler.message_router.coalescer.shutdown()
+        except Exception:
+            logging.getLogger(__name__).warning("coalescer_shutdown_failed", exc_info=True)
         await config_reloader.stop()
         await db_write_queue.stop()
         if broker_started and broker is not None and not broker.is_worker_process:

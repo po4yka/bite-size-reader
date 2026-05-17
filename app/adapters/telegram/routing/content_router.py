@@ -14,6 +14,7 @@ if TYPE_CHECKING:
         ResponseFormatterFacade as ResponseFormatter,
     )
     from app.adapters.telegram.callback_handler import CallbackHandler
+    from app.adapters.telegram.coalescer import MessageCoalescer
     from app.adapters.telegram.command_dispatcher import TelegramCommandDispatcher
     from app.adapters.telegram.forward_processor import ForwardProcessor
     from app.adapters.telegram.multi_source_aggregation_handler import (
@@ -56,6 +57,13 @@ class MessageContentRouter:
         self._lang = lang
         self._aggregation_default_mode = aggregation_default_mode
         self._forward_link_bundle_prose_threshold = forward_link_bundle_prose_threshold
+        self._coalescer: MessageCoalescer | None = None
+
+    def set_coalescer(self, coalescer: MessageCoalescer) -> None:
+        """Late-bind the coalescer so /command handlers can flush a pending
+        buffer before dispatching. Wired by MessageRouter after both objects
+        exist (avoids a constructor cycle)."""
+        self._coalescer = coalescer
 
     async def route(
         self,
@@ -201,6 +209,15 @@ class MessageContentRouter:
     ) -> bool:
         if not context.text.startswith("/"):
             return False
+        if self._coalescer is not None:
+            try:
+                await self._coalescer.flush_now(context.uid, context.chat_id)
+            except Exception:
+                logger.warning(
+                    "coalesce_flush_before_command_failed",
+                    extra={"uid": context.uid, "cid": context.correlation_id},
+                    exc_info=True,
+                )
         outcome = await self.command_dispatcher.dispatch_command(
             message=context.message,
             text=context.text,

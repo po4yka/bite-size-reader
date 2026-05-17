@@ -90,6 +90,12 @@ class RuntimeConfig(BaseModel):
     aggregation_default_mode: str = Field(
         default="per_url", validation_alias="AGGREGATION_DEFAULT_MODE"
     )
+    aggregate_coalesce_enabled: bool = Field(
+        default=True, validation_alias="AGGREGATE_COALESCE_ENABLED"
+    )
+    aggregate_coalesce_window_sec: float = Field(
+        default=5.0, validation_alias="AGGREGATE_COALESCE_WINDOW_SEC"
+    )
     rate_limit_max_requests: int = Field(default=10, validation_alias="RATE_LIMIT_MAX_REQUESTS")
     rate_limit_window_seconds: int = Field(default=60, validation_alias="RATE_LIMIT_WINDOW_SECONDS")
     rate_limit_max_concurrent: int = Field(default=3, validation_alias="RATE_LIMIT_MAX_CONCURRENT")
