@@ -5,6 +5,8 @@ from __future__ import annotations
 from datetime import datetime
 from unittest.mock import AsyncMock, patch
 
+import pytest
+
 from app.api.routers.auth.tokens import create_access_token
 from app.api.services.search_service import SearchService
 from app.core.time_utils import UTC
@@ -297,7 +299,8 @@ def test_check_duplicate_with_summary(
     assert "url" in data["summary"]
 
 
-def test_check_duplicate_url_normalization(client, search_data, search_token):
+@pytest.mark.asyncio
+async def test_check_duplicate_url_normalization(client, search_data, search_token, db):
     """Test that URL normalization works in duplicate detection."""
     # Original URL
     original_url = "https://example.com/ai-article"
@@ -308,20 +311,25 @@ def test_check_duplicate_url_normalization(client, search_data, search_token):
     normalized = normalize_url(original_url)
     dedupe_hash = compute_dedupe_hash(normalized)
 
-    req = Request.create(
-        user_id=search_data[0]["request"].user_id,
-        type="url",
-        status="completed",
-        input_url=original_url,
-        normalized_url=normalized,
-        dedupe_hash=dedupe_hash,
-    )
-
-    Summary.create(
-        request=req,
-        lang="en",
-        json_payload={"tldr": "test"},
-    )
+    async with db.transaction() as session:
+        req = Request(
+            user_id=search_data[0]["request"].user_id,
+            type="url",
+            status="completed",
+            input_url=original_url,
+            normalized_url=normalized,
+            dedupe_hash=dedupe_hash,
+        )
+        session.add(req)
+        await session.flush()
+        session.add(
+            Summary(
+                request_id=req.id,
+                lang="en",
+                json_payload={"tldr": "test"},
+            )
+        )
+    await db.engine.dispose()
 
     # Check variant URL
     response = client.get(
@@ -354,17 +362,20 @@ def test_check_duplicate_short_url(client, search_token):
     assert response.status_code == 422
 
 
-def test_check_duplicate_different_user(client, search_data, search_user, db, monkeypatch):
+@pytest.mark.asyncio
+async def test_check_duplicate_different_user(client, search_data, search_user, db, monkeypatch):
     """Test that duplicate check respects user isolation."""
-    # Create different user
-    other_user = User.create(telegram_user_id=111222333, username="other_user")
+    other_user_id = 111222333
+    async with db.transaction() as session:
+        session.add(User(telegram_user_id=other_user_id, username="other_user"))
+    await db.engine.dispose()
 
     # Add both users to ALLOWED_USER_IDS
     monkeypatch.setenv(
-        "ALLOWED_USER_IDS", f"{search_user.telegram_user_id},{other_user.telegram_user_id}"
+        "ALLOWED_USER_IDS", f"{search_user.telegram_user_id},{other_user_id}"
     )
 
-    other_token = create_access_token(other_user.telegram_user_id, client_id="test")
+    other_token = create_access_token(other_user_id, client_id="test")
 
     # Check URL that exists for first user
     existing_url = search_data[0]["request"].input_url

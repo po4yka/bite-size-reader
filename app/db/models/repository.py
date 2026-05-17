@@ -47,6 +47,10 @@ class GitHubIntegrationStatus(enum.StrEnum):
     REVOKED = "revoked"
 
 
+def _enum_values(enum_class: type[enum.Enum]) -> list[str]:
+    return [str(member.value) for member in enum_class]
+
+
 class Repository(Base):
     __tablename__ = "repositories"
     __table_args__ = (
@@ -92,7 +96,12 @@ class Repository(Base):
     analysis_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     content_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
     source: Mapped[RepoSource] = mapped_column(
-        SQLEnum(RepoSource, name="repo_source", create_type=True),
+        SQLEnum(
+            RepoSource,
+            name="repo_source",
+            values_callable=_enum_values,
+            create_type=True,
+        ),
         default=RepoSource.MANUAL,
         nullable=False,
     )
@@ -148,7 +157,12 @@ class UserGitHubIntegration(Base):
         index=True,
     )
     auth_method: Mapped[GitHubAuthMethod] = mapped_column(
-        SQLEnum(GitHubAuthMethod, name="github_auth_method", create_type=True),
+        SQLEnum(
+            GitHubAuthMethod,
+            name="github_auth_method",
+            values_callable=_enum_values,
+            create_type=True,
+        ),
         nullable=False,
     )
     encrypted_token: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
@@ -156,7 +170,12 @@ class UserGitHubIntegration(Base):
     github_login: Mapped[str | None] = mapped_column(String(100), nullable=True)
     github_user_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     status: Mapped[GitHubIntegrationStatus] = mapped_column(
-        SQLEnum(GitHubIntegrationStatus, name="github_integration_status", create_type=True),
+        SQLEnum(
+            GitHubIntegrationStatus,
+            name="github_integration_status",
+            values_callable=_enum_values,
+            create_type=True,
+        ),
         default=GitHubIntegrationStatus.ACTIVE,
         nullable=False,
     )

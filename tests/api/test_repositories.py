@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import random
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 import pytest_asyncio
@@ -49,6 +49,7 @@ async def _create_user(db: Database, user_id: int) -> None:
         existing = await session.scalar(select(User).where(User.telegram_user_id == user_id))
         if existing is None:
             session.add(User(telegram_user_id=user_id, username=f"user_{user_id}"))
+    await db.engine.dispose()
 
 
 async def _create_repo(
@@ -91,6 +92,7 @@ async def _create_repo(
         session.add(repo)
         await session.flush()
         await session.refresh(repo)
+    await db.engine.dispose()
     return repo
 
 
@@ -110,8 +112,8 @@ async def test_list_returns_user_repos_only(client: Any, db: Database) -> None:
     resp = client.get("/v1/repositories", headers=_auth(_USER_A_ID))
     assert resp.status_code == 200
     data = resp.json()
-    assert data["data"]["pagination"]["total"] == 3
-    assert len(data["data"]["repositories"]) == 3
+    assert data["pagination"]["total"] == 3
+    assert len(data["repositories"]) == 3
 
 
 # ---------------------------------------------------------------------------
@@ -127,7 +129,7 @@ async def test_list_filter_by_language(client: Any, db: Database) -> None:
 
     resp = client.get("/v1/repositories?language=Python", headers=_auth(_USER_A_ID))
     assert resp.status_code == 200
-    repos = resp.json()["data"]["repositories"]
+    repos = resp.json()["repositories"]
     assert len(repos) == 2
     assert all(r["primary_language"] == "Python" for r in repos)
 
@@ -145,7 +147,7 @@ async def test_list_filter_by_topic(client: Any, db: Database) -> None:
 
     resp = client.get("/v1/repositories?topic=webdev", headers=_auth(_USER_A_ID))
     assert resp.status_code == 200
-    repos = resp.json()["data"]["repositories"]
+    repos = resp.json()["repositories"]
     assert len(repos) == 2
 
 
@@ -161,14 +163,14 @@ async def test_list_pagination(client: Any, db: Database) -> None:
 
     resp = client.get("/v1/repositories?limit=10&offset=0", headers=_auth(_USER_A_ID))
     assert resp.status_code == 200
-    body = resp.json()["data"]
+    body = resp.json()
     assert body["pagination"]["total"] == 25
     assert len(body["repositories"]) == 10
     assert body["pagination"]["hasMore"] is True
 
     resp2 = client.get("/v1/repositories?limit=10&offset=20", headers=_auth(_USER_A_ID))
     assert resp2.status_code == 200
-    body2 = resp2.json()["data"]
+    body2 = resp2.json()
     assert len(body2["repositories"]) == 5
     assert body2["pagination"]["hasMore"] is False
 
@@ -186,7 +188,7 @@ async def test_list_sort_stars_desc(client: Any, db: Database) -> None:
 
     resp = client.get("/v1/repositories?sort=stars_desc", headers=_auth(_USER_A_ID))
     assert resp.status_code == 200
-    stars = [r["stars"] for r in resp.json()["data"]["repositories"]]
+    stars = [r["stars"] for r in resp.json()["repositories"]]
     assert stars == sorted(stars, reverse=True)
 
 
@@ -214,7 +216,7 @@ async def test_get_detail_returns_full_payload(client: Any, db: Database) -> Non
 
     resp = client.get(f"/v1/repositories/{repo.id}", headers=_auth(_USER_A_ID))
     assert resp.status_code == 200
-    data = resp.json()["data"]
+    data = resp.json()
     assert data["id"] == repo.id
     assert data["has_analysis"] is True
     assert data["analysis"]["confidence"] == 0.9
@@ -240,11 +242,18 @@ async def test_get_detail_404_for_other_users_repo(client: Any, db: Database) ->
 
 
 def test_post_ingest_invalid_url_returns_400(client: Any, db: Database) -> None:
-    resp = client.post(
-        "/v1/repositories",
-        json={"url": "https://example.com/not-a-github-url"},
-        headers=_auth(_USER_A_ID),
-    )
+    from app.api.main import app
+    from app.api.routers.repositories import _get_github_extractor
+
+    app.dependency_overrides[_get_github_extractor] = lambda: MagicMock()
+    try:
+        resp = client.post(
+            "/v1/repositories",
+            json={"url": "https://example.com/not-a-github-url"},
+            headers=_auth(_USER_A_ID),
+        )
+    finally:
+        app.dependency_overrides.pop(_get_github_extractor, None)
     assert resp.status_code == 400
 
 
@@ -264,26 +273,21 @@ async def test_post_ingest_happy_path(client: Any, db: Database) -> None:
     mock_extractor = MagicMock()
     mock_extractor.extract = AsyncMock(return_value=mock_result)
 
-    with patch(
-        "app.api.routers.repositories._get_github_extractor",
-        return_value=lambda r: mock_extractor,
-    ):
-        # Use dependency override approach
-        from app.api.main import app
-        from app.api.routers.repositories import _get_github_extractor
+    from app.api.main import app
+    from app.api.routers.repositories import _get_github_extractor
 
-        app.dependency_overrides[_get_github_extractor] = lambda: mock_extractor
-        try:
-            resp = client.post(
-                "/v1/repositories",
-                json={"url": "https://github.com/octocat/hello-world"},
-                headers=_auth(_USER_A_ID),
-            )
-        finally:
-            app.dependency_overrides.pop(_get_github_extractor, None)
+    app.dependency_overrides[_get_github_extractor] = lambda: mock_extractor
+    try:
+        resp = client.post(
+            "/v1/repositories",
+            json={"url": "https://github.com/octocat/hello-world"},
+            headers=_auth(_USER_A_ID),
+        )
+    finally:
+        app.dependency_overrides.pop(_get_github_extractor, None)
 
     assert resp.status_code == 202
-    data = resp.json()["data"]
+    data = resp.json()
     assert data["repository_id"] == 42
     assert data["full_name"] == "octocat/hello-world"
     assert data["status"] == "ready"
@@ -321,7 +325,7 @@ async def test_post_reanalyze_calls_use_case_with_force_true(client: Any, db: Da
 
     # 200 with full repository detail
     assert resp.status_code == 200
-    assert resp.json()["data"]["id"] == repo.id
+    assert resp.json()["id"] == repo.id
 
 
 # ---------------------------------------------------------------------------
@@ -373,5 +377,12 @@ async def test_delete_404_for_other_users_repo(client: Any, db: Database) -> Non
     await _create_user(db, _USER_B_ID)
     repo = await _create_repo(db, user_id=_USER_B_ID)
 
-    resp = client.delete(f"/v1/repositories/{repo.id}", headers=_auth(_USER_A_ID))
+    from app.api.main import app
+    from app.api.routers.repositories import _get_qdrant
+
+    app.dependency_overrides[_get_qdrant] = lambda: None
+    try:
+        resp = client.delete(f"/v1/repositories/{repo.id}", headers=_auth(_USER_A_ID))
+    finally:
+        app.dependency_overrides.pop(_get_qdrant, None)
     assert resp.status_code == 404

@@ -4,7 +4,7 @@ import os
 from typing import cast
 
 import pytest
-from sqlalchemy import Table, select
+from sqlalchemy import Table, select, text
 
 from app.config.database import DatabaseConfig
 from app.db.base import Base
@@ -274,8 +274,9 @@ async def test_feature_models_round_trip_against_postgres() -> None:
         assert stored_webhook.events_json == ["summary.created"]
         assert stored_tag is not None
         assert stored_tag.name == "AI"
-        assert len(ALL_MODELS) == 53
+        assert len(ALL_MODELS) == 57
     finally:
         async with database.engine.begin() as connection:
             await connection.run_sync(Base.metadata.drop_all, tables=list(reversed(_all_tables())))
+            await connection.execute(text("DROP TABLE IF EXISTS alembic_version"))
         await database.dispose()

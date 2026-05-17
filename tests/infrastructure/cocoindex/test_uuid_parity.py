@@ -30,9 +30,9 @@ def _expected_uuid(request_id: int, summary_id: int) -> str:
 )
 def test_point_id_matches_qdrant_store(request_id: int, summary_id: int) -> None:
     from app.infrastructure.cocoindex.embedding_bridge import summary_id_to_point_id
-    from app.infrastructure.vector.qdrant_store import _str_to_uuid
+    from app.infrastructure.vector.point_ids import str_to_uuid
 
-    expected = _str_to_uuid(f"{request_id}:{summary_id}")
+    expected = str_to_uuid(f"{request_id}:{summary_id}")
     actual = summary_id_to_point_id(request_id, summary_id)
 
     assert actual == expected, (
@@ -71,9 +71,9 @@ def test_repository_point_id_matches_repository_embedding_generator(
     repository_id: int,
 ) -> None:
     from app.infrastructure.cocoindex.embedding_bridge import repository_id_to_point_id
-    from app.infrastructure.vector.qdrant_store import _str_to_uuid
+    from app.infrastructure.vector.point_ids import str_to_uuid
 
-    expected = _str_to_uuid(f"{environment}:{user_scope}:repository:{repository_id}")
+    expected = str_to_uuid(f"{environment}:{user_scope}:repository:{repository_id}")
     actual = repository_id_to_point_id(environment, user_scope, repository_id)
 
     assert actual == expected

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 import time
-import uuid
 from typing import TYPE_CHECKING, Any
 from uuid import uuid4
 
@@ -22,6 +21,7 @@ from qdrant_client.models import (
 )
 
 from app.core.logging_utils import get_logger
+from app.infrastructure.vector.point_ids import str_to_uuid as _str_to_uuid
 from app.infrastructure.vector.protocol import VectorStoreError
 from app.infrastructure.vector.qdrant_schemas import QdrantQueryFilters
 from app.infrastructure.vector.result_types import VectorQueryHit, VectorQueryResult
@@ -30,14 +30,6 @@ if TYPE_CHECKING:
     from collections.abc import Sequence
 
 logger = get_logger(__name__)
-
-_UUID_NAMESPACE = uuid.NAMESPACE_OID
-
-
-def _str_to_uuid(s: str) -> str:
-    """Hash an arbitrary string to a deterministic UUID string for use as a Qdrant point ID."""
-    return str(uuid.uuid5(_UUID_NAMESPACE, s))
-
 
 class QdrantVectorStore:
     """Synchronous vector store wrapper around Qdrant.

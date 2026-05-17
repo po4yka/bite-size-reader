@@ -83,10 +83,11 @@ async def _add_request_with_latency(
                     updated_at=timestamp,
                 )
             )
-        for latency_ms in llm_ms or []:
+        for attempt_index, latency_ms in enumerate(llm_ms or [], start=1):
             session.add(
                 LLMCall(
                     request_id=request.id,
+                    attempt_index=attempt_index,
                     provider="openrouter",
                     model=model,
                     status=CallStatus.OK.value,

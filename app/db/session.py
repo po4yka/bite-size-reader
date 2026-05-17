@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import os
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, ParamSpec, TypeVar
@@ -15,6 +16,7 @@ from sqlalchemy.ext.asyncio import (
     async_sessionmaker,
     create_async_engine,
 )
+from sqlalchemy.pool import NullPool
 
 from app.core.logging_utils import get_logger
 from app.db.runtime.backup import DatabaseBackupService
@@ -51,13 +53,16 @@ class Database:
     _backup: DatabaseBackupService = field(init=False, repr=False)
 
     def __post_init__(self) -> None:
-        self._engine = create_async_engine(
-            self.config.dsn,
-            pool_size=self.config.pool_size,
-            max_overflow=self.config.max_overflow,
-            pool_pre_ping=True,
-            pool_recycle=self.config.pool_recycle_seconds,
-        )
+        engine_kwargs: dict[str, Any] = {"pool_pre_ping": True}
+        if os.getenv("RATATOSKR_DATABASE_NULL_POOL") == "1":
+            engine_kwargs["poolclass"] = NullPool
+        else:
+            engine_kwargs.update(
+                pool_size=self.config.pool_size,
+                max_overflow=self.config.max_overflow,
+                pool_recycle=self.config.pool_recycle_seconds,
+            )
+        self._engine = create_async_engine(self.config.dsn, **engine_kwargs)
         self._session_maker = async_sessionmaker(
             bind=self._engine,
             class_=AsyncSession,

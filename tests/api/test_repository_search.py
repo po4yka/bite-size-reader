@@ -70,7 +70,7 @@ async def test_search_returns_results(client: Any, db: Any) -> None:
     mock_service.search = AsyncMock(return_value=_fake_search_result(3))
 
     from app.api.main import app
-    from app.api.routers.search import _get_repo_search_service
+    from app.api.routers.content.search import _get_repo_search_service
 
     app.dependency_overrides[_get_repo_search_service] = lambda: mock_service
     try:
@@ -101,7 +101,7 @@ async def test_search_user_id_propagated_to_service(client: Any, db: Any) -> Non
     mock_service.search = _capture_search
 
     from app.api.main import app
-    from app.api.routers.search import _get_repo_search_service
+    from app.api.routers.content.search import _get_repo_search_service
 
     app.dependency_overrides[_get_repo_search_service] = lambda: mock_service
     try:
@@ -119,7 +119,14 @@ async def test_search_user_id_propagated_to_service(client: Any, db: Any) -> Non
 
 
 def test_search_validates_query_min_length(client: Any, db: Any) -> None:
-    resp = client.get("/v1/search/repositories?q=x", headers=_auth())
+    from app.api.main import app
+    from app.api.routers.content.search import _get_repo_search_service
+
+    app.dependency_overrides[_get_repo_search_service] = lambda: MagicMock()
+    try:
+        resp = client.get("/v1/search/repositories?q=x", headers=_auth())
+    finally:
+        app.dependency_overrides.pop(_get_repo_search_service, None)
     assert resp.status_code == 422
 
 
@@ -131,7 +138,8 @@ def test_search_validates_query_min_length(client: Any, db: Any) -> None:
 async def test_search_pagination(client: Any, db: Any) -> None:
     captured: dict[str, Any] = {}
 
-    async def _capture(**kwargs: Any) -> Any:
+    async def _capture(query: str, **kwargs: Any) -> Any:
+        captured["query"] = query
         captured.update(kwargs)
         from app.infrastructure.search.repository_search_service import RepositorySearchResults
 
@@ -141,7 +149,7 @@ async def test_search_pagination(client: Any, db: Any) -> None:
     mock_service.search = _capture
 
     from app.api.main import app
-    from app.api.routers.search import _get_repo_search_service
+    from app.api.routers.content.search import _get_repo_search_service
 
     app.dependency_overrides[_get_repo_search_service] = lambda: mock_service
     try:

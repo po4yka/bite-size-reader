@@ -327,7 +327,11 @@ async def test_device_poll_ok_stores_token(
                 )
             )
             mock.get("https://api.github.com/user").mock(
-                return_value=Response(200, json=_GH_USER_PAYLOAD)
+                return_value=Response(
+                    200,
+                    json=_GH_USER_PAYLOAD,
+                    headers={"X-GitHub-OAuthScopes": "repo, read:user"},
+                )
             )
             resp = client.post(
                 "/v1/auth/github/device/poll",

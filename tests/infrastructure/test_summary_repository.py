@@ -224,10 +224,11 @@ async def test_summary_repository_user_lists_and_topic_filter(database: Database
     insight_rows = await repo.async_get_user_summaries_for_insights(
         505, dt.datetime.now(UTC) - dt.timedelta(days=1), 5
     )
-    assert insight_rows[0]["version"] == first_version
-    assert insight_rows[0]["json_payload"]["topic_tags"] == ["postgres"]
-    assert insight_rows[0]["request"]["created_at"] is not None
-    assert "insights_json" not in insight_rows[0]
+    first_insight_row = next(row for row in insight_rows if row["request_id"] == first_request_id)
+    assert first_insight_row["version"] == first_version
+    assert first_insight_row["json_payload"]["topic_tags"] == ["postgres"]
+    assert first_insight_row["request"]["created_at"] is not None
+    assert "insights_json" not in first_insight_row
     assert (
         len(
             await repo.async_get_user_summary_activity_dates(

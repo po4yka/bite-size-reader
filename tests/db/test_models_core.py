@@ -5,7 +5,7 @@ import os
 from typing import cast
 
 import pytest
-from sqlalchemy import Table, select
+from sqlalchemy import Table, select, text
 
 from app.config.database import DatabaseConfig
 from app.db.base import Base
@@ -150,6 +150,7 @@ async def test_core_models_round_trip_against_postgres() -> None:
                     RefreshToken(
                         user_id=user.telegram_user_id,
                         token_hash="refresh-hash",
+                        family_id="refresh-family",
                         expires_at=expires_at,
                     ),
                 ]
@@ -183,6 +184,7 @@ async def test_core_models_round_trip_against_postgres() -> None:
             "SummaryEmbedding",
             "TelegramMessage",
             "User",
+            "UserCredential",
             "UserDevice",
             "UserInteraction",
             "VideoDownload",
@@ -190,6 +192,7 @@ async def test_core_models_round_trip_against_postgres() -> None:
     finally:
         async with database.engine.begin() as connection:
             await connection.run_sync(Base.metadata.drop_all, tables=_core_tables())
+            await connection.execute(text("DROP TABLE IF EXISTS alembic_version"))
         await database.dispose()
 
 
@@ -222,4 +225,5 @@ async def test_server_version_before_update_is_monotonic_against_postgres() -> N
     finally:
         async with database.engine.begin() as connection:
             await connection.run_sync(Base.metadata.drop_all, tables=_core_tables())
+            await connection.execute(text("DROP TABLE IF EXISTS alembic_version"))
         await database.dispose()

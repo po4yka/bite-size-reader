@@ -358,7 +358,13 @@ async def session(database):
 
     from app.db.base import Base
 
-    table_names = [t.name for t in reversed(Base.metadata.sorted_tables)]
+    async with database.session() as lookup:
+        existing_rows = await lookup.execute(
+            sql_text("SELECT tablename FROM pg_tables WHERE schemaname = 'public'")
+        )
+        existing_tables = {row[0] for row in existing_rows}
+
+    table_names = [t.name for t in reversed(Base.metadata.sorted_tables) if t.name in existing_tables]
     if table_names:
         quoted = ", ".join(f'"{name}"' for name in table_names)
         async with database.transaction() as cleanup:

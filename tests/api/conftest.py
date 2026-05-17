@@ -52,7 +52,13 @@ async def _truncate_all_tables(database: Database) -> None:
     """Async helper: TRUNCATE every model table to reset DB state."""
     from sqlalchemy import text as sql_text
 
-    table_names = [t.name for t in reversed(Base.metadata.sorted_tables)]
+    async with database.session() as lookup:
+        existing_rows = await lookup.execute(
+            sql_text("SELECT tablename FROM pg_tables WHERE schemaname = 'public'")
+        )
+        existing_tables = {row[0] for row in existing_rows}
+
+    table_names = [t.name for t in reversed(Base.metadata.sorted_tables) if t.name in existing_tables]
     if not table_names:
         return
     quoted = ", ".join(f'"{name}"' for name in table_names)
@@ -78,12 +84,14 @@ async def db(monkeypatch):
     monkeypatch.setenv("JWT_SECRET_KEY", "test-secret-at-least-32-chars-long-string")
     monkeypatch.setenv("REDIS_ENABLED", "0")
     monkeypatch.setenv("DATABASE_URL", dsn)
+    monkeypatch.setenv("RATATOSKR_DATABASE_NULL_POOL", "1")
 
     clear_session_manager()
 
     database = Database(config=DatabaseConfig(dsn=dsn, pool_size=2, max_overflow=2))
     await database.migrate()
     await _truncate_all_tables(database)
+    await database.engine.dispose()
 
     # Register as the runtime cache so FastAPI dependencies (and any
     # internal `get_or_create_runtime_database_from_env()` lookup) use it.
@@ -165,11 +173,13 @@ def user_factory(db: Database):
                 select(User).where(User.telegram_user_id == telegram_user_id)
             )
             if existing is not None:
-                return existing
-            user = User(telegram_user_id=telegram_user_id, username=username, **kwargs)
-            session.add(user)
-            await session.flush()
-            return user
+                user = existing
+            else:
+                user = User(telegram_user_id=telegram_user_id, username=username, **kwargs)
+                session.add(user)
+                await session.flush()
+        await db.engine.dispose()
+        return user
 
     return create_user
 
@@ -237,7 +247,8 @@ def summary_factory(db: Database, user_factory):
             summary = Summary(**summary_kwargs)
             session.add(summary)
             await session.flush()
-            return summary
+        await db.engine.dispose()
+        return summary
 
     return create_summary
 
@@ -281,10 +292,15 @@ def _build_search_results(
     )
 
 
-@pytest.fixture
-def search_user(db):
+@pytest_asyncio.fixture
+async def search_user(db: Database):
     """Create a test user for search tests."""
-    return User.create(telegram_user_id=987654321, username="search_test_user")
+    async with db.transaction() as session:
+        user = User(telegram_user_id=987654321, username="search_test_user")
+        session.add(user)
+        await session.flush()
+    await db.engine.dispose()
+    return user
 
 
 @pytest.fixture
@@ -293,21 +309,11 @@ def search_token(search_user):
     return create_access_token(search_user.telegram_user_id, client_id="test")
 
 
-@pytest.fixture
-def search_data(db, search_user):
+@pytest_asyncio.fixture
+async def search_data(db: Database, search_user: User):
     """Create test data for search tests."""
-    # Create multiple requests and summaries
     data = []
-
-    # First article - about AI
-    req1 = Request.create(
-        user_id=search_user.telegram_user_id,
-        type="url",
-        status="completed",
-        input_url="https://example.com/ai-article",
-        normalized_url="https://example.com/ai-article",
-        created_at=datetime.now(UTC) - timedelta(days=1),
-    )
+    now = datetime.now(UTC)
 
     payload1 = {
         "summary_250": "This is an article about artificial intelligence and machine learning.",
@@ -330,36 +336,6 @@ def search_data(db, search_user):
         "confidence": 0.9,
         "hallucination_risk": "low",
     }
-
-    summary1 = Summary.create(
-        request=req1,
-        lang="en",
-        json_payload=payload1,
-        is_read=False,
-    )
-
-    # Create FTS index entry for first article
-    TopicSearchIndex.create(
-        request_id=req1.id,
-        title="Introduction to AI",
-        snippet="This is an article about artificial intelligence",
-        source="example.com",
-        published_at=datetime.now(UTC) - timedelta(days=1),
-        lang="en",
-    )
-
-    data.append({"request": req1, "summary": summary1})
-
-    # Second article - about blockchain
-    req2 = Request.create(
-        user_id=search_user.telegram_user_id,
-        type="url",
-        status="completed",
-        input_url="https://example.com/blockchain-article",
-        normalized_url="https://example.com/blockchain-article",
-        created_at=datetime.now(UTC) - timedelta(days=2),
-    )
-
     payload2 = {
         "summary_250": "Blockchain technology and cryptocurrency explained.",
         "summary_1000": "Long summary about blockchain",
@@ -382,23 +358,68 @@ def search_data(db, search_user):
         "hallucination_risk": "low",
     }
 
-    summary2 = Summary.create(
-        request=req2,
-        lang="en",
-        json_payload=payload2,
-        is_read=True,
-    )
+    async with db.transaction() as session:
+        req1 = Request(
+            user_id=search_user.telegram_user_id,
+            type="url",
+            status="completed",
+            input_url="https://example.com/ai-article",
+            normalized_url="https://example.com/ai-article",
+            created_at=now - timedelta(days=1),
+        )
+        session.add(req1)
+        await session.flush()
+        summary1 = Summary(
+            request_id=req1.id,
+            lang="en",
+            json_payload=payload1,
+            is_read=False,
+        )
+        session.add(summary1)
+        session.add(
+            TopicSearchIndex(
+                request_id=req1.id,
+                title="Introduction to AI",
+                snippet="This is an article about artificial intelligence",
+                source="example.com",
+                published_at=(now - timedelta(days=1)).isoformat(),
+                body="artificial intelligence machine learning",
+                tags="#ai #technology",
+            )
+        )
 
-    # Create FTS index entry for second article
-    TopicSearchIndex.create(
-        request_id=req2.id,
-        title="Understanding Blockchain",
-        snippet="Blockchain technology and cryptocurrency explained",
-        source="example.com",
-        published_at=datetime.now(UTC) - timedelta(days=2),
-        lang="en",
-    )
+        req2 = Request(
+            user_id=search_user.telegram_user_id,
+            type="url",
+            status="completed",
+            input_url="https://example.com/blockchain-article",
+            normalized_url="https://example.com/blockchain-article",
+            created_at=now - timedelta(days=2),
+        )
+        session.add(req2)
+        await session.flush()
+        summary2 = Summary(
+            request_id=req2.id,
+            lang="en",
+            json_payload=payload2,
+            is_read=True,
+        )
+        session.add(summary2)
+        session.add(
+            TopicSearchIndex(
+                request_id=req2.id,
+                title="Understanding Blockchain",
+                snippet="Blockchain technology and cryptocurrency explained",
+                source="example.com",
+                published_at=(now - timedelta(days=2)).isoformat(),
+                body="blockchain technology cryptocurrency",
+                tags="#blockchain #crypto",
+            )
+        )
+        await session.flush()
 
+    await db.engine.dispose()
+    data.append({"request": req1, "summary": summary1})
     data.append({"request": req2, "summary": summary2})
 
     return data
