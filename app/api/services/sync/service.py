@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime, timedelta
-from typing import cast,  TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from app.api.exceptions import (
     SyncSessionExpiredError,
@@ -61,11 +61,11 @@ class SyncFacade:
             self._crawl_repo.async_get_max_server_version(user_id),
             self._llm_repo.async_get_max_server_version(user_id),
         )
-        return cast(int, max((v for v in versions if v is not None), default=0))
+        return cast("int", max((v for v in versions if v is not None), default=0))
 
     def _resolve_limit(self, requested: int | None) -> int:
         return cast(
-            int,
+            "int",
             max(
                 self.cfg.sync.min_limit,
                 min(self.cfg.sync.max_limit, requested or self.cfg.sync.default_limit),

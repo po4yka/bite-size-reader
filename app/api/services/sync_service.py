@@ -22,8 +22,6 @@ from app.api.services.sync import (
     SyncFacade,
     SyncRecordCollector,
 )
-from app.infrastructure.redis import get_redis
-
 from app.application.ports.requests import (  # noqa: TC001  # used at runtime in __init__ signature
     CrawlResultRepositoryPort,
     LLMRepositoryPort,
@@ -37,6 +35,7 @@ from app.application.ports.users import (  # noqa: TC001  # used at runtime in _
 )
 from app.config import AppConfig  # noqa: TC001  # used at runtime in __init__ signature
 from app.db.session import Database  # noqa: TC001  # used at runtime in __init__ signature
+from app.infrastructure.redis import get_redis
 
 if TYPE_CHECKING:
     from collections.abc import Iterable

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import os
-from typing import cast,  Any
+from typing import Any, cast
 
 from fastapi import APIRouter, BackgroundTasks, Depends, UploadFile
 from starlette.responses import FileResponse
@@ -50,6 +50,9 @@ async def _read_bounded(file: UploadFile, limit: int) -> bytes:
     return b"".join(chunks)
 
 
+_read_upload_capped = _read_bounded
+
+
 def _backup_to_response(b: dict[str, Any]) -> BackupResponse:
     """Convert a backup dict to a response model."""
     return BackupResponse(
@@ -72,7 +75,7 @@ async def _verify_ownership(repo: Any, backup_id: int, user_id: int) -> dict[str
         raise ResourceNotFoundError("Backup", backup_id)
     if backup["user"] != user_id:
         raise ResourceNotFoundError("Backup", backup_id)
-    return cast(dict[str, Any], backup)
+    return cast("dict[str, Any]", backup)
 
 
 # ---------------------------------------------------------------------------

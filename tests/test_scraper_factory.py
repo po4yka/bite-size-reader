@@ -2,17 +2,15 @@
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
 from app.adapters.content.scraper.factory import ContentScraperFactory
-from app.adapters.external.firecrawl.models import FirecrawlResult
 from app.config import FirecrawlConfig
 from app.config.scraper import ScraperConfig
 from tests.conftest import make_test_app_config
-from tests.helpers.scraper_helpers import _MockProvider, _error_result, _ok_result
-
+from tests.helpers.scraper_helpers import _MockProvider
 
 # ===================================================================
 # ContentScraperFactory tests

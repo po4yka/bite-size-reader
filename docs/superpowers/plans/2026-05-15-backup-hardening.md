@@ -28,6 +28,7 @@
 ## Task 1: BackupConfig
 
 **Files:**
+
 - Create: `app/config/backup.py`
 - Modify: `app/config/settings.py` (lines 40–41 for import, line 251 for field)
 - Test: `tests/test_backup_hardening.py` (new file, first batch of tests)
@@ -179,11 +180,13 @@ def load_backup_config() -> BackupConfig:
 - [ ] **Step 4: Wire `BackupConfig` into `AppConfig` in `app/config/settings.py`**
 
 Add import after line 40 (`from .retention import RetentionConfig`):
+
 ```python
 from .backup import BackupConfig
 ```
 
 Add field after line 251 (`retention: RetentionConfig = Field(default_factory=RetentionConfig)`):
+
 ```python
     backup: BackupConfig = Field(default_factory=BackupConfig)
 ```
@@ -208,6 +211,7 @@ git commit -m "feat(config): add BackupConfig for encryption and safety limits"
 ## Task 2: Backup Crypto
 
 **Files:**
+
 - Create: `app/infrastructure/persistence/backup_crypto.py`
 - Modify: `tests/test_backup_hardening.py` (add `TestBackupCrypto` class)
 
@@ -363,6 +367,7 @@ git commit -m "feat(backup): add Fernet encrypt/decrypt helpers"
 ## Task 3: ZIP Safety Validator
 
 **Files:**
+
 - Create: `app/infrastructure/persistence/backup_safety.py`
 - Modify: `tests/test_backup_hardening.py` (add `TestZipSafety` class)
 
@@ -577,6 +582,7 @@ git commit -m "feat(backup): add ZIP safety validator (zip bomb + path traversal
 ## Task 4: Wire Encryption into Backup Creation
 
 **Files:**
+
 - Modify: `app/infrastructure/persistence/backup_archive_service.py`
 
 The current create path writes directly to `zip_path` with `zipfile.ZipFile(zip_path, "w", ...)`. This task changes it to build the ZIP into a `BytesIO` buffer first, then optionally encrypt, then write to disk.
@@ -591,6 +597,7 @@ from app.infrastructure.persistence.backup_crypto import encrypt_backup
 ```
 
 Change the `async_create_backup_archive` signature from:
+
 ```python
 async def async_create_backup_archive(
     user_id: int,
@@ -600,7 +607,9 @@ async def async_create_backup_archive(
     data_dir: str | None = None,
 ) -> None:
 ```
+
 to:
+
 ```python
 async def async_create_backup_archive(
     user_id: int,
@@ -615,6 +624,7 @@ async def async_create_backup_archive(
 - [ ] **Step 2: Replace the `zipfile.ZipFile(zip_path, ...)` block**
 
 Find (starting around line 213):
+
 ```python
         os.makedirs(backup_dir, exist_ok=True)
         timestamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
@@ -679,6 +689,7 @@ Replace with:
 - [ ] **Step 3: Update the sync wrapper to pass `cfg`**
 
 Find `create_backup_archive` (sync wrapper) and change:
+
 ```python
 def create_backup_archive(
     user_id: int,
@@ -697,7 +708,9 @@ def create_backup_archive(
         )
     )
 ```
+
 to:
+
 ```python
 def create_backup_archive(
     user_id: int,
@@ -739,6 +752,7 @@ git commit -m "feat(backup): encrypt archive on write when BACKUP_ENCRYPTION_KEY
 ## Task 5: Wire Decrypt + Safety into Restore
 
 **Files:**
+
 - Modify: `app/infrastructure/persistence/backup_archive_service.py`
 - Modify: `tests/test_backup_hardening.py` (add `TestRestoreHardening` class)
 
@@ -908,6 +922,7 @@ Note: the `encrypt_backup` import was added in Task 4; consolidate all three imp
 - [ ] **Step 4: Update `async_restore_from_archive` signature**
 
 Change:
+
 ```python
 async def async_restore_from_archive(
     user_id: int,
@@ -916,7 +931,9 @@ async def async_restore_from_archive(
     db: Database | None = None,
 ) -> dict[str, Any]:
 ```
+
 to:
+
 ```python
 async def async_restore_from_archive(
     user_id: int,
@@ -930,6 +947,7 @@ async def async_restore_from_archive(
 - [ ] **Step 5: Add decrypt + safety logic at the start of `async_restore_from_archive`**
 
 The current function body begins with:
+
 ```python
     restored: dict[str, int] = {
 ```
@@ -999,6 +1017,7 @@ Then **remove** the duplicate `restored`, `skipped`, and `errors` initialization
 - [ ] **Step 6: Update sync wrapper `restore_from_archive` to accept `cfg`**
 
 Change:
+
 ```python
 def restore_from_archive(
     user_id: int,
@@ -1009,7 +1028,9 @@ def restore_from_archive(
     """Synchronous compatibility wrapper for backup archive restore."""
     return asyncio.run(async_restore_from_archive(user_id=user_id, zip_bytes=zip_bytes, db=db))
 ```
+
 to:
+
 ```python
 def restore_from_archive(
     user_id: int,
@@ -1044,6 +1065,7 @@ git commit -m "feat(backup): decrypt + validate ZIP safety before restore DB acc
 ## Task 6: Router Hardening
 
 **Files:**
+
 - Modify: `app/api/routers/backups.py`
 - Modify: `tests/test_backup_hardening.py` (add `TestUploadCap` class)
 
@@ -1188,6 +1210,7 @@ async def restore_backup(
 **Update `download_backup`** to set the correct content-type based on actual file format:
 
 Replace:
+
 ```python
     filename = os.path.basename(file_path)
     return FileResponse(
@@ -1196,7 +1219,9 @@ Replace:
         media_type="application/zip",
     )
 ```
+
 with:
+
 ```python
     filename = os.path.basename(file_path)
     media_type = "application/zip" if filename.endswith(".zip") else "application/octet-stream"
@@ -1243,6 +1268,7 @@ git commit -m "feat(backup): cap restore upload size; correct download content-t
 ## Task 7: Docs Update
 
 **Files:**
+
 - Modify: `docs/guides/backup-and-restore.md`
 
 - [ ] **Step 1: Add Backup Encryption section**
@@ -1303,6 +1329,7 @@ open("backup.zip", "wb").write(zip_bytes)
 | `BACKUP_MAX_COMPRESSED_BYTES` | 104857600 (100 MB) | Max total compressed size |
 | `BACKUP_MAX_DECOMPRESSED_BYTES` | 524288000 (500 MB) | Max total decompressed size |
 | `BACKUP_MAX_COMPRESSION_RATIO` | 100.0 | Per-entry ratio cap (zip bomb guard) |
+
 ```
 
 - [ ] **Step 2: Run the full test suite one final time**

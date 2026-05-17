@@ -82,9 +82,8 @@ class PlatformRequestLifecycle:
             # dedupe_hash for non-academic / no-paper-id cases.
             existing_req = None
             if paper_canonical_id:
-                existing_req = (
-                    await self._message_persistence.request_repo
-                    .async_get_request_by_paper_canonical_id(paper_canonical_id)
+                existing_req = await self._message_persistence.request_repo.async_get_request_by_paper_canonical_id(
+                    paper_canonical_id
                 )
             if existing_req is None:
                 existing_req = (

@@ -13,28 +13,27 @@ def test_metrics_module_exports() -> None:
     from prometheus_client import Counter, Histogram
 
     assert isinstance(repo_metrics.GITHUB_SYNC_RUNS_TOTAL, Counter)
-    assert repo_metrics.GITHUB_SYNC_RUNS_TOTAL._name == "ratatoskr_github_sync_runs_total"
+    assert repo_metrics.GITHUB_SYNC_RUNS_TOTAL._name == "ratatoskr_github_sync_runs"
 
     assert isinstance(repo_metrics.GITHUB_SYNC_REPOS_IMPORTED_TOTAL, Counter)
     assert (
         repo_metrics.GITHUB_SYNC_REPOS_IMPORTED_TOTAL._name
-        == "ratatoskr_github_sync_repos_imported_total"
+        == "ratatoskr_github_sync_repos_imported"
     )
 
     assert isinstance(repo_metrics.GITHUB_SYNC_REPOS_UPDATED_TOTAL, Counter)
     assert (
-        repo_metrics.GITHUB_SYNC_REPOS_UPDATED_TOTAL._name
-        == "ratatoskr_github_sync_repos_updated_total"
+        repo_metrics.GITHUB_SYNC_REPOS_UPDATED_TOTAL._name == "ratatoskr_github_sync_repos_updated"
     )
 
     assert isinstance(repo_metrics.GITHUB_SYNC_REPOS_UNSTARRED_TOTAL, Counter)
     assert (
         repo_metrics.GITHUB_SYNC_REPOS_UNSTARRED_TOTAL._name
-        == "ratatoskr_github_sync_repos_unstarred_total"
+        == "ratatoskr_github_sync_repos_unstarred"
     )
 
     assert isinstance(repo_metrics.GITHUB_SYNC_LLM_CALLS_TOTAL, Counter)
-    assert repo_metrics.GITHUB_SYNC_LLM_CALLS_TOTAL._name == "ratatoskr_github_sync_llm_calls_total"
+    assert repo_metrics.GITHUB_SYNC_LLM_CALLS_TOTAL._name == "ratatoskr_github_sync_llm_calls"
 
     assert isinstance(repo_metrics.REPOSITORY_SEARCH_LATENCY_SECONDS, Histogram)
     assert (

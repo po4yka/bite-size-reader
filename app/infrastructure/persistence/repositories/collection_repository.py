@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import datetime as dt
 import uuid
-from typing import cast,  TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from sqlalchemy import delete, func, or_, select, update
 from sqlalchemy.dialects.postgresql import insert
@@ -663,9 +663,14 @@ class CollectionRepositoryAdapter:
 async def _active_collection(session: Any, collection_id: int | None) -> Collection | None:
     if collection_id is None:
         return None
-    return cast("Collection | None", await session.scalar(
-        select(Collection).where(Collection.id == collection_id, Collection.is_deleted.is_(False))
-    ))
+    return cast(
+        "Collection | None",
+        await session.scalar(
+            select(Collection).where(
+                Collection.id == collection_id, Collection.is_deleted.is_(False)
+            )
+        ),
+    )
 
 
 async def _item_count(session: Any, collection_id: int) -> int:

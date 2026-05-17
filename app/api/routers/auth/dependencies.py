@@ -32,7 +32,9 @@ except Exception:  # pragma: no cover - fallback for environments without compat
         return None
 
 
-from app.api.dependencies.database import get_auth_repository as get_db_auth_repository  # noqa: E402
+from app.api.dependencies.database import (  # noqa: E402
+    get_auth_repository as get_db_auth_repository,
+)
 from app.api.exceptions import AuthenticationError, AuthorizationError  # noqa: E402
 from app.api.routers.auth.tokens import decode_token, validate_client_id  # noqa: E402
 from app.config import Config  # noqa: E402

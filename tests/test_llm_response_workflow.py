@@ -69,9 +69,7 @@ class LLMResponseWorkflowTests(unittest.IsolatedAsyncioTestCase):
 
         self.workflow.summary_repo = MagicMock()
         self.upsert_summary_mock: AsyncMock = AsyncMock(return_value=1)
-        self.workflow.summary_repo.async_finalize_request_summary = (
-            self.upsert_summary_mock
-        )
+        self.workflow.summary_repo.async_finalize_request_summary = self.upsert_summary_mock
 
         self.workflow.llm_repo = MagicMock()
         self.insert_llm_call_mock: AsyncMock = AsyncMock(return_value=1)
@@ -150,9 +148,7 @@ class LLMResponseWorkflowTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_execute_runs_repair_on_parse_failure(self) -> None:
         llm_invalid = self._llm_response({}, text="not json")
-        llm_repaired = self._llm_response(
-            {}, text='{"summary_250": "Fixed", "tldr": "TLDR"}'
-        )
+        llm_repaired = self._llm_response({}, text='{"summary_250": "Fixed", "tldr": "TLDR"}')
         self.openrouter.chat = AsyncMock(side_effect=[llm_invalid, llm_repaired])
 
         with unittest.mock.patch(
@@ -388,9 +384,7 @@ class LLMResponseWorkflowTests(unittest.IsolatedAsyncioTestCase):
             **_workflow_repo_kwargs(),
         )
 
-        self.openrouter.chat = AsyncMock(
-            return_value=self._llm_response({"tldr": "ok"})
-        )
+        self.openrouter.chat = AsyncMock(return_value=self._llm_response({"tldr": "ok"}))
 
         with self.assertRaises(TimeoutError):
             await workflow._invoke_llm(self.request, req_id=902)
@@ -425,9 +419,7 @@ class LLMResponseWorkflowTests(unittest.IsolatedAsyncioTestCase):
         self.openrouter.chat = AsyncMock(side_effect=slow_chat)
 
         with self.assertRaises(TimeoutError):
-            await self.workflow._invoke_llm(
-                self.request, req_id=903, on_retry=retry_callback
-            )
+            await self.workflow._invoke_llm(self.request, req_id=903, on_retry=retry_callback)
 
         assert retry_callback.await_count == 0
 
@@ -442,9 +434,7 @@ class LLMResponseWorkflowTests(unittest.IsolatedAsyncioTestCase):
         summary_payload = {"summary_250": "From fallback", "tldr": "Fallback TLDR"}
         llm_response = self._llm_response(summary_payload)
 
-        self.openrouter.chat = AsyncMock(
-            side_effect=[TimeoutError("LLM timeout"), llm_response]
-        )
+        self.openrouter.chat = AsyncMock(side_effect=[TimeoutError("LLM timeout"), llm_response])
 
         req_primary = LLMRequestConfig(
             messages=self.base_messages,

@@ -46,11 +46,7 @@ _SKIP_FILES = {"tests/architecture/test_late_binding_closures.py"}
 
 
 def _names_used_in(node: ast.AST) -> set[str]:
-    return {
-        n.id
-        for n in ast.walk(node)
-        if isinstance(n, ast.Name) and isinstance(n.ctx, ast.Load)
-    }
+    return {n.id for n in ast.walk(node) if isinstance(n, ast.Name) and isinstance(n.ctx, ast.Load)}
 
 
 def _default_names(args: ast.arguments) -> set[str]:

@@ -13,7 +13,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import unicodedata
-from typing import Any,  Literal
+from typing import Any, Literal
 
 from argon2 import PasswordHasher
 from argon2.exceptions import (

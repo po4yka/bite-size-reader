@@ -132,9 +132,7 @@ class URLBatchProcessor:
             cached_summaries=[],
             semaphore=asyncio.Semaphore(batch_request.max_concurrent),
             sender=_resolve_sender(self._response_formatter),
-            draft_enabled=_is_draft_streaming_enabled(
-                _resolve_sender(self._response_formatter)
-            ),
+            draft_enabled=_is_draft_streaming_enabled(_resolve_sender(self._response_formatter)),
             initial_message_id=batch_request.initial_message_id,
         )
 
@@ -147,12 +145,8 @@ class URLBatchProcessor:
             await self._deliver_cached_summaries(state)
 
             state.progress_tracker = self._build_progress_tracker(state)
-            progress_task = asyncio.create_task(
-                state.progress_tracker.process_update_queue()
-            )
-            heartbeat_task = asyncio.create_task(
-                self._progress_heartbeat(state.progress_tracker)
-            )
+            progress_task = asyncio.create_task(state.progress_tracker.process_update_queue())
+            heartbeat_task = asyncio.create_task(self._progress_heartbeat(state.progress_tracker))
 
             try:
                 await self._process_all_urls(state)
@@ -272,10 +266,7 @@ class URLBatchProcessor:
         existing_request = await _await_if_needed(
             self._request_repo.async_get_request_by_dedupe_hash(dedupe_hash)
         )
-        if (
-            not existing_request
-            or existing_request.get("status") != RequestStatus.COMPLETED
-        ):
+        if not existing_request or existing_request.get("status") != RequestStatus.COMPLETED:
             return False
 
         request_id = existing_request.get("id")
@@ -317,15 +308,11 @@ class URLBatchProcessor:
         if state.initial_message_id is not None or state.draft_enabled:
             return
         try:
-            initial_text = BatchProgressFormatter.format_progress_message(
-                state.batch_status
-            )
-            state.initial_message_id = (
-                await self._response_formatter.safe_reply_with_id(
-                    state.request.message,
-                    initial_text,
-                    parse_mode="HTML",
-                )
+            initial_text = BatchProgressFormatter.format_progress_message(state.batch_status)
+            state.initial_message_id = await self._response_formatter.safe_reply_with_id(
+                state.request.message,
+                initial_text,
+                parse_mode="HTML",
             )
         except Exception as exc:
             logger.debug("initial_progress_message_failed", extra={"error": str(exc)})
@@ -390,17 +377,13 @@ class URLBatchProcessor:
 
         # Circuit breaker: half-open recovery after cooldown
         if state.edit_consecutive_failures >= self._EDIT_CIRCUIT_BREAKER_THRESHOLD:
-            if (
-                now - state.circuit_breaker_opened_at
-            ) < self._CIRCUIT_BREAKER_RECOVERY_SEC:
+            if (now - state.circuit_breaker_opened_at) < self._CIRCUIT_BREAKER_RECOVERY_SEC:
                 return message_id
             # Half-open: allow one probe attempt
             logger.debug("progress_circuit_breaker_half_open")
 
         try:
-            progress_text = BatchProgressFormatter.format_progress_message(
-                state.batch_status
-            )
+            progress_text = BatchProgressFormatter.format_progress_message(state.batch_status)
             draft_ok = await _send_message_draft_safe(
                 state.sender,
                 state.request.message,
@@ -423,10 +406,7 @@ class URLBatchProcessor:
                     state.edit_consecutive_failures = 0
                     return message_id
                 state.edit_consecutive_failures += 1
-                if (
-                    state.edit_consecutive_failures
-                    >= self._EDIT_CIRCUIT_BREAKER_THRESHOLD
-                ):
+                if state.edit_consecutive_failures >= self._EDIT_CIRCUIT_BREAKER_THRESHOLD:
                     state.circuit_breaker_opened_at = time.time()
                     logger.warning(
                         "progress_edit_circuit_breaker_open",
@@ -435,9 +415,7 @@ class URLBatchProcessor:
             return message_id
         except Exception as exc:
             # Detect Telegram FloodWait / rate-limit errors
-            flood_wait = getattr(exc, "value", None) or getattr(
-                exc, "retry_after", None
-            )
+            flood_wait = getattr(exc, "value", None) or getattr(exc, "retry_after", None)
             if flood_wait and isinstance(flood_wait, (int, float)):
                 state.rate_limited_until = time.time() + float(flood_wait)
                 logger.info(
@@ -466,9 +444,7 @@ class URLBatchProcessor:
             try:
                 await asyncio.sleep(self._HEARTBEAT_INTERVAL_SEC)
                 # Skip if a regular update was queued recently
-                if (
-                    time.time() - progress_tracker.last_queue_time
-                ) < self._HEARTBEAT_SKIP_SEC:
+                if (time.time() - progress_tracker.last_queue_time) < self._HEARTBEAT_SKIP_SEC:
                     continue
                 progress_tracker.force_update()
             except asyncio.CancelledError:
@@ -591,9 +567,7 @@ class URLBatchProcessor:
                     self._record_domain_timeout(state, url_domain)
                 except Exception as exc:
                     last_error = str(exc)
-                    error_type, is_transient = self._classify_processing_error(
-                        last_error
-                    )
+                    error_type, is_transient = self._classify_processing_error(last_error)
                     if is_transient and attempt < state.request.max_retries:
                         state.batch_status.mark_retrying(
                             url,
@@ -706,9 +680,7 @@ class URLBatchProcessor:
         await self._cancel_pending_tasks(pending)
 
         if not done:
-            raise TimeoutError(
-                f"Timed out after {int(current_timeout)}s (ID: {per_link_cid[:8]})"
-            )
+            raise TimeoutError(f"Timed out after {int(current_timeout)}s (ID: {per_link_cid[:8]})")
         if cancel_task is not None and cancel_task in done:
             return None
         return processing_task.result()
@@ -734,14 +706,10 @@ class URLBatchProcessor:
             state.domain_events[domain] = asyncio.Event()
         return state.domain_events[domain]
 
-    def _record_domain_timeout(
-        self, state: _BatchRunState, url_domain: str | None
-    ) -> None:
+    def _record_domain_timeout(self, state: _BatchRunState, url_domain: str | None) -> None:
         if not url_domain:
             return
-        state.domain_failure_counts[url_domain] = (
-            state.domain_failure_counts.get(url_domain, 0) + 1
-        )
+        state.domain_failure_counts[url_domain] = state.domain_failure_counts.get(url_domain, 0) + 1
         if state.domain_failure_counts[url_domain] >= self._DOMAIN_FAILFAST_THRESHOLD:
             state.failed_domains.add(url_domain)
             self._get_domain_event(state, url_domain).set()
@@ -775,17 +743,13 @@ class URLBatchProcessor:
         per_link_cid: str,
     ) -> None:
         if not (
-            result
-            and getattr(result, "success", False)
-            and getattr(result, "summary_json", None)
+            result and getattr(result, "success", False) and getattr(result, "summary_json", None)
         ):
             return
 
         async with state.delivery_lock:
             try:
-                request_id = getattr(
-                    result, "request_id", None
-                ) or state.url_to_request_id.get(url)
+                request_id = getattr(result, "request_id", None) or state.url_to_request_id.get(url)
                 await self._response_formatter.send_structured_summary_response(
                     state.request.message,
                     result.summary_json,
@@ -830,9 +794,7 @@ class URLBatchProcessor:
             )
 
     async def _send_completion_message(self, state: _BatchRunState) -> None:
-        completion_message = BatchProgressFormatter.format_completion_message(
-            state.batch_status
-        )
+        completion_message = BatchProgressFormatter.format_completion_message(state.batch_status)
         logger.info(
             "sending_batch_completion",
             extra={

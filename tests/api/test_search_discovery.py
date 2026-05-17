@@ -5,14 +5,11 @@ from __future__ import annotations
 from datetime import datetime
 from unittest.mock import AsyncMock, patch
 
-import pytest
-
 from app.api.routers.auth.tokens import create_access_token
 from app.api.services.search_service import SearchService
 from app.core.time_utils import UTC
 from app.core.url_utils import compute_dedupe_hash, normalize_url
 from app.db.models import Request, Summary, User
-
 
 # ==================== Trending Topics Tests ====================
 

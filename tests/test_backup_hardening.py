@@ -13,10 +13,10 @@ from pydantic import ValidationError
 
 from app.config.backup import BackupConfig
 
-
 # ---------------------------------------------------------------------------
 # BackupConfig
 # ---------------------------------------------------------------------------
+
 
 class TestBackupConfig:
     def test_encryption_enabled_when_key_set(self) -> None:
@@ -50,8 +50,8 @@ class TestBackupConfig:
 
 from cryptography.fernet import Fernet as _Fernet
 
-_TEST_KEY = _Fernet.generate_key()          # bytes, valid Fernet key
-_TEST_KEY_STR = _TEST_KEY.decode()          # str version
+_TEST_KEY = _Fernet.generate_key()  # bytes, valid Fernet key
+_TEST_KEY_STR = _TEST_KEY.decode()  # str version
 _OTHER_KEY = _Fernet.generate_key().decode()  # different key for wrong-key tests
 
 
@@ -226,6 +226,7 @@ class TestZipSafety:
 # Restore pipeline (decrypt + safety + import)
 # ---------------------------------------------------------------------------
 
+
 def _minimal_backup_zip() -> bytes:
     """Minimal valid backup ZIP with empty data arrays."""
     manifest = {
@@ -233,16 +234,26 @@ def _minimal_backup_zip() -> bytes:
         "user_id": 1,
         "created_at": "2024-01-01T00:00:00+00:00",
         "counts": {
-            "requests": 0, "summaries": 0, "tags": 0, "summary_tags": 0,
-            "collections": 0, "collection_items": 0, "highlights": 0,
+            "requests": 0,
+            "summaries": 0,
+            "tags": 0,
+            "summary_tags": 0,
+            "collections": 0,
+            "collection_items": 0,
+            "highlights": 0,
         },
     }
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
         zf.writestr("manifest.json", json.dumps(manifest))
         for name in (
-            "requests", "summaries", "tags", "summary_tags",
-            "collections", "collection_items", "highlights",
+            "requests",
+            "summaries",
+            "tags",
+            "summary_tags",
+            "collections",
+            "collection_items",
+            "highlights",
         ):
             zf.writestr(f"{name}.json", "[]")
     return buf.getvalue()
@@ -250,6 +261,7 @@ def _minimal_backup_zip() -> bytes:
 
 def _make_mock_db() -> MagicMock:
     """Minimal DB mock that satisfies async_restore_from_archive."""
+
     @asynccontextmanager
     async def fake_transaction():
         session = MagicMock()

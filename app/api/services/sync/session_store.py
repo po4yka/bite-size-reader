@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import cast,  Any, Protocol
+from typing import Any, Protocol, cast
 
 from app.core.json_utils import dumps as json_dumps, loads as json_loads
 from app.core.logging_utils import get_logger

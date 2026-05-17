@@ -6,10 +6,10 @@ Usage:
 """
 
 import os
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from datetime import datetime
 from pathlib import Path as _Path
-from collections.abc import AsyncGenerator
 from typing import Any
 
 from fastapi import Depends, FastAPI, HTTPException, Request
@@ -77,7 +77,7 @@ logger = get_logger(__name__)
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
+async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     runtime = None
     broker = None
     coco_runtime = None

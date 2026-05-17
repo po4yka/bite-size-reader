@@ -44,10 +44,7 @@ class _DatabaseDetailsCache:
         self.lock = asyncio.Lock()
 
     def fresh(self, now: float) -> bool:
-        return (
-            self.value is not None
-            and now - self.cached_at < _DATABASE_DETAILS_TTL_SECONDS
-        )
+        return self.value is not None and now - self.cached_at < _DATABASE_DETAILS_TTL_SECONDS
 
     def clear(self) -> None:
         self.value = None

@@ -21,6 +21,7 @@ from app.core.logging_utils import get_logger
 from app.db.models import Request, Summary, SummaryEmbedding
 from app.db.session import Database  # noqa: TC001 — taskiq resolves type hints at runtime
 from app.infrastructure.embedding.embedding_factory import create_embedding_service
+from app.infrastructure.locks.redis_lock import RedisDistributedLock
 from app.infrastructure.persistence.repositories.embedding_repository import (
     EmbeddingRepositoryAdapter,
 )
@@ -30,7 +31,6 @@ from app.infrastructure.persistence.repositories.request_repository import (
 from app.infrastructure.persistence.repositories.summary_repository import (
     SummaryRepositoryAdapter,
 )
-from app.infrastructure.locks.redis_lock import RedisDistributedLock
 from app.infrastructure.redis import get_redis
 from app.tasks.broker import broker
 from app.tasks.deps import get_app_config, get_db

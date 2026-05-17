@@ -242,11 +242,14 @@ class BackgroundProcessor:
         *,
         metadata: dict[str, Any] | None = None,
     ) -> str:
-        return cast(str, self._url_request_handler.resolve_request_language(
-            request,
-            content_text,
-            metadata=metadata,
-        ))
+        return cast(
+            "str",
+            self._url_request_handler.resolve_request_language(
+                request,
+                content_text,
+                metadata=metadata,
+            ),
+        )
 
     @staticmethod
     def _build_error_payload(stage: str, exc: Exception) -> dict[str, Any]:

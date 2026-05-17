@@ -8,7 +8,6 @@ import pytest
 
 from app.infrastructure.locks.redis_lock import RedisDistributedLock
 
-
 # ---------------------------------------------------------------------------
 # Fake Redis helpers
 # ---------------------------------------------------------------------------
@@ -20,7 +19,9 @@ class _FakeRedis:
     def __init__(self) -> None:
         self._store: dict[str, str] = {}
 
-    async def set(self, key: str, value: str, *, nx: bool = False, ex: int | None = None) -> str | None:
+    async def set(
+        self, key: str, value: str, *, nx: bool = False, ex: int | None = None
+    ) -> str | None:
         if nx and key in self._store:
             return None  # key already exists — SET NX fails
         self._store[key] = value

@@ -63,9 +63,7 @@ class ProviderRotationTracker:
                 excluded_provider=rejected_provider,
                 used_rotations=len(excluded),
             )
-            return ProviderRotationDecision(
-                advance_model=True, excluded_providers=tuple(excluded)
-            )
+            return ProviderRotationDecision(advance_model=True, excluded_providers=tuple(excluded))
 
         if rejected_provider not in excluded:
             excluded.append(rejected_provider)
@@ -76,9 +74,7 @@ class ProviderRotationTracker:
             excluded_provider=rejected_provider,
             used_rotations=len(excluded),
         )
-        return ProviderRotationDecision(
-            advance_model=False, excluded_providers=tuple(excluded)
-        )
+        return ProviderRotationDecision(advance_model=False, excluded_providers=tuple(excluded))
 
     def _emit(self, event: str, **fields: object) -> None:
         if self._audit is None:

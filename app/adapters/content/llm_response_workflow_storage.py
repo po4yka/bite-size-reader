@@ -71,8 +71,7 @@ class LLMWorkflowStorageMixin:
         model = (
             attempt.get("model")
             or getattr(llm, "model", None)
-            or (getattr(self.cfg, "openrouter", None)
-            and self.cfg.openrouter.model)
+            or (getattr(self.cfg, "openrouter", None) and self.cfg.openrouter.model)
             or "unknown"
         )
         return {
@@ -104,9 +103,7 @@ class LLMWorkflowStorageMixin:
         attempt_trigger: str | None = None,
     ) -> None:
         cascade_attempts = list(getattr(llm, "per_model_attempts", []) or [])
-        payload = self._build_llm_call_payload(
-            llm, req_id, attempt_trigger=attempt_trigger
-        )
+        payload = self._build_llm_call_payload(llm, req_id, attempt_trigger=attempt_trigger)
 
         if self._db_write_queue is not None:
             for cascade_attempt in cascade_attempts:
@@ -137,9 +134,7 @@ class LLMWorkflowStorageMixin:
 
         for cascade_attempt in cascade_attempts:
             try:
-                cascade_payload = self._build_cascade_attempt_payload(
-                    llm, req_id, cascade_attempt
-                )
+                cascade_payload = self._build_cascade_attempt_payload(llm, req_id, cascade_attempt)
                 await self.llm_repo.async_insert_llm_call(cascade_payload)
             except Exception as exc:
                 logger.warning(

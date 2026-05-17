@@ -15,7 +15,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "0007"
-down_revision: str = "0006"
+down_revision: tuple[str, str] = ("0006", "0001b")
 branch_labels = None
 depends_on = None
 

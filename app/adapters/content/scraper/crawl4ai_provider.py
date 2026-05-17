@@ -120,9 +120,10 @@ class Crawl4AIProvider:
             current_endpoint = crawl_endpoint
             data: dict[str, Any] | None = None
             for _ in range(5):
-                safe, reason = is_url_safe(current_endpoint)
-                if not safe:
-                    raise ValueError(f"SSRF blocked redirect target: {reason}")
+                if current_endpoint != crawl_endpoint:
+                    safe, reason = is_url_safe(current_endpoint)
+                    if not safe:
+                        raise ValueError(f"SSRF blocked redirect target: {reason}")
                 resp = await client.post(
                     current_endpoint,
                     json=payload,

@@ -151,6 +151,39 @@
         }
       }
     },
+    "/v1/auth/logout-all": {
+      "post": {
+        "tags": [
+          "Authentication"
+        ],
+        "summary": "Logout All Sessions",
+        "description": "Revoke every active refresh-token family for the current user.\n\nEnumerates the distinct ``family_id`` values across the user's active\nrefresh tokens, bulk-revokes each family, and writes one\n``AuditLog`` row per revoked family. The current refresh cookie is\ncleared. Returns the number of families and tokens revoked.",
+        "operationId": "logout_all_v1_auth_logout_all_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Every active session for the user has been revoked.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthorizedError"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        }
+      }
+    },
     "/v1/auth/sessions": {
       "get": {
         "tags": [

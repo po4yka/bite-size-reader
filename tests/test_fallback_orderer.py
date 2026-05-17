@@ -26,9 +26,7 @@ class FakeLatencyRepo:
     stats: dict[str, LatencyStats] = field(default_factory=dict)
     calls: list[tuple[str, int]] = field(default_factory=list)
 
-    async def async_get_model_latency_stats(
-        self, model: str, days: int = 7
-    ) -> LatencyStats:
+    async def async_get_model_latency_stats(self, model: str, days: int = 7) -> LatencyStats:
         self.calls.append((model, days))
         return self.stats.get(model, LatencyStats(p50_ms=None, p95_ms=None, sample_count=0))
 
@@ -55,9 +53,7 @@ class TestPrimaryFixed:
 
 
 class TestReorderByLatency:
-    async def test_sorts_fallbacks_by_p95_ascending(
-        self, repo: FakeLatencyRepo
-    ) -> None:
+    async def test_sorts_fallbacks_by_p95_ascending(self, repo: FakeLatencyRepo) -> None:
         # alt-b is significantly faster than alt-a — well beyond stickiness.
         repo.stats = {
             "primary": _stats(500),
@@ -98,27 +94,21 @@ class TestStickinessBias:
 
 
 class TestColdStart:
-    async def test_unobserved_models_are_appended_last(
-        self, repo: FakeLatencyRepo
-    ) -> None:
+    async def test_unobserved_models_are_appended_last(self, repo: FakeLatencyRepo) -> None:
         repo.stats = {
             "alt-a": _stats(200),
             "alt-c": _stats(100),
             # alt-b has no samples
         }
         orderer = FallbackOrderer(repo=repo, stickiness_factor=2.0)
-        result = await orderer.order(
-            primary="primary", fallbacks=("alt-a", "alt-b", "alt-c")
-        )
+        result = await orderer.order(primary="primary", fallbacks=("alt-a", "alt-b", "alt-c"))
         assert result[0] == "primary"
         # alt-b (cold) must be last; alt-c < alt-a (observed) should sort by latency.
         assert result[-1] == "alt-b"
         observed_segment = result[1:-1]
         assert observed_segment == ["alt-c", "alt-a"]
 
-    async def test_insufficient_samples_treated_as_cold(
-        self, repo: FakeLatencyRepo
-    ) -> None:
+    async def test_insufficient_samples_treated_as_cold(self, repo: FakeLatencyRepo) -> None:
         # alt-a has very few samples (< 10) and is not considered "observed".
         repo.stats = {
             "alt-a": LatencyStats(p50_ms=None, p95_ms=10, sample_count=2),
@@ -131,9 +121,7 @@ class TestColdStart:
 
 
 class TestCaching:
-    async def test_cached_within_ttl_avoids_repo_calls(
-        self, repo: FakeLatencyRepo
-    ) -> None:
+    async def test_cached_within_ttl_avoids_repo_calls(self, repo: FakeLatencyRepo) -> None:
         repo.stats = {"alt-a": _stats(200), "alt-b": _stats(500)}
         orderer = FallbackOrderer(repo=repo, stickiness_factor=2.0, ttl_seconds=300)
         await orderer.order(primary="primary", fallbacks=("alt-a", "alt-b"))
@@ -142,9 +130,7 @@ class TestCaching:
         # No additional repo calls — cache served the second invocation.
         assert len(repo.calls) == call_count_after_first
 
-    async def test_cache_can_be_invalidated_via_zero_ttl(
-        self, repo: FakeLatencyRepo
-    ) -> None:
+    async def test_cache_can_be_invalidated_via_zero_ttl(self, repo: FakeLatencyRepo) -> None:
         repo.stats = {"alt-a": _stats(200)}
         orderer = FallbackOrderer(repo=repo, stickiness_factor=2.0, ttl_seconds=0)
         await orderer.order(primary="primary", fallbacks=("alt-a",))
@@ -154,9 +140,7 @@ class TestCaching:
 
 
 class TestEdgeCases:
-    async def test_empty_fallbacks_returns_primary_only(
-        self, repo: FakeLatencyRepo
-    ) -> None:
+    async def test_empty_fallbacks_returns_primary_only(self, repo: FakeLatencyRepo) -> None:
         orderer = FallbackOrderer(repo=repo, stickiness_factor=2.0)
         result = await orderer.order(primary="primary", fallbacks=())
         assert result == ["primary"]
@@ -164,18 +148,12 @@ class TestEdgeCases:
     async def test_no_repo_returns_original_order(self) -> None:
         # Without a repo, we always keep the configured order — defensive default.
         orderer = FallbackOrderer(repo=None, stickiness_factor=2.0)
-        result = await orderer.order(
-            primary="primary", fallbacks=("alt-a", "alt-b")
-        )
+        result = await orderer.order(primary="primary", fallbacks=("alt-a", "alt-b"))
         assert result == ["primary", "alt-a", "alt-b"]
 
-    async def test_primary_deduplicated_from_fallbacks(
-        self, repo: FakeLatencyRepo
-    ) -> None:
+    async def test_primary_deduplicated_from_fallbacks(self, repo: FakeLatencyRepo) -> None:
         orderer = FallbackOrderer(repo=repo, stickiness_factor=2.0)
-        result = await orderer.order(
-            primary="primary", fallbacks=("primary", "alt-a")
-        )
+        result = await orderer.order(primary="primary", fallbacks=("primary", "alt-a"))
         # Primary must not appear twice.
         assert result.count("primary") == 1
         assert "alt-a" in result
@@ -206,7 +184,5 @@ class TestErrorIsolation:
                 raise RuntimeError("db down")
 
         orderer = FallbackOrderer(repo=FailingRepo(), stickiness_factor=2.0)
-        result = await orderer.order(
-            primary="primary", fallbacks=("alt-a", "alt-b")
-        )
+        result = await orderer.order(primary="primary", fallbacks=("alt-a", "alt-b"))
         assert result == ["primary", "alt-a", "alt-b"]

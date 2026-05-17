@@ -305,9 +305,7 @@ async def test_refresh_persists_family_id_and_parent_token_hash_on_rotation(db, 
         )
 
     assert new_row is not None
-    assert new_row.family_id == original_family_id, (
-        "rotation must inherit the parent's family_id"
-    )
+    assert new_row.family_id == original_family_id, "rotation must inherit the parent's family_id"
     assert new_row.parent_token_hash == old_hash, (
         "rotation must chain parent_token_hash to the predecessor"
     )
@@ -347,9 +345,7 @@ async def test_refresh_family_revoke_writes_one_audit_log_row(db, user_factory):
         audit_rows = list(
             (
                 await session.execute(
-                    sa_select(AuditLogModel).where(
-                        AuditLogModel.event == "refresh_family_revoked"
-                    )
+                    sa_select(AuditLogModel).where(AuditLogModel.event == "refresh_family_revoked")
                 )
             )
             .scalars()
@@ -435,9 +431,7 @@ async def test_logout_all_revokes_every_active_family_for_user(db, user_factory)
     current_user = {"user_id": user.telegram_user_id}
     auth_repo = get_auth_repository()
 
-    result = await logout_all(
-        response=response, current_user=current_user, auth_repo=auth_repo
-    )
+    result = await logout_all(response=response, current_user=current_user, auth_repo=auth_repo)
     assert result["data"]["revokedFamilies"] == 3
 
     for tok in (tok1, tok2, tok3):
@@ -455,9 +449,7 @@ async def test_logout_all_revokes_every_active_family_for_user(db, user_factory)
             sa_select(RefreshTokenModel).where(RefreshTokenModel.token_hash == other_hash)
         )
     assert other_row is not None
-    assert other_row.is_revoked is False, (
-        "logout-all must NOT revoke other users' tokens"
-    )
+    assert other_row.is_revoked is False, "logout-all must NOT revoke other users' tokens"
 
 
 @pytest.mark.asyncio
@@ -483,9 +475,7 @@ async def test_logout_all_writes_one_audit_log_per_revoked_family(db, user_facto
         audit_rows = list(
             (
                 await session.execute(
-                    sa_select(AuditLogModel).where(
-                        AuditLogModel.event == "refresh_family_revoked"
-                    )
+                    sa_select(AuditLogModel).where(AuditLogModel.event == "refresh_family_revoked")
                 )
             )
             .scalars()

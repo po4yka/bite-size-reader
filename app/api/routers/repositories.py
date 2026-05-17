@@ -21,7 +21,9 @@ from app.api.models.responses.repositories import (
 from app.api.routers.auth import get_current_user
 from app.core.logging_utils import get_logger
 from app.db.models.repository import Repository
-from app.db.session import Database  # noqa: TC001  # used at runtime in FastAPI Depends() signatures
+from app.db.session import (  # noqa: TC001  # used at runtime in FastAPI Depends() signatures
+    Database,
+)
 
 if TYPE_CHECKING:
     from app.adapters.github.platform_extractor import GitHubPlatformExtractor

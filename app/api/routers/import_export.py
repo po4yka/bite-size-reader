@@ -12,6 +12,7 @@ from app.api.exceptions import APIException, ErrorCode
 from app.api.models.responses import success_response
 from app.api.routers.auth import get_current_user
 from app.api.services.import_export_service import ImportExportService
+from app.config.settings import load_config
 from app.core.logging_utils import get_logger
 from app.domain.services.import_export import (
     CsvExporter,
@@ -20,7 +21,6 @@ from app.domain.services.import_export import (
     NetscapeHtmlExporter,
 )
 from app.domain.services.import_parsers import PARSER_REGISTRY
-from app.config.settings import load_config
 from app.tasks.import_tasks import process_import_job
 
 logger = get_logger(__name__)
@@ -125,10 +125,7 @@ async def import_bookmarks(
 
     if len(bookmarks) > cfg.max_items:
         raise APIException(
-            message=(
-                f"Import contains {len(bookmarks)} items; "
-                f"maximum allowed is {cfg.max_items}"
-            ),
+            message=(f"Import contains {len(bookmarks)} items; maximum allowed is {cfg.max_items}"),
             error_code=ErrorCode.VALIDATION_ERROR,
             status_code=400,
         )

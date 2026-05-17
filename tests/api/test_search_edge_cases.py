@@ -5,13 +5,10 @@ from __future__ import annotations
 from datetime import datetime
 from unittest.mock import AsyncMock, patch
 
-import pytest
-
 from app.api.models.responses import SearchResult
 from app.api.services.search_service import SearchService
 from app.core.time_utils import UTC
 from tests.api.conftest import _build_search_results
-
 
 # ==================== Edge Cases and Error Handling ====================
 

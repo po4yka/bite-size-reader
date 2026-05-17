@@ -722,9 +722,7 @@ def record_aggregation_synthesis(
         ).inc(cost_usd)
 
 
-def record_llm_call_attempt(
-    *, provider: str, model: str, status: str
-) -> None:
+def record_llm_call_attempt(*, provider: str, model: str, status: str) -> None:
     """Record a single LLM call attempt.
 
     Args:
@@ -739,9 +737,7 @@ def record_llm_call_attempt(
     """
     if not PROMETHEUS_AVAILABLE:
         return
-    LLM_CALL_ATTEMPTS_TOTAL.labels(
-        provider=provider, model=model, status=status
-    ).inc()
+    LLM_CALL_ATTEMPTS_TOTAL.labels(provider=provider, model=model, status=status).inc()
 
 
 def record_llm_call_retry_exhaustion(*, model: str) -> None:
@@ -782,14 +778,10 @@ def record_scraper_attempt(*, provider: str, status: str) -> None:
     SCRAPER_ATTEMPTS_TOTAL.labels(provider=provider, status=status).inc()
 
 
-def record_scraper_attempt_latency(
-    *, provider: str, latency_seconds: float
-) -> None:
+def record_scraper_attempt_latency(*, provider: str, latency_seconds: float) -> None:
     """Record per-attempt scraper provider latency."""
     if not PROMETHEUS_AVAILABLE:
         return
     if latency_seconds < 0:
         return
-    SCRAPER_ATTEMPT_LATENCY_SECONDS.labels(provider=provider).observe(
-        latency_seconds
-    )
+    SCRAPER_ATTEMPT_LATENCY_SECONDS.labels(provider=provider).observe(latency_seconds)

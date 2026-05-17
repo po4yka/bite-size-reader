@@ -47,9 +47,7 @@ def upgrade() -> None:
     # text. Each historical token becomes a singleton family —
     # matches today's no-rotation behaviour.
     op.execute(
-        "UPDATE refresh_tokens "
-        "SET family_id = gen_random_uuid()::text "
-        "WHERE family_id IS NULL"
+        "UPDATE refresh_tokens SET family_id = gen_random_uuid()::text WHERE family_id IS NULL"
     )
     # 3. Promote family_id to NOT NULL once backfilled.
     op.alter_column("refresh_tokens", "family_id", nullable=False)

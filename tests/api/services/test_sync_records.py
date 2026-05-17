@@ -1,16 +1,10 @@
 """Tests for sync service data operations: collect, paginate, get_full, get_delta, apply_changes."""
 
-import json
 from datetime import datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from app.api.exceptions import (
-    SyncSessionExpiredError,
-    SyncSessionForbiddenError,
-    SyncSessionNotFoundError,
-)
 from app.api.models.responses import SyncEntityEnvelope
 from app.api.services.sync_service import SyncService
 from app.core.time_utils import UTC

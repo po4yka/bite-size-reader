@@ -10,7 +10,6 @@ from fastapi.testclient import TestClient
 from app.api.routers.auth.tokens import create_access_token
 from app.db.models import User
 
-
 # ---------------------------------------------------------------------------
 # db-dump endpoint
 # ---------------------------------------------------------------------------

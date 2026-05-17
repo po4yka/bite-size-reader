@@ -27,27 +27,17 @@ class TestLLMCallAttemptsCounter:
         if not metrics_module.PROMETHEUS_AVAILABLE:
             pytest.skip("prometheus_client unavailable")
         metric = metrics_module.LLM_CALL_ATTEMPTS_TOTAL
-        before = metric.labels(
-            provider="openrouter", model="m1", status="success"
-        )._value.get()
-        metrics_module.record_llm_call_attempt(
-            provider="openrouter", model="m1", status="success"
-        )
-        after = metric.labels(
-            provider="openrouter", model="m1", status="success"
-        )._value.get()
+        before = metric.labels(provider="openrouter", model="m1", status="success")._value.get()
+        metrics_module.record_llm_call_attempt(provider="openrouter", model="m1", status="success")
+        after = metric.labels(provider="openrouter", model="m1", status="success")._value.get()
         assert after == before + 1.0
 
     def test_record_attempt_error_status(self, metrics_module) -> None:
         if not metrics_module.PROMETHEUS_AVAILABLE:
             pytest.skip("prometheus_client unavailable")
         metric = metrics_module.LLM_CALL_ATTEMPTS_TOTAL
-        before = metric.labels(
-            provider="openrouter", model="m2", status="error"
-        )._value.get()
-        metrics_module.record_llm_call_attempt(
-            provider="openrouter", model="m2", status="error"
-        )
+        before = metric.labels(provider="openrouter", model="m2", status="error")._value.get()
+        metrics_module.record_llm_call_attempt(provider="openrouter", model="m2", status="error")
         assert (
             metric.labels(provider="openrouter", model="m2", status="error")._value.get()
             == before + 1.0
@@ -58,9 +48,7 @@ class TestLLMCallAttemptsCounter:
     ) -> None:
         monkeypatch.setattr(metrics_module, "PROMETHEUS_AVAILABLE", False)
         # Must not raise.
-        metrics_module.record_llm_call_attempt(
-            provider="openrouter", model="x", status="success"
-        )
+        metrics_module.record_llm_call_attempt(provider="openrouter", model="x", status="success")
 
 
 class TestRetryExhaustionCounter:
@@ -98,9 +86,7 @@ class TestExposedInMetricsEndpoint:
             provider="openrouter", model="exposed-test", status="success"
         )
         metrics_module.record_llm_call_retry_exhaustion(model="exposed-test")
-        metrics_module.record_llm_call_latency(
-            model="exposed-test", latency_seconds=1.0
-        )
+        metrics_module.record_llm_call_latency(model="exposed-test", latency_seconds=1.0)
         payload = metrics_module.get_metrics().decode("utf-8")
         assert "ratatoskr_llm_call_attempts_total" in payload
         assert "ratatoskr_llm_call_retry_exhaustion_total" in payload

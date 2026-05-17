@@ -15,8 +15,8 @@ class BackupConfig(BaseModel):
         validation_alias="BACKUP_ENCRYPTION_KEY",
         description=(
             "Fernet key (44-char url-safe base64). "
-            "Generate with: python -c \"from cryptography.fernet import Fernet; "
-            "print(Fernet.generate_key().decode())\""
+            'Generate with: python -c "from cryptography.fernet import Fernet; '
+            'print(Fernet.generate_key().decode())"'
         ),
     )
     encryption_enabled: bool | None = Field(

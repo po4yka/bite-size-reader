@@ -18,9 +18,7 @@ class OpenRouterConfig(BaseModel):
     model_config = ConfigDict(frozen=True, populate_by_name=True)
 
     api_key: str = Field(..., validation_alias="OPENROUTER_API_KEY")
-    model: str = Field(
-        default="deepseek/deepseek-v4-flash", validation_alias="OPENROUTER_MODEL"
-    )
+    model: str = Field(default="deepseek/deepseek-v4-flash", validation_alias="OPENROUTER_MODEL")
     # Order: fastest to most-capable; fastest-first ensures the user gets a response
     # before the outer per-URL timeout fires when the primary stalls.
     fallback_models: tuple[str, ...] = Field(
@@ -32,21 +30,15 @@ class OpenRouterConfig(BaseModel):
         ),
         validation_alias="OPENROUTER_FALLBACK_MODELS",
     )
-    http_referer: str | None = Field(
-        default=None, validation_alias="OPENROUTER_HTTP_REFERER"
-    )
+    http_referer: str | None = Field(default=None, validation_alias="OPENROUTER_HTTP_REFERER")
     x_title: str | None = Field(default=None, validation_alias="OPENROUTER_X_TITLE")
-    max_tokens: int | None = Field(
-        default=None, validation_alias="OPENROUTER_MAX_TOKENS"
-    )
+    max_tokens: int | None = Field(default=None, validation_alias="OPENROUTER_MAX_TOKENS")
     top_p: float | None = Field(default=None, validation_alias="OPENROUTER_TOP_P")
     temperature: float = Field(default=0.2, validation_alias="OPENROUTER_TEMPERATURE")
     provider_order: tuple[str, ...] = Field(
         default_factory=tuple, validation_alias="OPENROUTER_PROVIDER_ORDER"
     )
-    enable_stats: bool = Field(
-        default=False, validation_alias="OPENROUTER_ENABLE_STATS"
-    )
+    enable_stats: bool = Field(default=False, validation_alias="OPENROUTER_ENABLE_STATS")
     long_context_model: str | None = Field(
         default="minimax/minimax-m2",
         validation_alias="OPENROUTER_LONG_CONTEXT_MODEL",
@@ -76,9 +68,7 @@ class OpenRouterConfig(BaseModel):
     structured_output_mode: str = Field(
         default="json_schema", validation_alias="OPENROUTER_STRUCTURED_OUTPUT_MODE"
     )
-    require_parameters: bool = Field(
-        default=True, validation_alias="OPENROUTER_REQUIRE_PARAMETERS"
-    )
+    require_parameters: bool = Field(default=True, validation_alias="OPENROUTER_REQUIRE_PARAMETERS")
     auto_fallback_structured: bool = Field(
         default=True, validation_alias="OPENROUTER_AUTO_FALLBACK_STRUCTURED"
     )
@@ -187,9 +177,7 @@ class OpenRouterConfig(BaseModel):
             raise ValueError(msg)
         return top_p
 
-    @field_validator(
-        "summary_top_p_relaxed", "summary_top_p_json_fallback", mode="before"
-    )
+    @field_validator("summary_top_p_relaxed", "summary_top_p_json_fallback", mode="before")
     @classmethod
     def _validate_summary_top_p(cls, value: Any) -> float | None:
         if value in (None, ""):
@@ -256,9 +244,7 @@ class OpenRouterConfig(BaseModel):
             return ()
         iterable = value if isinstance(value, list | tuple) else str(value).split(",")
 
-        allowed = set(
-            "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-:"
-        )
+        allowed = set("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-:")
         parsed: list[str] = []
         for raw in iterable:
             slug = str(raw).strip()
@@ -502,9 +488,7 @@ class OpenAIConfig(_FallbackModelsMixin, BaseModel):
         default_factory=lambda: ("gpt-4o-mini",),
         validation_alias="OPENAI_FALLBACK_MODELS",
     )
-    organization: str | None = Field(
-        default=None, validation_alias="OPENAI_ORGANIZATION"
-    )
+    organization: str | None = Field(default=None, validation_alias="OPENAI_ORGANIZATION")
     enable_structured_outputs: bool = Field(
         default=True, validation_alias="OPENAI_ENABLE_STRUCTURED_OUTPUTS"
     )
@@ -622,9 +606,7 @@ class AnthropicConfig(_FallbackModelsMixin, BaseModel):
     model_config = ConfigDict(frozen=True, populate_by_name=True)
 
     api_key: str = Field(default="", validation_alias="ANTHROPIC_API_KEY")
-    model: str = Field(
-        default="claude-sonnet-4-5-20250929", validation_alias="ANTHROPIC_MODEL"
-    )
+    model: str = Field(default="claude-sonnet-4-5-20250929", validation_alias="ANTHROPIC_MODEL")
     fallback_models: tuple[str, ...] = Field(
         default_factory=lambda: ("claude-3-5-haiku-20241022",),
         validation_alias="ANTHROPIC_FALLBACK_MODELS",

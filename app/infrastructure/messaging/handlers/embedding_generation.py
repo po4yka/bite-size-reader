@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-from typing import cast,  TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from app.core.logging_utils import get_logger
 

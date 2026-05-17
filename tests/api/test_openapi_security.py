@@ -67,9 +67,7 @@ def _get_code_protected_routes(app: Any, protected_fn: Any) -> set[tuple[str, st
     protected: set[tuple[str, str]] = set()
     for route in app.routes:
         if not (
-            hasattr(route, "dependant")
-            and hasattr(route, "methods")
-            and hasattr(route, "path")
+            hasattr(route, "dependant") and hasattr(route, "methods") and hasattr(route, "path")
         ):
             continue
         if _depends_on(route.dependant, protected_fn):

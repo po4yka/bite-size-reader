@@ -48,9 +48,7 @@ class LocalRateLimiter:
         with self._lock:
             if now - self._cleanup_last > self._CLEANUP_INTERVAL_SEC:
                 stale_keys = [
-                    k
-                    for k in self._buckets
-                    if int(k.split(":")[-1]) < window_start - window
+                    k for k in self._buckets if int(k.split(":")[-1]) < window_start - window
                 ]
                 for k in stale_keys:
                     del self._buckets[k]

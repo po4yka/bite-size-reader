@@ -21,7 +21,6 @@ from app.adapters.academic.platform_extractor import (
 )
 from app.adapters.academic.url_patterns import AcademicHost, AcademicPaperRef
 
-
 # ---------------------------------------------------------------------------
 # _extract_abstract
 # ---------------------------------------------------------------------------
@@ -35,9 +34,7 @@ def test_extract_abstract_after_h2_heading() -> None:
         "## Introduction\n\n"
         "Body content here."
     )
-    assert _extract_abstract(md) == (
-        "This is the abstract text. It spans multiple sentences."
-    )
+    assert _extract_abstract(md) == ("This is the abstract text. It spans multiple sentences.")
 
 
 def test_extract_abstract_after_h3_heading() -> None:
@@ -102,11 +99,7 @@ def test_extract_title_prefers_metadata_over_h1() -> None:
 
 
 def test_harvest_pdf_anchor_basic() -> None:
-    md = (
-        "Some text.\n\n"
-        "[Open PDF in Browser](https://example.com/paper.pdf)\n\n"
-        "More text."
-    )
+    md = "Some text.\n\n[Open PDF in Browser](https://example.com/paper.pdf)\n\nMore text."
     assert _harvest_pdf_anchor(md) == "https://example.com/paper.pdf"
 
 
@@ -119,10 +112,7 @@ def test_harvest_pdf_anchor_with_query_string() -> None:
 
 def test_harvest_pdf_anchor_picks_first_match() -> None:
     """When multiple PDF anchors exist (e.g. paper + supplements), take the first."""
-    md = (
-        "[Main paper](https://example.com/main.pdf)\n\n"
-        "[Supplement](https://example.com/supp.pdf)"
-    )
+    md = "[Main paper](https://example.com/main.pdf)\n\n[Supplement](https://example.com/supp.pdf)"
     assert _harvest_pdf_anchor(md) == "https://example.com/main.pdf"
 
 

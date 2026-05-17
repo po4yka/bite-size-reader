@@ -1,16 +1,10 @@
 """Tests for sync service misc/serialization: serialization edge cases, build responses, coerce_iso."""
 
-import json
-from datetime import datetime, timedelta
-from unittest.mock import AsyncMock, MagicMock, patch
+from datetime import datetime
+from unittest.mock import MagicMock
 
 import pytest
 
-from app.api.exceptions import (
-    SyncSessionExpiredError,
-    SyncSessionForbiddenError,
-    SyncSessionNotFoundError,
-)
 from app.api.models.responses import SyncEntityEnvelope
 from app.api.services.sync_service import SyncService
 from app.core.time_utils import UTC

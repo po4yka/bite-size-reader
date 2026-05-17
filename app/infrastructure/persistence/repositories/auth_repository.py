@@ -140,9 +140,7 @@ class AuthRepositoryAdapter:
 
         return hashes
 
-    async def async_list_active_family_records_for_user(
-        self, user_id: int
-    ) -> list[dict[str, Any]]:
+    async def async_list_active_family_records_for_user(self, user_id: int) -> list[dict[str, Any]]:
         """Return every active (non-revoked, non-expired) refresh-token row
         for a user. Used by ``POST /v1/auth/logout-all`` to enumerate the
         distinct families to revoke.

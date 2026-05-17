@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import cast,  Any
+from typing import Any, cast
 
 from app.api.dependencies.database import (
     get_bookmark_import_repository,
@@ -100,7 +100,7 @@ class ImportExportService:
             raise ResourceNotFoundError("ImportJob", job_id)
         if job["user"] != user_id:
             raise ResourceNotFoundError("ImportJob", job_id)
-        return cast(dict[str, Any], job)
+        return cast("dict[str, Any]", job)
 
     @staticmethod
     def _job_to_response(job: dict[str, Any]) -> ImportJobResponse:

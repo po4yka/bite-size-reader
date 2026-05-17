@@ -14,12 +14,12 @@ from typing import TYPE_CHECKING, Any
 import httpx
 
 from app.core.logging_utils import get_logger
-from app.security.ssrf import make_safe_async_client
 from app.domain.services.webhook_service import (
     build_webhook_payload,
     is_webhook_url_safe,
     sign_payload,
 )
+from app.security.ssrf import make_safe_async_client
 
 if TYPE_CHECKING:
     from app.application.ports.requests import RequestRepositoryPort

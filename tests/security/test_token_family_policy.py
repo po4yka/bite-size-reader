@@ -55,12 +55,8 @@ class TestFirstFamilyToken:
     def test_first_token_in_family_rotates_cleanly(self) -> None:
         # The presented token is the leaf of the family (no children).
         tok = _rec(token_hash="t1", family_id="fam-1")
-        decision = TokenFamilyPolicy.decide(
-            presented_token=tok, family_records=[tok], now=_now()
-        )
-        assert decision == FamilyDecision(
-            kind=FamilyDecisionKind.ROTATE, family_id="fam-1"
-        )
+        decision = TokenFamilyPolicy.decide(presented_token=tok, family_records=[tok], now=_now())
+        assert decision == FamilyDecision(kind=FamilyDecisionKind.ROTATE, family_id="fam-1")
 
 
 class TestReplayDetection:
@@ -68,21 +64,15 @@ class TestReplayDetection:
         # Two tokens in family fam-2: t1 (retired) and t2 (current).
         # Attacker presents the retired t1 -> revoke family.
         t1 = _rec(token_hash="t1", family_id="fam-2", is_revoked=True)
-        t2 = _rec(
-            token_hash="t2", family_id="fam-2", parent_token_hash="t1"
-        )
-        decision = TokenFamilyPolicy.decide(
-            presented_token=t1, family_records=[t1, t2], now=_now()
-        )
+        t2 = _rec(token_hash="t2", family_id="fam-2", parent_token_hash="t1")
+        decision = TokenFamilyPolicy.decide(presented_token=t1, family_records=[t1, t2], now=_now())
         assert decision.kind is FamilyDecisionKind.REVOKE_FAMILY
         assert decision.family_id == "fam-2"
 
     def test_already_revoked_current_leaf_does_not_rotate(self) -> None:
         # A revoked leaf with no descendants should still reject (not rotate).
         tok = _rec(token_hash="t1", family_id="fam-3", is_revoked=True)
-        decision = TokenFamilyPolicy.decide(
-            presented_token=tok, family_records=[tok], now=_now()
-        )
+        decision = TokenFamilyPolicy.decide(presented_token=tok, family_records=[tok], now=_now())
         assert decision.kind is FamilyDecisionKind.REVOKE_FAMILY
 
 
@@ -93,12 +83,8 @@ class TestExpiry:
             family_id="fam-4",
             expires_at=_now() - _dt.timedelta(hours=1),
         )
-        decision = TokenFamilyPolicy.decide(
-            presented_token=tok, family_records=[tok], now=_now()
-        )
-        assert decision == FamilyDecision(
-            kind=FamilyDecisionKind.REJECT, family_id="fam-4"
-        )
+        decision = TokenFamilyPolicy.decide(presented_token=tok, family_records=[tok], now=_now())
+        assert decision == FamilyDecision(kind=FamilyDecisionKind.REJECT, family_id="fam-4")
 
     def test_expired_token_in_already_rotated_family_does_not_revoke(self) -> None:
         # User let an old token sit until it expired; their new token is
@@ -115,9 +101,7 @@ class TestExpiry:
             parent_token_hash="t1",
         )
         # Old token presented past its expiry: REJECT, do not cascade.
-        decision = TokenFamilyPolicy.decide(
-            presented_token=t1, family_records=[t1, t2], now=_now()
-        )
+        decision = TokenFamilyPolicy.decide(presented_token=t1, family_records=[t1, t2], now=_now())
         assert decision.kind is FamilyDecisionKind.REJECT
 
 
@@ -126,16 +110,10 @@ class TestConcurrentRefresh:
         # Edge case: two concurrent refresh attempts from the same client.
         # The policy should treat a refresh whose token is the latest
         # (not retired) as a normal rotation, regardless of siblings.
-        t1 = _rec(
-            token_hash="t1", family_id="fam-6", is_revoked=True
-        )
-        t2 = _rec(
-            token_hash="t2", family_id="fam-6", parent_token_hash="t1"
-        )
+        t1 = _rec(token_hash="t1", family_id="fam-6", is_revoked=True)
+        t2 = _rec(token_hash="t2", family_id="fam-6", parent_token_hash="t1")
         # Present t2 — current leaf, not revoked → rotate.
-        decision = TokenFamilyPolicy.decide(
-            presented_token=t2, family_records=[t1, t2], now=_now()
-        )
+        decision = TokenFamilyPolicy.decide(presented_token=t2, family_records=[t1, t2], now=_now())
         assert decision.kind is FamilyDecisionKind.ROTATE
         assert decision.family_id == "fam-6"
 

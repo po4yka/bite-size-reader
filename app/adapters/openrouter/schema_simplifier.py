@@ -46,9 +46,7 @@ def simplify_schema(schema: dict[str, Any], step: int) -> dict[str, Any]:
     if step < 0:
         raise ValueError("step must be >= 0")
     if step > _TOTAL_STEPS:
-        raise SchemaSimplificationExhausted(
-            f"requested step {step} exceeds max {_TOTAL_STEPS}"
-        )
+        raise SchemaSimplificationExhausted(f"requested step {step} exceeds max {_TOTAL_STEPS}")
 
     out = copy.deepcopy(schema)
     if step >= 1:
@@ -89,9 +87,7 @@ def _unwrap_single_branch_alternation(schema: dict[str, Any]) -> dict[str, Any]:
     def fn(node: dict[str, Any]) -> dict[str, Any]:
         for key in ("oneOf", "anyOf"):
             branches = node.get(key)
-            if isinstance(branches, list) and len(branches) == 1 and isinstance(
-                branches[0], dict
-            ):
+            if isinstance(branches, list) and len(branches) == 1 and isinstance(branches[0], dict):
                 inlined = copy.deepcopy(branches[0])
                 node.pop(key)
                 # Merge inlined keys without overwriting explicit siblings.

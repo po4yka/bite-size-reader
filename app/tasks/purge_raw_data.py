@@ -58,9 +58,7 @@ async def purge_raw_data(
 ) -> PurgeStats:
     """Acquire Redis lock and delegate to _purge_body."""
     redis_client = await get_redis(cfg)
-    async with RedisDistributedLock(
-        redis_client, _PURGE_LOCK_KEY, _PURGE_LOCK_TTL
-    ) as acquired:
+    async with RedisDistributedLock(redis_client, _PURGE_LOCK_KEY, _PURGE_LOCK_TTL) as acquired:
         if not acquired:
             logger.info(
                 "data_purge_skipped_lock_held",
@@ -88,15 +86,9 @@ async def _purge_body(cfg: AppConfig, db: Database) -> PurgeStats:
         telegram_raw=await _purge_telegram_raw(db, now, ret.telegram_raw_days, batch),
         crawl_content=await _purge_crawl_content(db, now, ret.crawl_content_days, batch),
         llm_payload=await _purge_llm_payload(db, now, ret.llm_payload_days, batch),
-        video_transcript=await _purge_video_transcript(
-            db, now, ret.video_transcript_days, batch
-        ),
-        interaction_text=await _purge_interaction_text(
-            db, now, ret.interaction_text_days, batch
-        ),
-        request_content=await _purge_request_content(
-            db, now, ret.request_content_days, batch
-        ),
+        video_transcript=await _purge_video_transcript(db, now, ret.video_transcript_days, batch),
+        interaction_text=await _purge_interaction_text(db, now, ret.interaction_text_days, batch),
+        request_content=await _purge_request_content(db, now, ret.request_content_days, batch),
     )
     logger.info("data_purge_complete", extra=asdict(stats))
     return stats
@@ -113,9 +105,7 @@ async def _null_columns(
         return result.rowcount or 0  # type: ignore[attr-defined]
 
 
-async def _purge_telegram_raw(
-    db: Database, now: dt.datetime, days: int, batch: int
-) -> int:
+async def _purge_telegram_raw(db: Database, now: dt.datetime, days: int, batch: int) -> int:
     """NULL text_full, entities_json, telegram_raw_json.
 
     telegram_messages has no own timestamp; age is derived from the parent
@@ -147,9 +137,7 @@ async def _purge_telegram_raw(
     return await _null_columns(db, stmt=stmt)
 
 
-async def _purge_crawl_content(
-    db: Database, now: dt.datetime, days: int, batch: int
-) -> int:
+async def _purge_crawl_content(db: Database, now: dt.datetime, days: int, batch: int) -> int:
     """NULL content_markdown, content_html, raw_response_json, firecrawl_details_json,
     structured_json, metadata_json, links_json.
 
@@ -195,9 +183,7 @@ async def _purge_crawl_content(
     return await _null_columns(db, stmt=stmt)
 
 
-async def _purge_llm_payload(
-    db: Database, now: dt.datetime, days: int, batch: int
-) -> int:
+async def _purge_llm_payload(db: Database, now: dt.datetime, days: int, batch: int) -> int:
     """NULL request_messages_json, request_headers_json, response_text, response_json,
     openrouter_response_text, openrouter_response_json.
 
@@ -239,9 +225,7 @@ async def _purge_llm_payload(
     return await _null_columns(db, stmt=stmt)
 
 
-async def _purge_video_transcript(
-    db: Database, now: dt.datetime, days: int, batch: int
-) -> int:
+async def _purge_video_transcript(db: Database, now: dt.datetime, days: int, batch: int) -> int:
     """NULL transcript_text in video_downloads."""
     if days == 0:
         return 0
@@ -264,9 +248,7 @@ async def _purge_video_transcript(
     return await _null_columns(db, stmt=stmt)
 
 
-async def _purge_interaction_text(
-    db: Database, now: dt.datetime, days: int, batch: int
-) -> int:
+async def _purge_interaction_text(db: Database, now: dt.datetime, days: int, batch: int) -> int:
     """NULL input_text in user_interactions."""
     if days == 0:
         return 0
@@ -289,9 +271,7 @@ async def _purge_interaction_text(
     return await _null_columns(db, stmt=stmt)
 
 
-async def _purge_request_content(
-    db: Database, now: dt.datetime, days: int, batch: int
-) -> int:
+async def _purge_request_content(db: Database, now: dt.datetime, days: int, batch: int) -> int:
     """NULL content_text and error_context_json in requests."""
     if days == 0:
         return 0
@@ -303,10 +283,7 @@ async def _purge_request_content(
                 select(Request.id)
                 .where(
                     Request.created_at < cutoff,
-                    (
-                        Request.content_text.is_not(None)
-                        | Request.error_context_json.is_not(None)
-                    ),
+                    (Request.content_text.is_not(None) | Request.error_context_json.is_not(None)),
                 )
                 .order_by(Request.id)
                 .limit(batch)

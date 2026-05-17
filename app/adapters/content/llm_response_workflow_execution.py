@@ -203,9 +203,7 @@ class LLMWorkflowExecutionMixin:
         )
         return None
 
-    def build_structured_response_format(
-        self, mode: str | None = None
-    ) -> dict[str, Any]:
+    def build_structured_response_format(self, mode: str | None = None) -> dict[str, Any]:
         """Build response format configuration for structured outputs."""
         try:
             from app.core.summary_contract import get_summary_json_schema
@@ -233,9 +231,7 @@ class LLMWorkflowExecutionMixin:
         attempt_trigger: str | None = None,
     ) -> None:
         """Public helper to persist an LLM call."""
-        await self._persist_llm_call(
-            llm, req_id, correlation_id, attempt_trigger=attempt_trigger
-        )
+        await self._persist_llm_call(llm, req_id, correlation_id, attempt_trigger=attempt_trigger)
 
     async def _resolve_llm_timeout(self, model: str | None) -> tuple[float, str]:
         """Determine the LLM call timeout, preferring the adaptive service."""
@@ -254,15 +250,11 @@ class LLMWorkflowExecutionMixin:
 
         return fixed_timeout, "fixed"
 
-    async def _invoke_llm(
-        self, request: Any, req_id: int, on_retry: Any | None = None
-    ) -> Any:
+    async def _invoke_llm(self, request: Any, req_id: int, on_retry: Any | None = None) -> Any:
         from app.adapters.content.llm_response_workflow import ConcurrencyTimeoutError
 
         sem_timeout = getattr(self.cfg.runtime, "semaphore_acquire_timeout_sec", 30.0)
-        llm_timeout, timeout_source = await self._resolve_llm_timeout(
-            request.model_override
-        )
+        llm_timeout, timeout_source = await self._resolve_llm_timeout(request.model_override)
 
         # Compute per-model timeout: divide total budget among models in fallback chain,
         # then enforce a minimum floor so slow models in long ladders are not starved.
@@ -279,9 +271,7 @@ class LLMWorkflowExecutionMixin:
             self.openrouter, "_fallback_models", ()
         )
         num_models = 1 + len(fallback_models or ())
-        per_model_min = float(
-            getattr(self.cfg.runtime, "llm_per_model_timeout_min_sec", 90.0)
-        )
+        per_model_min = float(getattr(self.cfg.runtime, "llm_per_model_timeout_min_sec", 90.0))
         per_model_timeout = max(per_model_min, llm_timeout / max(num_models, 1))
         between_model_buffer = 15.0 if num_models > 1 else 0.0
         effective_llm_timeout = max(

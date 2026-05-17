@@ -11,7 +11,6 @@ import pytest
 
 from app.security.ssrf import is_ip_blocked, is_url_safe
 
-
 # ---------------------------------------------------------------------------
 # is_ip_blocked — individual IP payload checks
 # ---------------------------------------------------------------------------
@@ -69,7 +68,7 @@ def test_is_url_safe_blocks_localhost_name() -> None:
 
 
 def test_is_url_safe_blocks_ipv4_loopback_literal() -> None:
-    safe, reason = is_url_safe("http://127.0.0.1/")
+    safe, _ = is_url_safe("http://127.0.0.1/")
     assert safe is False
 
 
@@ -95,11 +94,13 @@ def test_is_url_safe_blocks_ipv4_mapped_ipv6() -> None:
 
 def test_is_url_safe_returns_false_on_dns_failure() -> None:
     with patch("app.security.ssrf.resolve_host_ips", side_effect=socket.gaierror("NXDOMAIN")):
-        safe, reason = is_url_safe("http://does-not-exist.invalid/")
+        safe, _ = is_url_safe("http://does-not-exist.invalid/")
     assert safe is False
 
 
-def test_is_url_safe_blocks_hostname_that_resolves_to_private(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_is_url_safe_blocks_hostname_that_resolves_to_private(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     # Patch resolve_host_ips to return a private IP; is_url_safe must block the request.
     # The reason string may reference the resolved IP or the hostname depending on
     # whether is_ip_blocked short-circuits before DNS resolution.

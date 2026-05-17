@@ -22,6 +22,7 @@
 ## Task 1: Fix Dockerfile.api browser installation
 
 **Files:**
+
 - Modify: `ops/docker/Dockerfile.api:54-58`
 
 ### What is wrong now
@@ -37,6 +38,7 @@ RUN if [ "${WITH_PLAYWRIGHT}" = "1" ]; then playwright install --with-deps chrom
 ```
 
 Problems:
+
 1. No `ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright` — browser lands in `/root/.cache/ms-playwright`, invisible to `appuser`.
 2. No `mkdir -p /ms-playwright` before install.
 3. No `patchright install chromium` — Scrapling's stealth browser path goes unresolved.
@@ -91,6 +93,7 @@ grep -n "PLAYWRIGHT\|playwright\|patchright\|ms-playwright\|WITH_PLAYWRIGHT" ops
 ```
 
 Expected output (approximate line numbers):
+
 ```
 54:# Install Chromium for Playwright-based scraping fallback.
 63:ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
@@ -116,6 +119,7 @@ git commit -m "fix(docker): align API Dockerfile browser install with bot (PLAYW
 ## Task 2: Add CI smoke test for API image browser execution as appuser
 
 **Files:**
+
 - Modify: `.github/workflows/ci.yml`
 
 The existing `docker-build` CI job builds only `Dockerfile` (the bot image) using `docker/build-push-action` with `load: false` (image is cached but not loaded locally). We need a separate job that builds `Dockerfile.api` with a regular `docker build` command (so the image is available locally), then runs a Chromium path check as UID 1000 (the `appuser` UID).

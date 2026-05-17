@@ -70,9 +70,7 @@ class TokenFamilyPolicy:
         # If it's revoked, treat as replay regardless of whether it has
         # children — keeps the rule simple and safe.
         if presented_token.is_revoked:
-            return FamilyDecision(
-                kind=FamilyDecisionKind.REVOKE_FAMILY, family_id=family_id
-            )
+            return FamilyDecision(kind=FamilyDecisionKind.REVOKE_FAMILY, family_id=family_id)
 
         # Healthy leaf — rotate.
         return FamilyDecision(kind=FamilyDecisionKind.ROTATE, family_id=family_id)

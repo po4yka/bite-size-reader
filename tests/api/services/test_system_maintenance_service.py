@@ -18,6 +18,7 @@ def _make_service(tmp_path, *, side_effect=None):
     if side_effect is not None:
         database.create_backup_copy.side_effect = side_effect
     else:
+
         def create_backup(dest: str) -> Path:
             path = Path(dest)
             path.write_bytes(b"pgdump-content")

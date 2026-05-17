@@ -226,16 +226,16 @@ class PlaywrightProvider:
             def _block_ssrf_route(route: object) -> None:
                 # Best-effort URL-level SSRF filter for browser-initiated requests.
                 # Does not close the DNS-rebinding window (browser DNS is opaque).
-                req_url: str = route.request.url  # type: ignore[union-attr]
+                req_url: str = route.request.url  # type: ignore[attr-defined]
                 safe, reason = is_url_safe(req_url)
                 if not safe:
                     logger.warning(
                         "playwright_ssrf_blocked",
                         extra={"url": req_url, "reason": reason},
                     )
-                    route.abort("accessdenied")  # type: ignore[union-attr]
+                    route.abort("accessdenied")  # type: ignore[attr-defined]
                     return
-                route.continue_()  # type: ignore[union-attr]
+                route.continue_()  # type: ignore[attr-defined]
 
             page.route("**/*", _block_ssrf_route)
 

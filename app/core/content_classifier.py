@@ -272,9 +272,7 @@ def _heuristic_weights(
 
 def _is_tie(tier: ContentTier, tech_weight: int, socio_weight: int) -> bool:
     """A tie is: heuristic returned DEFAULT yet both sides scored >= 1."""
-    return (
-        tier is ContentTier.DEFAULT and tech_weight >= 1 and socio_weight >= 1
-    )
+    return tier is ContentTier.DEFAULT and tech_weight >= 1 and socio_weight >= 1
 
 
 def _log_classification(
@@ -411,9 +409,7 @@ class LLMTierClassifier:
         self._max_tokens = max_tokens
         self._cache: dict[str, ContentTier] = {}
 
-    async def resolve_tie(
-        self, content_text: str, *, url: str | None
-    ) -> ContentTier | None:
+    async def resolve_tie(self, content_text: str, *, url: str | None) -> ContentTier | None:
         if not self._enabled:
             return None
         if not content_text or not content_text.strip():

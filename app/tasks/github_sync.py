@@ -23,6 +23,8 @@ from app.db.models.repository import (
     UserGitHubIntegration,
 )
 from app.db.session import Database  # noqa: TC001 — taskiq resolves type hints at runtime
+from app.infrastructure.locks.redis_lock import RedisDistributedLock
+from app.infrastructure.redis import get_redis
 from app.observability.metrics_repositories import (
     GITHUB_SYNC_LLM_CALLS_TOTAL,
     GITHUB_SYNC_REPOS_IMPORTED_TOTAL,
@@ -31,8 +33,6 @@ from app.observability.metrics_repositories import (
     GITHUB_SYNC_RUNS_TOTAL,
 )
 from app.security.token_crypto import decrypt_token
-from app.infrastructure.locks.redis_lock import RedisDistributedLock
-from app.infrastructure.redis import get_redis
 from app.tasks.broker import broker
 from app.tasks.deps import get_app_config, get_db
 

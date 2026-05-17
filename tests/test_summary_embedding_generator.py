@@ -189,9 +189,7 @@ async def test_dependency_error_is_logged_without_traceback(generator_fixture) -
         "libcudart.so.13: cannot open shared object file"
     )
 
-    with patch(
-        "app.application.services.summary_embedding_generator.logger"
-    ) as mock_logger:
+    with patch("app.application.services.summary_embedding_generator.logger") as mock_logger:
         first = await generator.generate_embedding_for_summary(12, {"summary_250": "text"})
         second = await generator.generate_embedding_for_summary(13, {"summary_250": "text"})
 

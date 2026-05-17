@@ -116,9 +116,7 @@ class TestFailureSoftFallthrough:
         classifier = LLMTierClassifier(client=client, model="m", enabled=True)
         assert await classifier.resolve_tie("text", url=None) is None
 
-    async def test_empty_text_returns_none_without_calling(
-        self, client: FakeLLMClient
-    ) -> None:
+    async def test_empty_text_returns_none_without_calling(self, client: FakeLLMClient) -> None:
         classifier = LLMTierClassifier(client=client, model="m", enabled=True)
         assert await classifier.resolve_tie("", url=None) is None
         assert client.calls == []
@@ -149,9 +147,7 @@ class TestTieBreakIntegration:
     tie (``tech_weight == socio_weight >= 1``). For unambiguous inputs
     the LLM must never be called."""
 
-    async def test_unambiguous_input_does_not_call_llm(
-        self, client: FakeLLMClient
-    ) -> None:
+    async def test_unambiguous_input_does_not_call_llm(self, client: FakeLLMClient) -> None:
         from app.core.content_classifier import classify_content_async
 
         classifier = LLMTierClassifier(client=client, model="m", enabled=True)
@@ -164,9 +160,7 @@ class TestTieBreakIntegration:
         assert tier is ContentTier.TECHNICAL
         assert client.calls == []
 
-    async def test_tie_triggers_llm_classifier(
-        self, client: FakeLLMClient
-    ) -> None:
+    async def test_tie_triggers_llm_classifier(self, client: FakeLLMClient) -> None:
         from app.core.content_classifier import classify_content_async
 
         client.reply_text = "technical"
@@ -177,9 +171,7 @@ class TestTieBreakIntegration:
             "algorithm runtime compiler kernel database performance optimisation "
             "election democracy policy government legislature regulation citizens"
         )
-        tier = await classify_content_async(
-            text, url=None, llm_classifier=classifier
-        )
+        tier = await classify_content_async(text, url=None, llm_classifier=classifier)
         assert tier is ContentTier.TECHNICAL
         assert len(client.calls) == 1
 
@@ -193,9 +185,7 @@ class TestTieBreakIntegration:
             "algorithm runtime compiler kernel database performance optimisation "
             "election democracy policy government legislature regulation citizens"
         )
-        tier = await classify_content_async(
-            text, url=None, llm_classifier=classifier
-        )
+        tier = await classify_content_async(text, url=None, llm_classifier=classifier)
         assert tier is ContentTier.DEFAULT
         assert client.calls == []
 
@@ -227,9 +217,7 @@ class TestConfigDefaults:
 
 
 class TestPromptShape:
-    async def test_prompt_is_short_and_asks_for_label(
-        self, client: FakeLLMClient
-    ) -> None:
+    async def test_prompt_is_short_and_asks_for_label(self, client: FakeLLMClient) -> None:
         client.reply_text = "default"
         classifier = LLMTierClassifier(client=client, model="m", enabled=True)
         await classifier.resolve_tie(

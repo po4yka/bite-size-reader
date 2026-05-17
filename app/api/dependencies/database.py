@@ -33,12 +33,17 @@ else:
 logger = get_logger(__name__)
 
 
+def resolve_api_runtime(request: Any = None) -> Any:
+    """Resolve the API runtime through a patchable module-level wrapper."""
+    from app.di.api import resolve_api_runtime as _resolve_api_runtime
+
+    return _resolve_api_runtime(request)
+
+
 def get_session_manager(request: Any = None) -> Database:
     """Resolve the shared API database facade."""
-    from app.di.api import resolve_api_runtime
-
     try:
-        return resolve_api_runtime(request).db
+        return cast("Database", resolve_api_runtime(request).db)
     except RuntimeError:
         manager = get_or_create_runtime_database_from_env(migrate=True)
         logger.info(
@@ -75,8 +80,6 @@ def resolve_repository_session(
         return session_manager
 
     with contextlib.suppress(RuntimeError):
-        from app.di.api import resolve_api_runtime
-
         return resolve_api_runtime(request).db
 
     return get_session_manager(request)
@@ -294,7 +297,9 @@ def get_summary_read_model_use_case(
     with contextlib.suppress(RuntimeError):
         from app.di.api import resolve_api_runtime
 
-        return cast(SummaryReadModelUseCase, resolve_api_runtime(request).summary_read_model_use_case)
+        return cast(
+            "SummaryReadModelUseCase", resolve_api_runtime(request).summary_read_model_use_case
+        )
     manager = resolve_repository_session(session_manager, request)
     return SummaryReadModelUseCase(
         summary_repository=get_summary_repository(manager, request),
@@ -319,7 +324,9 @@ def get_search_read_model_use_case(
     with contextlib.suppress(RuntimeError):
         from app.di.api import resolve_api_runtime
 
-        return cast(SearchReadModelUseCase, resolve_api_runtime(request).search_read_model_use_case)
+        return cast(
+            "SearchReadModelUseCase", resolve_api_runtime(request).search_read_model_use_case
+        )
     manager = resolve_repository_session(session_manager, request)
     return SearchReadModelUseCase(
         topic_search_repository=get_topic_search_repository(manager, request),

@@ -54,8 +54,7 @@ async def test_floor_applied_when_estimate_below_floor() -> None:
     )
 
     assert result >= floor, (
-        f"Expected compute_timeout >= {floor}, got {result}. "
-        "Floor was not applied."
+        f"Expected compute_timeout >= {floor}, got {result}. Floor was not applied."
     )
 
 

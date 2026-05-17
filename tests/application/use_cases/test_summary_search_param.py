@@ -35,9 +35,7 @@ async def test_search_param_is_threaded_to_repository() -> None:
         llm_repository=AsyncMock(),
     )
 
-    await use_case.get_user_summaries(
-        user_id=42, limit=10, offset=0, search="kotlin"
-    )
+    await use_case.get_user_summaries(user_id=42, limit=10, offset=0, search="kotlin")
 
     call = repo.async_get_user_summaries.await_args
     assert call is not None

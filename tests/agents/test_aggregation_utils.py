@@ -5,8 +5,6 @@ from __future__ import annotations
 from typing import Any
 from unittest.mock import MagicMock
 
-import pytest
-
 from app.agents._aggregation_utils import (
     _canonical_sentence,
     _clean_string_list,
@@ -24,7 +22,6 @@ from app.agents._aggregation_utils import (
     _truncate,
 )
 from app.application.dto.aggregation import AggregationEvidenceKind, ExtractedTextKind
-
 
 # ---------------------------------------------------------------------------
 # _truncate

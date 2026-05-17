@@ -6,7 +6,7 @@ import math
 import re
 from collections import Counter
 from dataclasses import dataclass
-from datetime import datetime, UTC
+from datetime import UTC, datetime
 from typing import Any
 
 from app.application.services.topic_search_utils import ensure_mapping

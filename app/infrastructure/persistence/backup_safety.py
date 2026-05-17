@@ -37,9 +37,7 @@ def validate_zip_safety(
         raise ZipSafetyViolation("Archive contains no entries")
 
     if len(entries) > max_entries:
-        raise ZipSafetyViolation(
-            f"Archive has {len(entries)} entries; limit is {max_entries}"
-        )
+        raise ZipSafetyViolation(f"Archive has {len(entries)} entries; limit is {max_entries}")
 
     total_compressed = sum(e.compress_size for e in entries)
     if total_compressed > max_compressed_bytes:

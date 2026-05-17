@@ -38,17 +38,23 @@ def _make_qdrant_stubs() -> None:
             *,
             must: list | None = None,
             should: list | None = None,
-            min_should: int | None = None,
+            min_should: object | None = None,
         ) -> None:
             self.must = must or []
             self.should = should
             self.min_should = min_should
+
+    class _MinShould:
+        def __init__(self, *, conditions: list, min_count: int) -> None:
+            self.conditions = conditions
+            self.min_count = min_count
 
     models_mod = types.ModuleType("qdrant_client.models")
     models_mod.FieldCondition = _Condition  # type: ignore[attr-defined]
     models_mod.MatchValue = _MatchValue  # type: ignore[attr-defined]
     models_mod.MatchAny = _MatchAny  # type: ignore[attr-defined]
     models_mod.Filter = _Filter  # type: ignore[attr-defined]
+    models_mod.MinShould = _MinShould  # type: ignore[attr-defined]
 
     qdrant_mod = types.ModuleType("qdrant_client")
     qdrant_mod.models = models_mod  # type: ignore[attr-defined]
@@ -236,7 +242,8 @@ async def test_search_filters_by_topics_with_should() -> None:
     assert len(qdrant_filter.should) == 2
     topic_values = {c.match.value for c in qdrant_filter.should}
     assert topic_values == {"pytest", "testing"}
-    assert qdrant_filter.min_should == 1
+    assert qdrant_filter.min_should.min_count == 1
+    assert qdrant_filter.min_should.conditions == qdrant_filter.should
 
 
 @pytest.mark.asyncio

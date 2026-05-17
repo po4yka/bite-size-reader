@@ -239,9 +239,7 @@ class AcademicPlatformExtractor(PlatformExtractor):
             )
 
         detected_lang = detect_language(content_text)
-        content_source = (
-            "academic_paper_full" if pdf_text else "academic_paper_abstract_only"
-        )
+        content_source = "academic_paper_full" if pdf_text else "academic_paper_abstract_only"
 
         if request.mode == "interactive" and request_id is not None:
             await self._lifecycle.persist_detected_lang(request_id, detected_lang)

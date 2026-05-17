@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import time
-from typing import cast,  Any
+from typing import Any, cast
 
 import httpx
 from fastapi import APIRouter, Depends, Query
@@ -97,7 +97,7 @@ async def _verify_ownership(repo: Any, webhook_id: int, user_id: int) -> dict[st
         raise ResourceNotFoundError("WebhookSubscription", webhook_id)
     if sub["user"] != user_id:
         raise ResourceNotFoundError("WebhookSubscription", webhook_id)
-    return cast(dict[str, Any], sub)
+    return cast("dict[str, Any]", sub)
 
 
 def _validate_events(events: list[str]) -> None:

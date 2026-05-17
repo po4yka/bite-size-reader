@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import re
 
-import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -80,7 +79,7 @@ class TestSanitizeCorrelationId:
         assert _VALID_RE.fullmatch(cid)
 
     def test_generated_id_format(self):
-        cid, generated = sanitize_correlation_id(None)
+        cid, _ = sanitize_correlation_id(None)
         assert cid.startswith("api-")
         assert len(cid) == len("api-") + 16
 
@@ -122,4 +121,6 @@ class TestCorrelationIdMiddleware:
             resp = client.get("/ping", headers=headers)
             cid = resp.headers.get("X-Correlation-ID", "")
             assert cid, f"Missing X-Correlation-ID for input {header_value!r}"
-            assert _VALID_RE.fullmatch(cid), f"Unsafe correlation ID {cid!r} for input {header_value!r}"
+            assert _VALID_RE.fullmatch(cid), (
+                f"Unsafe correlation ID {cid!r} for input {header_value!r}"
+            )

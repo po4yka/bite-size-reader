@@ -76,9 +76,9 @@ def first_positional(viewer: str, args: list[str]) -> str | None:
             skip_next = False
             continue
         if t.startswith("-") and len(t) > 1:
-            if viewer in ("head", "tail") and t in ("-n", "-c"):
-                skip_next = True
-            elif viewer == "sed" and t in ("-e", "-f", "-i"):
+            if (viewer in ("head", "tail") and t in ("-n", "-c")) or (
+                viewer == "sed" and t in ("-e", "-f", "-i")
+            ):
                 skip_next = True
             continue
         if viewer == "sed" and not saw_sed_script:

@@ -57,9 +57,7 @@ class TestRemoveAdditionalPropertiesFalse:
         out = simplify_schema(schema, step=1)
         assert "additionalProperties" not in out
 
-    def test_strips_additional_properties_false_nested(
-        self, strict_summary_schema: dict
-    ) -> None:
+    def test_strips_additional_properties_false_nested(self, strict_summary_schema: dict) -> None:
         out = simplify_schema(strict_summary_schema, step=1)
         # Both root and the nested $defs/Tag had additionalProperties: false
         assert "additionalProperties" not in out
@@ -164,9 +162,7 @@ class TestStepCount:
         # 5 ordered steps as documented in the task spec.
         assert simplification_steps() == 5
 
-    def test_step_zero_returns_original_copy(
-        self, strict_summary_schema: dict
-    ) -> None:
+    def test_step_zero_returns_original_copy(self, strict_summary_schema: dict) -> None:
         out = simplify_schema(strict_summary_schema, step=0)
         assert out == strict_summary_schema
         # Defensive copy

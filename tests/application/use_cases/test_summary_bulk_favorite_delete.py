@@ -30,9 +30,7 @@ async def test_bulk_favorite_threads_and_returns_count() -> None:
         crawl_result_repository=AsyncMock(),
         llm_repository=AsyncMock(),
     )
-    out = await use_case.bulk_set_favorite(
-        user_id=7, summary_ids=[10, 11], value=True
-    )
+    out = await use_case.bulk_set_favorite(user_id=7, summary_ids=[10, 11], value=True)
     assert out == 2
     call = repo.async_bulk_set_summaries_favorite.await_args
     assert call is not None

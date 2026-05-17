@@ -106,34 +106,37 @@ class TopicSearchRepositoryAdapter:
         if not search_query:
             return [], 0
 
-        where_user = "AND r.user_id = :user_id" if user_id is not None else ""
         params: dict[str, Any] = {
             "query": search_query,
             "limit": limit,
             "offset": offset,
             "user_id": user_id,
         }
-        count_sql = text(
-            f"""
-            SELECT COUNT(*)
-            FROM topic_search_index AS t
-            JOIN requests AS r ON t.request_id = r.id
-            WHERE t.body_tsv @@ websearch_to_tsquery('simple', :query)
-            {where_user}
-            """
+        count_sql_lines = [
+            "SELECT COUNT(*)",
+            "FROM topic_search_index AS t",
+            "JOIN requests AS r ON t.request_id = r.id",
+            "WHERE t.body_tsv @@ websearch_to_tsquery('simple', :query)",
+        ]
+        search_sql_lines = [
+            "SELECT t.request_id, t.title, t.snippet, t.source, t.published_at",
+            "FROM topic_search_index AS t",
+            "JOIN requests AS r ON t.request_id = r.id",
+            "WHERE t.body_tsv @@ websearch_to_tsquery('simple', :query)",
+        ]
+        if user_id is not None:
+            user_filter = "AND r.user_id = :user_id"
+            count_sql_lines.append(user_filter)
+            search_sql_lines.append(user_filter)
+        search_sql_lines.extend(
+            [
+                "ORDER BY ts_rank_cd(t.body_tsv, websearch_to_tsquery('simple', :query)) DESC,",
+                "         t.request_id DESC",
+                "LIMIT :limit OFFSET :offset",
+            ]
         )
-        search_sql = text(
-            f"""
-            SELECT t.request_id, t.title, t.snippet, t.source, t.published_at
-            FROM topic_search_index AS t
-            JOIN requests AS r ON t.request_id = r.id
-            WHERE t.body_tsv @@ websearch_to_tsquery('simple', :query)
-            {where_user}
-            ORDER BY ts_rank_cd(t.body_tsv, websearch_to_tsquery('simple', :query)) DESC,
-                     t.request_id DESC
-            LIMIT :limit OFFSET :offset
-            """
-        )
+        count_sql = text("\n".join(count_sql_lines))
+        search_sql = text("\n".join(search_sql_lines))
         async with self._database.session() as session:
             total = int((await session.execute(count_sql, params)).scalar_one() or 0)
             rows = await session.execute(search_sql, params)

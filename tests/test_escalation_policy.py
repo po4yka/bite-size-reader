@@ -80,9 +80,7 @@ class TestDecision:
             reason=SoftFailureReason.JSON_PARSE_ERROR,
             remaining_fallbacks=("strong-pro",),
         )
-        assert decision == EscalationDecision(
-            advance_model=True, next_model="strong-pro"
-        )
+        assert decision == EscalationDecision(advance_model=True, next_model="strong-pro")
 
     def test_no_remaining_fallback_does_not_escalate(self) -> None:
         policy = EscalationPolicy(max_escalations=2)

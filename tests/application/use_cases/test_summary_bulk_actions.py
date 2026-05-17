@@ -18,9 +18,7 @@ from app.application.use_cases.summary_read_model import SummaryReadModelUseCase
 
 class _SummaryRepoBulkSpy:
     def __init__(self, *, rows_affected: int = 0) -> None:
-        self.async_bulk_mark_summaries_as_read = AsyncMock(
-            return_value=rows_affected
-        )
+        self.async_bulk_mark_summaries_as_read = AsyncMock(return_value=rows_affected)
 
 
 @pytest.mark.asyncio

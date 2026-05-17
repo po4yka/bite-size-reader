@@ -92,11 +92,12 @@ The task spec asks for explicit flags on:
 ### Fail-open allowlist behaviour
 
 `ALLOWED_USER_IDS` is read into a static `set[int]` at startup.
-Open question: does the dependency *fail open* when the env var is
-empty or malformed (allowing any user) or *fail closed* (denying
+Open question: does the dependency _fail open_ when the env var is
+empty or malformed (allowing any user) or _fail closed_ (denying
 all)?
 
 **_AWAITING SECURITY ENGINEER call_** — verification probe:
+
 ```sh
 ALLOWED_USER_IDS="" pytest tests/api/test_auth_allowlist.py
 ```

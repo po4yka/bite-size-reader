@@ -177,14 +177,10 @@ class ChatAttemptRunner:
 
                     _fallback_reason = (
                         "stream_request_failed"
-                        if (outcome.error_text or "").startswith(
-                            "stream_request_failed"
-                        )
+                        if (outcome.error_text or "").startswith("stream_request_failed")
                         else "non_streaming_chunk_path"
                     )
-                    record_openrouter_stream_fallback(
-                        model=model, reason=_fallback_reason
-                    )
+                    record_openrouter_stream_fallback(model=model, reason=_fallback_reason)
                     state.request = self._copy_request_with_stream(state.request, False)
                     rf_mode_current = outcome.retry.rf_mode
                     response_format_current = outcome.retry.response_format
@@ -209,9 +205,7 @@ class ChatAttemptRunner:
                                     "request_id": request_id,
                                 },
                             )
-                            state.last_error_text = (
-                                "truncation_recovery_skipped_budget_tight"
-                            )
+                            state.last_error_text = "truncation_recovery_skipped_budget_tight"
                             state.last_error_context = {"reason": "budget_tight"}
                             break
 
@@ -233,12 +227,9 @@ class ChatAttemptRunner:
                         }
                         break
 
-                    new_max_tokens = (
-                        outcome.retry.truncation_recovery.suggested_max_tokens
-                    )
+                    new_max_tokens = outcome.retry.truncation_recovery.suggested_max_tokens
                     if new_max_tokens and (
-                        not state.request.max_tokens
-                        or new_max_tokens > state.request.max_tokens
+                        not state.request.max_tokens or new_max_tokens > state.request.max_tokens
                     ):
                         logger.info(
                             "truncation_recovery_increasing_max_tokens",
@@ -316,9 +307,7 @@ class ChatAttemptRunner:
             per_model_attempts=per_model_attempts or [],
         )
 
-    def _copy_request_with_max_tokens(
-        self, request: ChatRequest, max_tokens: int
-    ) -> ChatRequest:
+    def _copy_request_with_max_tokens(self, request: ChatRequest, max_tokens: int) -> ChatRequest:
         return ChatRequest(
             messages=request.messages,
             temperature=request.temperature,
@@ -330,9 +319,7 @@ class ChatAttemptRunner:
             model_override=request.model_override,
         )
 
-    def _copy_request_with_stream(
-        self, request: ChatRequest, stream: bool
-    ) -> ChatRequest:
+    def _copy_request_with_stream(self, request: ChatRequest, stream: bool) -> ChatRequest:
         return ChatRequest(
             messages=request.messages,
             temperature=request.temperature,

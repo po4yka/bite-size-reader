@@ -82,9 +82,7 @@ def test_none_sentinel_passes() -> None:
 
 def test_immutable_default_passes() -> None:
     """Non-mutable defaults (str, int, tuple, None) must pass B006."""
-    source = (
-        "def f(name='', count=0, pair=(1, 2), flag=None): pass\n"
-    )
+    source = "def f(name='', count=0, pair=(1, 2), flag=None): pass\n"
     result = _lint(source)
     assert result.returncode == 0, f"Immutable defaults should pass B006:\n{result.stdout}"
 
@@ -187,7 +185,7 @@ def test_is_int_literal_is_rejected() -> None:
 def test_is_bytes_literal_is_rejected() -> None:
     """``value is b"abc"`` must fail F632 — use ``value == b"abc"``."""
     result = _lint_f632('value = b"abc"\nassert value is b"abc"\n')
-    assert result.returncode != 0, "F632 should have flagged `value is b\"abc\"`"
+    assert result.returncode != 0, 'F632 should have flagged `value is b"abc"`'
     assert _F632 in result.stdout or _F632 in result.stderr
 
 
@@ -390,6 +388,4 @@ def test_bare_except_swallows_keyboard_interrupt() -> None:
     assert caught_by_bare == [KeyboardInterrupt], (
         "Bare except caught KeyboardInterrupt — this is the bug"
     )
-    assert caught_by_exception == [], (
-        "except Exception correctly did NOT catch KeyboardInterrupt"
-    )
+    assert caught_by_exception == [], "except Exception correctly did NOT catch KeyboardInterrupt"

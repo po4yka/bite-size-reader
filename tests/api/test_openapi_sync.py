@@ -44,6 +44,14 @@ IGNORED_APP_ROUTES = frozenset(
         # Static legal pages served by the web layer
         ("GET", "/web/privacy.html"),
         ("GET", "/web/terms.html"),
+        # Bulk summary helpers are internal client acceleration routes until
+        # the mobile contract is expanded for bulk article operations.
+        ("POST", "/v1/articles/bulk/delete"),
+        ("POST", "/v1/articles/bulk/favorite"),
+        ("POST", "/v1/articles/bulk/mark-read"),
+        ("POST", "/v1/summaries/bulk/delete"),
+        ("POST", "/v1/summaries/bulk/favorite"),
+        ("POST", "/v1/summaries/bulk/mark-read"),
     }
 )
 

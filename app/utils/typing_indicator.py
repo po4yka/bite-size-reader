@@ -112,7 +112,9 @@ class TypingIndicator:
         self._task.cancel()
         result = await asyncio.gather(self._task, return_exceptions=True)
         task_error = result[0] if result else None
-        if isinstance(task_error, BaseException) and not isinstance(task_error, asyncio.CancelledError):
+        if isinstance(task_error, BaseException) and not isinstance(
+            task_error, asyncio.CancelledError
+        ):
             logger.debug("typing_indicator_stop_wait_failed", extra={"error": str(task_error)})
 
         self._task = None

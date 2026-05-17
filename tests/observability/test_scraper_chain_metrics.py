@@ -23,12 +23,8 @@ class TestScraperAttemptsCounter:
             pytest.skip("prometheus_client unavailable")
         metric = metrics_module.SCRAPER_ATTEMPTS_TOTAL
         before = metric.labels(provider="scrapling", status="success")._value.get()
-        metrics_module.record_scraper_attempt(
-            provider="scrapling", status="success"
-        )
-        assert metric.labels(provider="scrapling", status="success")._value.get() == (
-            before + 1.0
-        )
+        metrics_module.record_scraper_attempt(provider="scrapling", status="success")
+        assert metric.labels(provider="scrapling", status="success")._value.get() == (before + 1.0)
 
     def test_record_attempt_error_status(self, metrics_module) -> None:
         if not metrics_module.PROMETHEUS_AVAILABLE:
@@ -36,9 +32,7 @@ class TestScraperAttemptsCounter:
         metric = metrics_module.SCRAPER_ATTEMPTS_TOTAL
         before = metric.labels(provider="firecrawl", status="timeout")._value.get()
         metrics_module.record_scraper_attempt(provider="firecrawl", status="timeout")
-        assert metric.labels(provider="firecrawl", status="timeout")._value.get() == (
-            before + 1.0
-        )
+        assert metric.labels(provider="firecrawl", status="timeout")._value.get() == (before + 1.0)
 
     def test_record_attempt_noop_when_unavailable(
         self, monkeypatch: pytest.MonkeyPatch, metrics_module
@@ -53,17 +47,11 @@ class TestScraperLatencyHistogram:
             pytest.skip("prometheus_client unavailable")
         metric = metrics_module.SCRAPER_ATTEMPT_LATENCY_SECONDS
         before = metric.labels(provider="playwright")._sum.get()
-        metrics_module.record_scraper_attempt_latency(
-            provider="playwright", latency_seconds=3.7
-        )
-        assert metric.labels(provider="playwright")._sum.get() == pytest.approx(
-            before + 3.7
-        )
+        metrics_module.record_scraper_attempt_latency(provider="playwright", latency_seconds=3.7)
+        assert metric.labels(provider="playwright")._sum.get() == pytest.approx(before + 3.7)
 
     def test_record_latency_drops_negative(self, metrics_module) -> None:
-        metrics_module.record_scraper_attempt_latency(
-            provider="playwright", latency_seconds=-0.1
-        )
+        metrics_module.record_scraper_attempt_latency(provider="playwright", latency_seconds=-0.1)
 
 
 class TestExposedInMetricsEndpoint:
@@ -71,9 +59,7 @@ class TestExposedInMetricsEndpoint:
         if not metrics_module.PROMETHEUS_AVAILABLE:
             pytest.skip("prometheus_client unavailable")
         metrics_module.record_scraper_attempt(provider="probe", status="success")
-        metrics_module.record_scraper_attempt_latency(
-            provider="probe", latency_seconds=1.2
-        )
+        metrics_module.record_scraper_attempt_latency(provider="probe", latency_seconds=1.2)
         payload = metrics_module.get_metrics().decode("utf-8")
         assert "ratatoskr_scraper_attempts_total" in payload
         assert "ratatoskr_scraper_attempt_latency_seconds" in payload
@@ -131,13 +117,9 @@ class TestAttemptLogSerialization:
 
         # Allowed statuses per task spec: success | error | timeout | skipped.
         for status in ("success", "error", "timeout", "skipped"):
-            ScraperAttemptEntry(
-                provider="x", status=status, latency_ms=0, error_class=None
-            )
+            ScraperAttemptEntry(provider="x", status=status, latency_ms=0, error_class=None)
         with pytest.raises(ValueError):
-            ScraperAttemptEntry(
-                provider="x", status="wibble", latency_ms=0, error_class=None
-            )
+            ScraperAttemptEntry(provider="x", status="wibble", latency_ms=0, error_class=None)
 
     def test_partial_failure_path_collects_multiple_entries(self) -> None:
         from app.adapters.content.scraper.attempt_log import (

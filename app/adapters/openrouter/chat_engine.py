@@ -93,9 +93,7 @@ class OpenRouterChatEngine:
         self._context_builder = ChatContextBuilder(client)
         self._response_handler = ChatResponseHandler(client)
         self._streaming_handler = ChatStreamingHandler(self._response_handler)
-        self._transport = ChatTransport(
-            client, self._response_handler, self._streaming_handler
-        )
+        self._transport = ChatTransport(client, self._response_handler, self._streaming_handler)
         self._attempt_runner = ChatAttemptRunner(client, self._transport)
 
     async def chat(
@@ -165,9 +163,7 @@ class OpenRouterChatEngine:
                     # --- Per-model circuit breaker check (Improvement A) ---
                     if per_model_cb is not None and not per_model_cb.can_proceed(model):
                         cb_state_str = per_model_cb.state(model).value
-                        record_per_model_circuit_breaker_state(
-                            model=model, state=cb_state_str
-                        )
+                        record_per_model_circuit_breaker_state(model=model, state=cb_state_str)
                         logger.warning(
                             "per_model_circuit_breaker_open",
                             extra={
@@ -220,18 +216,14 @@ class OpenRouterChatEngine:
                             )
                             if skip_model:
                                 elapsed = _time.monotonic() - model_start
-                                models_attempted.append(
-                                    (model, "skipped_unsupported_structured")
-                                )
+                                models_attempted.append((model, "skipped_unsupported_structured"))
                                 per_model_attempts.append(
                                     {
                                         "model": model,
                                         "status": "skipped_unsupported_structured",
                                         "latency_ms": int(elapsed * 1000),
                                         "error_text": "Model does not support structured output; skipped",
-                                        "error_context": {
-                                            "reason": "unsupported_structured"
-                                        },
+                                        "error_context": {"reason": "unsupported_structured"},
                                         "per_model_timeout_sec": effective_timeout,
                                     }
                                 )
@@ -288,9 +280,7 @@ class OpenRouterChatEngine:
                             }
                         )
                         record_per_model_timeout(model=model)
-                        record_per_model_latency(
-                            model=model, outcome="timeout", seconds=elapsed
-                        )
+                        record_per_model_latency(model=model, outcome="timeout", seconds=elapsed)
                         if per_model_cb is not None:
                             per_model_cb.record_failure(model)
                             record_per_model_circuit_breaker_state(
@@ -302,9 +292,7 @@ class OpenRouterChatEngine:
                                 "model": model,
                                 "request_id": request_id,
                                 "timeout_sec": effective_timeout,
-                                "models_remaining": len(context.models_to_try)
-                                - model_index
-                                - 1,
+                                "models_remaining": len(context.models_to_try) - model_index - 1,
                             },
                         )
                         if model_index < len(context.models_to_try) - 1:
@@ -327,15 +315,12 @@ class OpenRouterChatEngine:
                     if model_state.terminal_result is not None:
                         outcome = (
                             "success"
-                            if getattr(model_state.terminal_result, "status", None)
-                            == "ok"
+                            if getattr(model_state.terminal_result, "status", None) == "ok"
                             else "error"
                         )
                         models_attempted.append((model, outcome))
                         elapsed = _time.monotonic() - model_start
-                        record_per_model_latency(
-                            model=model, outcome=outcome, seconds=elapsed
-                        )
+                        record_per_model_latency(model=model, outcome=outcome, seconds=elapsed)
                         if per_model_cb is not None:
                             if outcome == "success":
                                 per_model_cb.record_success(model)
@@ -369,9 +354,7 @@ class OpenRouterChatEngine:
                             "per_model_timeout_sec": effective_timeout,
                         }
                     )
-                    record_per_model_latency(
-                        model=model, outcome="error", seconds=elapsed
-                    )
+                    record_per_model_latency(model=model, outcome="error", seconds=elapsed)
                     if per_model_cb is not None:
                         per_model_cb.record_failure(model)
                         record_per_model_circuit_breaker_state(
@@ -387,12 +370,9 @@ class OpenRouterChatEngine:
                         if stripped_count:
                             context.sanitized_messages = stripped_messages
                             context.message_lengths = [
-                                len(str(m.get("content", "")))
-                                for m in stripped_messages
+                                len(str(m.get("content", ""))) for m in stripped_messages
                             ]
-                            context.message_roles = [
-                                m.get("role", "?") for m in stripped_messages
-                            ]
+                            context.message_roles = [m.get("role", "?") for m in stripped_messages]
                             context.total_chars = sum(context.message_lengths)
                             current_request = current_request.model_copy(
                                 update={"messages": stripped_messages}
@@ -414,9 +394,7 @@ class OpenRouterChatEngine:
                             extra={
                                 "model": model,
                                 "request_id": request_id,
-                                "models_remaining": len(context.models_to_try)
-                                - model_index
-                                - 1,
+                                "models_remaining": len(context.models_to_try) - model_index - 1,
                             },
                         )
                     if model_index < len(context.models_to_try) - 1:
@@ -470,9 +448,7 @@ class OpenRouterChatEngine:
             latency_ms=0,
         )
 
-    def _critical_chat_error_payload(
-        self, error: Exception
-    ) -> tuple[str, dict[str, Any]]:
+    def _critical_chat_error_payload(self, error: Exception) -> tuple[str, dict[str, Any]]:
         return (
             f"Critical error: {error!s}",
             {

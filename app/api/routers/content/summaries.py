@@ -9,10 +9,9 @@ from hashlib import sha256
 from typing import Any, Literal, cast
 
 from fastapi import APIRouter, Depends, Query
-
-from app.api.dependencies.database import get_summary_read_model_use_case
 from pydantic import BaseModel as _BulkBaseModel
 
+from app.api.dependencies.database import get_summary_read_model_use_case
 from app.api.exceptions import ResourceNotFoundError, ValidationError
 from app.api.models.requests import (
     SaveReadingPositionRequest,
@@ -678,9 +677,7 @@ async def bulk_delete(
 ) -> Any:
     """Soft-delete multiple summaries in one round-trip."""
     try:
-        deleted = await use_case.bulk_delete(
-            user_id=user["user_id"], summary_ids=body.summary_ids
-        )
+        deleted = await use_case.bulk_delete(user_id=user["user_id"], summary_ids=body.summary_ids)
     except ValueError as exc:
         raise ValidationError(str(exc), details={"field": "summary_ids"}) from exc
     return success_response(_BulkMarkReadResponse(updated=deleted))

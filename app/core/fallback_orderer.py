@@ -33,10 +33,7 @@ logger = get_logger(__name__)
 
 
 class _LatencyRepo(Protocol):
-    async def async_get_model_latency_stats(
-        self, model: str, days: int = 7
-    ) -> LatencyStats:
-        ...
+    async def async_get_model_latency_stats(self, model: str, days: int = 7) -> LatencyStats: ...
 
 
 class FallbackOrderer:
@@ -54,9 +51,7 @@ class FallbackOrderer:
         self._observation_days = observation_days
         self._cache: dict[str, tuple[float, LatencyStats]] = {}
 
-    async def order(
-        self, *, primary: str, fallbacks: tuple[str, ...]
-    ) -> list[str]:
+    async def order(self, *, primary: str, fallbacks: tuple[str, ...]) -> list[str]:
         # Always strip primary from the candidate set; preserve original
         # configured order amongst the rest.
         candidates = [m for m in fallbacks if m != primary]
@@ -92,9 +87,7 @@ class FallbackOrderer:
             if self._ttl > 0 and (now - stamp) < self._ttl:
                 return stats
         assert self._repo is not None  # narrowed in order()
-        stats = await self._repo.async_get_model_latency_stats(
-            model, days=self._observation_days
-        )
+        stats = await self._repo.async_get_model_latency_stats(model, days=self._observation_days)
         self._cache[model] = (now, stats)
         return stats
 

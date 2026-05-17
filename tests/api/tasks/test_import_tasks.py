@@ -12,7 +12,6 @@ import pytest
 
 from app.tasks.import_tasks import _dict_to_bookmark, _run_import_body
 
-
 # ---------------------------------------------------------------------------
 # _dict_to_bookmark
 # ---------------------------------------------------------------------------
@@ -33,15 +32,17 @@ def test_dict_to_bookmark_with_timestamp():
 
 
 def test_dict_to_bookmark_full():
-    bm = _dict_to_bookmark({
-        "url": "https://example.com",
-        "title": "My Title",
-        "tags": ["a", "b"],
-        "notes": "note",
-        "collection_name": "Reading",
-        "highlights": [{"text": "hi"}],
-        "extra": {"source": "pocket"},
-    })
+    bm = _dict_to_bookmark(
+        {
+            "url": "https://example.com",
+            "title": "My Title",
+            "tags": ["a", "b"],
+            "notes": "note",
+            "collection_name": "Reading",
+            "highlights": [{"text": "hi"}],
+            "extra": {"source": "pocket"},
+        }
+    )
     assert bm.title == "My Title"
     assert bm.tags == ["a", "b"]
     assert bm.notes == "note"

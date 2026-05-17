@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import datetime as dt
 from dataclasses import dataclass
-from typing import cast,  Any
+from typing import Any, cast
 
 from app.core.logging_utils import get_logger
 

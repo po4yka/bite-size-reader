@@ -297,7 +297,9 @@ async def get_collection_tree(
 
 
 @router.get("/{collection_id}/acl")
-async def get_collection_acl(collection_id: int, user: dict[str, Any] = Depends(get_current_user)) -> Any:
+async def get_collection_acl(
+    collection_id: int, user: dict[str, Any] = Depends(get_current_user)
+) -> Any:
     acl = await CollectionService.list_acl(collection_id, user["user_id"])
     payload = []
     for entry in acl:

@@ -17,7 +17,6 @@ from app.adapters.academic.url_patterns import (
     parse_academic_paper_url,
 )
 
-
 # ---------------------------------------------------------------------------
 # arXiv
 # ---------------------------------------------------------------------------
@@ -89,9 +88,7 @@ def test_arxiv_landing_url() -> None:
 
 
 def test_ssrn_papers_cfm_url() -> None:
-    ref = parse_academic_paper_url(
-        "https://papers.ssrn.com/sol3/papers.cfm?abstract_id=6531478"
-    )
+    ref = parse_academic_paper_url("https://papers.ssrn.com/sol3/papers.cfm?abstract_id=6531478")
     assert ref is not None
     assert ref.host == AcademicHost.SSRN
     assert ref.paper_id == "6531478"
@@ -136,10 +133,7 @@ def test_nber_working_paper_url() -> None:
 
 def test_nber_pdf_url_rewrite() -> None:
     ref = AcademicPaperRef(host=AcademicHost.NBER, paper_id="w12345")
-    assert (
-        pdf_url_for(ref)
-        == "https://www.nber.org/system/files/working_papers/w12345/w12345.pdf"
-    )
+    assert pdf_url_for(ref) == "https://www.nber.org/system/files/working_papers/w12345/w12345.pdf"
 
 
 # ---------------------------------------------------------------------------
@@ -180,9 +174,7 @@ def test_researchgate_has_no_deterministic_pdf_rewrite() -> None:
 
 
 def test_repec_url_parsed() -> None:
-    ref = parse_academic_paper_url(
-        "https://econpapers.repec.org/RePEc:nbr:nberwo:12345"
-    )
+    ref = parse_academic_paper_url("https://econpapers.repec.org/RePEc:nbr:nberwo:12345")
     assert ref is not None
     assert ref.host == AcademicHost.REPEC
     assert pdf_url_for(ref) is None

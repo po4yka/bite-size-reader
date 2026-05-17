@@ -62,9 +62,7 @@ async def test_find_recent_returns_processing_row(database: Database) -> None:
         input_url="https://example.com/proc",
     )
 
-    result = await repo.async_find_recent_request_by_dedupe(
-        "hash-proc-1", max_age_sec=300
-    )
+    result = await repo.async_find_recent_request_by_dedupe("hash-proc-1", max_age_sec=300)
 
     assert result is not None
     assert result["status"] == "processing"
@@ -85,9 +83,7 @@ async def test_find_recent_returns_pending_row(database: Database) -> None:
         input_url="https://example.com/pend",
     )
 
-    result = await repo.async_find_recent_request_by_dedupe(
-        "hash-pend-1", max_age_sec=300
-    )
+    result = await repo.async_find_recent_request_by_dedupe("hash-pend-1", max_age_sec=300)
 
     assert result is not None
     assert result["status"] == "pending"
@@ -108,9 +104,7 @@ async def test_find_recent_returns_none_for_completed(database: Database) -> Non
     )
     await repo.async_update_request_status(req_id, "completed")
 
-    result = await repo.async_find_recent_request_by_dedupe(
-        "hash-done-1", max_age_sec=300
-    )
+    result = await repo.async_find_recent_request_by_dedupe("hash-done-1", max_age_sec=300)
 
     assert result is None
 
@@ -141,8 +135,6 @@ async def test_find_recent_returns_none_for_unknown_hash(database: Database) -> 
     """Returns None when no row matches the dedupe_hash."""
     repo = RequestRepositoryAdapter(database)
 
-    result = await repo.async_find_recent_request_by_dedupe(
-        "hash-nonexistent-xyz", max_age_sec=300
-    )
+    result = await repo.async_find_recent_request_by_dedupe("hash-nonexistent-xyz", max_age_sec=300)
 
     assert result is None

@@ -15,9 +15,7 @@ class LLMCallResult(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     status: CallStatus = Field(description="High-level result status.")
-    model: str | None = Field(
-        default=None, description="Model that produced the response."
-    )
+    model: str | None = Field(default=None, description="Model that produced the response.")
     response_text: str | None = Field(
         default=None, description="Primary text response returned by the provider."
     )
@@ -36,16 +34,12 @@ class LLMCallResult(BaseModel):
     tokens_completion: int | None = Field(
         default=None, description="Completion tokens produced by the request."
     )
-    cost_usd: float | None = Field(
-        default=None, description="Estimated USD cost for the request."
-    )
+    cost_usd: float | None = Field(default=None, description="Estimated USD cost for the request.")
     latency_ms: int | None = Field(
         default=None,
         description="Observed latency for the LLM request in milliseconds.",
     )
-    error_text: str | None = Field(
-        default=None, description="Error message when the call fails."
-    )
+    error_text: str | None = Field(default=None, description="Error message when the call fails.")
     request_headers: dict[str, Any] | None = Field(
         default=None, description="HTTP headers sent with the request."
     )

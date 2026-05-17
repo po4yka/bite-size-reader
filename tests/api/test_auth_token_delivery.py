@@ -1,4 +1,5 @@
 """Tests for refresh-token delivery policy: web cookie vs mobile/CLI body."""
+
 from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -277,8 +278,8 @@ async def test_secret_login_token_delivery(client_id, expect_cookie):
     ],
 )
 async def test_refresh_token_delivery(db, user_factory, client_id, expect_cookie):
-    from app.api.routers.auth.dependencies import get_auth_repository
     from app.api.models.auth import RefreshTokenRequest
+    from app.api.routers.auth.dependencies import get_auth_repository
     from app.api.routers.auth.endpoints_sessions import refresh_access_token
     from app.api.routers.auth.tokens import create_refresh_token
 

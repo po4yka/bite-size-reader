@@ -244,14 +244,13 @@ def summary_factory(db: Database, user_factory):
 
 # ==================== Search test fixtures ====================
 
-from datetime import datetime, timedelta  # noqa: E402
-from unittest.mock import AsyncMock, patch  # noqa: E402
+from datetime import datetime, timedelta
+from unittest.mock import AsyncMock, patch
 
-from app.api.models.responses import PaginationInfo, SearchResult, SearchResultsData  # noqa: E402
-from app.api.routers.auth.tokens import create_access_token  # noqa: E402
-from app.api.services.search_service import SearchService  # noqa: E402
-from app.core.time_utils import UTC  # noqa: E402
-from app.core.url_utils import compute_dedupe_hash, normalize_url  # noqa: E402
+from app.api.models.responses import PaginationInfo, SearchResult, SearchResultsData
+from app.api.routers.auth.tokens import create_access_token
+from app.api.services.search_service import SearchService
+from app.core.time_utils import UTC
 
 
 def _build_search_results(

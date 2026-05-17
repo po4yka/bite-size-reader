@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import cast,  Any
+from typing import Any, cast
 
 from app.api.models.responses import SyncEntityEnvelope
 from app.core.logging_utils import get_logger

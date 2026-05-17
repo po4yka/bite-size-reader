@@ -56,7 +56,9 @@ ignores:
   - "node_modules/**"
   - ".venv/**"
   - "venv/**"
+  - ".desloppify/**"
   - "build/**"
   - "dist/**"
+  - "docs/superpowers/**"
   - "*.md.bak"
   - "CHANGELOG.md"  # Auto-generated, different format

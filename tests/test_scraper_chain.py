@@ -2,15 +2,12 @@
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock, patch
-
 import pytest
 
 from app.adapters.content.scraper.chain import ContentScraperChain
 from app.adapters.external.firecrawl.models import FirecrawlResult
 from app.core.call_status import CallStatus
-from tests.helpers.scraper_helpers import _MockProvider, _error_result, _ok_result
-
+from tests.helpers.scraper_helpers import _error_result, _MockProvider, _ok_result
 
 # ===================================================================
 # ContentScraperChain tests

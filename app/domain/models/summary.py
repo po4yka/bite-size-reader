@@ -5,7 +5,7 @@ content summary with its metadata and insights.
 """
 
 from dataclasses import dataclass, field
-from datetime import datetime, UTC
+from datetime import UTC, datetime
 from typing import Any
 
 from app.core.time_utils import coerce_datetime

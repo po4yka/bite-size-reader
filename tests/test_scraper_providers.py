@@ -7,9 +7,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from app.adapters.content.scraper.firecrawl_provider import FirecrawlProvider
-from app.core.call_status import CallStatus
 from tests.helpers.scraper_helpers import _ok_result
-
 
 # ===================================================================
 # FirecrawlProvider tests

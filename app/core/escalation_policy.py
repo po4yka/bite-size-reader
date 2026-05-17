@@ -111,8 +111,7 @@ class EscalationPolicy:
 
         if self._used >= self._max:
             raise EscalationBudgetExceeded(
-                f"escalation budget {self._max} exhausted "
-                f"after {self._used} cascades"
+                f"escalation budget {self._max} exhausted after {self._used} cascades"
             )
 
         next_model = remaining_fallbacks[0]

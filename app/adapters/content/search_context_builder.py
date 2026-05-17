@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
+from datetime import UTC
 from typing import TYPE_CHECKING
 
 from app.core.logging_utils import get_logger
-from datetime import UTC
 
 if TYPE_CHECKING:
     from app.application.services.topic_search import TopicArticle

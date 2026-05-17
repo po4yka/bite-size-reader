@@ -79,10 +79,6 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     with op.get_context().autocommit_block():
-        op.execute(
-            sa.text(f"DROP INDEX CONCURRENTLY IF EXISTS {_IDX_EMBEDDINGS}")
-        )
+        op.execute(sa.text(f"DROP INDEX CONCURRENTLY IF EXISTS {_IDX_EMBEDDINGS}"))
 
-        op.execute(
-            sa.text(f"DROP INDEX CONCURRENTLY IF EXISTS {_IDX_SUMMARIES}")
-        )
+        op.execute(sa.text(f"DROP INDEX CONCURRENTLY IF EXISTS {_IDX_SUMMARIES}"))

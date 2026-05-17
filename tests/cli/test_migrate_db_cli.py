@@ -5,7 +5,6 @@ from typing import Any
 
 from app.cli import migrate_db as migrate_cli
 
-
 _PG_DSN = "postgresql+asyncpg://user:pass@localhost:5432/test"
 
 

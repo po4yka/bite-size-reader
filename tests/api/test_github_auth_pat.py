@@ -306,9 +306,7 @@ async def test_token_not_logged(
 # ---------------------------------------------------------------------------
 
 
-async def test_pat_stores_token_scopes(
-    client: Any, db: Database, gh_user: Any
-) -> None:
+async def test_pat_stores_token_scopes(client: Any, db: Database, gh_user: Any) -> None:
     """Successful PAT → UserGitHubIntegration.token_scopes populated."""
     with respx.mock(assert_all_called=False) as mock:
         mock.get("https://api.github.com/user").mock(
@@ -340,9 +338,7 @@ async def test_pat_stores_token_scopes(
 # ---------------------------------------------------------------------------
 
 
-async def test_pat_scope_warnings_in_response(
-    client: Any, db: Database, gh_user: Any
-) -> None:
+async def test_pat_scope_warnings_in_response(client: Any, db: Database, gh_user: Any) -> None:
     """Overbroad token → 200 with scope_warnings list."""
     with respx.mock(assert_all_called=False) as mock:
         mock.get("https://api.github.com/user").mock(
@@ -371,9 +367,7 @@ async def test_pat_scope_warnings_in_response(
 # ---------------------------------------------------------------------------
 
 
-async def test_pat_insufficient_scope_returns_422(
-    client: Any, db: Database, gh_user: Any
-) -> None:
+async def test_pat_insufficient_scope_returns_422(client: Any, db: Database, gh_user: Any) -> None:
     """Token with public_repo but not repo → 422 Unprocessable Entity."""
     with respx.mock(assert_all_called=False) as mock:
         mock.get("https://api.github.com/user").mock(

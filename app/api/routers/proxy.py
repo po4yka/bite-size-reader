@@ -2,10 +2,11 @@
 Proxy endpoints for external resources.
 """
 
+from typing import Any
+
 import httpx
 from fastapi import APIRouter, Depends, Query
 from starlette.responses import Response
-from typing import Any
 
 from app.api.exceptions import (
     AuthorizationError,

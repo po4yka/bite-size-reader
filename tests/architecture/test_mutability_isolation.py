@@ -45,9 +45,7 @@ _SKIP_FILES = {
 # AST helpers
 # ---------------------------------------------------------------------------
 
-_MUTABLE_NAMES = {
-    "list", "dict", "set", "defaultdict", "OrderedDict", "Counter", "deque"
-}
+_MUTABLE_NAMES = {"list", "dict", "set", "defaultdict", "OrderedDict", "Counter", "deque"}
 
 
 def _is_mutable(node: ast.AST) -> bool:
@@ -81,18 +79,14 @@ class _MutablePatternScanner(ast.NodeVisitor):
                 if isinstance(left, (ast.List, ast.Tuple)) and any(
                     _is_mutable(e) for e in left.elts
                 ):
-                    self.findings.append(
-                        (self._path, node.lineno, "[mutable] * n")
-                    )
+                    self.findings.append((self._path, node.lineno, "[mutable] * n"))
         self.generic_visit(node)
 
     def visit_Call(self, node: ast.Call) -> None:
         fn = node.func
         if isinstance(fn, ast.Attribute) and fn.attr == "fromkeys":
             if len(node.args) >= 2 and _is_mutable(node.args[1]):
-                self.findings.append(
-                    (self._path, node.lineno, "dict.fromkeys(keys, mutable)")
-                )
+                self.findings.append((self._path, node.lineno, "dict.fromkeys(keys, mutable)"))
         self.generic_visit(node)
 
 
@@ -220,9 +214,7 @@ def test_content_scraper_chain_providers_property_returns_copy() -> None:
     copy1 = chain.providers
     copy1.append(MagicMock())  # mutate the returned copy
     copy2 = chain.providers
-    assert len(copy2) == 1, (
-        "Mutating the returned providers list must not affect the chain"
-    )
+    assert len(copy2) == 1, "Mutating the returned providers list must not affect the chain"
 
 
 # ---------------------------------------------------------------------------
@@ -287,9 +279,6 @@ def test_no_nested_repeat_or_fromkeys_mutable_in_codebase() -> None:
     """
     findings = scan_repository()
     if findings:
-        lines = [
-            f"  {path}:{lineno}  {pattern}"
-            for path, lineno, pattern in findings
-        ]
+        lines = [f"  {path}:{lineno}  {pattern}" for path, lineno, pattern in findings]
         msg = "Mutable aliasing patterns found in codebase:\n" + "\n".join(lines)
         raise AssertionError(msg)

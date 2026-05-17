@@ -61,9 +61,7 @@ class TestBuildCascadeAttemptPayload:
             "per_model_timeout_sec": 90.0,
         }
 
-        payload = storage._build_cascade_attempt_payload(
-            llm, req_id=42, attempt=attempt
-        )
+        payload = storage._build_cascade_attempt_payload(llm, req_id=42, attempt=attempt)
 
         assert payload["request_id"] == 42
         assert payload["model"] == "fallback-model"

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import contextlib
-from typing import cast,  Any
+from typing import Any, cast
 
 from fastapi import APIRouter, BackgroundTasks, Depends, Request
 
@@ -29,7 +29,7 @@ def _get_request_service(request: Request) -> RequestService:
     from app.di.api import resolve_api_runtime
 
     with contextlib.suppress(RuntimeError):
-        return cast(RequestService, resolve_api_runtime(request).request_service)
+        return cast("RequestService", resolve_api_runtime(request).request_service)
     # Fallback for tests
     from app.api.dependencies.database import (
         get_crawl_result_repository,

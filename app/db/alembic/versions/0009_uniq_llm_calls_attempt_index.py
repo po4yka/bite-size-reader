@@ -70,15 +70,18 @@ def upgrade() -> None:
         row = result.fetchone()
         dup_count: int = row[0] if row else 0
         if dup_count > 0:
+            duplicate_query_hint = (
+                "  SELECT request_id, attempt_index, COUNT(*) "
+                "  FROM llm_calls "
+                "  GROUP BY request_id, attempt_index "
+                "  HAVING COUNT(*) > 1;"
+            )
             msg = (
                 f"Migration {revision} aborted: found {dup_count} duplicate "
                 "(request_id, attempt_index) pair(s) in llm_calls. "
                 "Clean up duplicates before applying this migration. "
                 "Example query to inspect them:\n"
-                "  SELECT request_id, attempt_index, COUNT(*) "
-                "  FROM llm_calls "
-                "  GROUP BY request_id, attempt_index "
-                "  HAVING COUNT(*) > 1;"
+                f"{duplicate_query_hint}"
             )
             raise RuntimeError(msg)
 

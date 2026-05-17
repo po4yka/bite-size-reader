@@ -85,9 +85,7 @@ def _extract_yaml_routes(spec: dict[str, Any]) -> set[tuple[str, str]]:
 #   YAML chooses to express as inline error responses rather than named
 #   components. They're framework noise, not surface area worth syncing.
 _RUNTIME_NOISE_PREFIXES: tuple[str, ...] = ("Body_",)
-_RUNTIME_NOISE_NAMES: frozenset[str] = frozenset(
-    {"ValidationError", "HTTPValidationError"}
-)
+_RUNTIME_NOISE_NAMES: frozenset[str] = frozenset({"ValidationError", "HTTPValidationError"})
 
 
 def _is_runtime_noise(name: str) -> bool:
@@ -181,8 +179,7 @@ class TestRuntimeOpenApiDrift:
 
         if errors:
             pytest.fail(
-                "Route drift between runtime app.openapi() and YAML:\n"
-                + "\n\n".join(errors)
+                "Route drift between runtime app.openapi() and YAML:\n" + "\n\n".join(errors)
             )
 
     def test_runtime_response_envelopes_align_with_yaml(
@@ -200,9 +197,7 @@ class TestRuntimeOpenApiDrift:
         ``HTTPValidationError``) is excluded because it is framework
         plumbing, not user-facing.
         """
-        runtime_schemas_all = set(
-            (runtime_spec.get("components") or {}).get("schemas", {}).keys()
-        )
+        runtime_schemas_all = set((runtime_spec.get("components") or {}).get("schemas", {}).keys())
         yaml_schemas = set(yaml_spec.get("components", {}).get("schemas", {}).keys())
 
         envelope_suffixes = ("ResponseEnvelope", "Envelope")

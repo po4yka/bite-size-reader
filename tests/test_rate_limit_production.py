@@ -22,7 +22,6 @@ _MINIMAL_ENV = {
 }
 
 
-
 class TestDeploymentConfig(unittest.TestCase):
     def test_default_is_development(self):
         cfg = DeploymentConfig()
