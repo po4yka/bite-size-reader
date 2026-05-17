@@ -29,7 +29,7 @@ COPY pyproject.toml uv.lock ./
 # Build virtual environment with API dependencies
 # (includes sentence-transformers for /search/semantic)
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --frozen --no-dev --extra api --extra otel
+    uv sync --frozen --no-dev --extra api --extra otel --extra scheduler
 
 # Stage 1.5: Web - Build Carbon Web App assets
 # Stage 2: Runtime - Minimal runtime environment (no build tools)

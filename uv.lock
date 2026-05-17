@@ -4340,6 +4340,7 @@ api = [
     { name = "python-multipart" },
     { name = "qdrant-client" },
     { name = "sentence-transformers" },
+    { name = "sse-starlette" },
     { name = "starlette" },
     { name = "uvicorn", extra = ["standard"] },
 ]
@@ -4487,6 +4488,7 @@ requires-dist = [
     { name = "sentry-sdk", extras = ["fastapi", "loguru"], marker = "extra == 'monitoring'", specifier = ">=2.0.0" },
     { name = "spacy", specifier = ">=3.8.11,<4" },
     { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2.0.30,<3.0" },
+    { name = "sse-starlette", marker = "extra == 'api'", specifier = ">=3.4.1" },
     { name = "starlette", marker = "extra == 'api'", specifier = ">=0.50.0" },
     { name = "taskiq", marker = "extra == 'scheduler'", specifier = ">=0.12.4,<0.13.0" },
     { name = "taskiq-redis", marker = "extra == 'scheduler'", specifier = ">=1.0.0,<2.0.0" },
