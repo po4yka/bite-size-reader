@@ -1,6 +1,6 @@
 ---
-title: Overhaul articles management (filters, bulk actions, real signal)
-status: backlog
+title: Overhaul articles management (filters, bulk actions, real signal) — frontend repo
+status: blocked
 area: frontend
 priority: medium
 owner: unassigned
@@ -10,7 +10,9 @@ created: 2026-04-30
 updated: 2026-05-17
 ---
 
-- [ ] #task Overhaul articles management (filters, bulk actions, real signal) #repo/ratatoskr #area/frontend #status/backlog 🔼
+- [ ] #task Overhaul articles management (filters, bulk actions, real signal) — frontend repo #repo/ratatoskr #area/frontend #status/blocked #blocked 🔼
+
+    - blocked_reason: Bulk of the work lives in `ratatoskr-web/` (ArticlesPage.tsx, LibraryPage.tsx). The backend slices (server-side search/filters on /v1/summaries, batch endpoints, signal_score field on SummaryCompact) can land in this repo, but the consuming UI changes ship from the frontend repo.
 
 ## Goal
 
@@ -21,16 +23,32 @@ Make the All Articles + Library screens usable as a real workspace. Today users 
 - `ratatoskr-web/src/features/articles/ArticlesPage.tsx`: `searchTerm` is local state only and never reaches the API; no filter beyond sort.
 - `ratatoskr-web/src/features/library/LibraryPage.tsx`: hardcoded `limit:100, offset:0` (no real pagination); HIGH SIGNAL filter casts to `SummaryCompact & { confidence?: number }` — field is not in the API contract; INBOX/PENDING/TOTAL counters reflect only the loaded page; the `INGEST · SYNC ACTIVE` footer is a static literal.
 
-## Scope
+## Scope split
 
+### In this (backend) repo
+- Add server-side `search`, `tag`, `collection`, `domain`, `language`,
+  `favorited`, `read`, `from`, `to` query parameters to
+  `GET /v1/summaries` (`app/api/routers/content/summaries.py`).
+- Add server-side `signal_score` field to the `SummaryCompact`
+  response model so HIGH SIGNAL filter is server-side; document
+  contract in `docs/SPEC.md`.
+- Add bulk-action POST endpoints: `/v1/summaries/bulk/mark-read`,
+  `/v1/summaries/bulk/favorite`, `/v1/summaries/bulk/tag`,
+  `/v1/summaries/bulk/add-to-collection`, `/v1/summaries/bulk/delete`.
+- Replace offset pagination with keyset/cursor pagination on
+  `/v1/summaries`.
+- Wire Library footer ingest status to a real signal (existing
+  ingestion telemetry).
+- pytest coverage on the new endpoints and the signal_score field.
+
+### In the ratatoskr-web frontend repo
 - Wire ArticlesPage search to `GET /v1/summaries?search=...`.
-- Add filters on both screens: read/unread, favorited, language, source domain, topic tag, collection, date range.
-- Add a real `confidence` (or rename to `signal_score`) to the `SummaryCompact` API model so the HIGH SIGNAL filter is server-side.
-- Replace Library's offset pagination with cursor/keyset pagination; virtualize the row list for >500 items.
-- Bulk actions in ArticlesPage: multi-select rows + apply mark read/unread, favorite, add tag, add to collection, delete.
-- Inline row actions on Library: `m` mark read, `f` favorite, `t` tag, `d` delete, `c` collection — all keyboard-bound.
+- Add filters on both screens; deep-link via URL params.
+- Bulk-action multi-select with optimistic update + rollback.
+- Inline row actions: `m` mark read, `f` favorite, `t` tag, `d`
+  delete, `c` collection — keyboard-bound.
 - Saved views: persist `{filter, sort, search}` per user as named presets.
-- Wire the Library footer ingest status to a real signal.
+- Virtualize the row list for >500 items.
 
 ## Acceptance criteria
 

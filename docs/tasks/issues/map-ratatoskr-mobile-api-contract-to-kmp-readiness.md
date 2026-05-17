@@ -1,6 +1,6 @@
 ---
 title: Map Ratatoskr mobile API contract to KMP client readiness
-status: doing
+status: blocked
 area: kmp
 priority: high
 owner: CTO
@@ -10,19 +10,31 @@ created: 2026-04-30
 updated: 2026-05-17
 ---
 
-- [ ] #task Map Ratatoskr mobile API contract to KMP client readiness #repo/ratatoskr #area/kmp #status/doing ⏫
+- [ ] #task Map Ratatoskr mobile API contract to KMP client readiness #repo/ratatoskr #area/kmp #status/blocked #blocked ⏫
+
+    - blocked_reason: The KMP client lives in the separate `ratatoskr-client` repository which is not part of this checkout. The cross-repo contract map requires read access to that repo to identify consuming modules. The mobile-API source-of-truth (`docs/openapi/mobile_api.yaml`, `docs/reference/mobile-api.md`) IS in this repo and ready to feed the comparison.
 
 ## Objective
 
 Produce a cross-repo contract map between the Ratatoskr FastAPI mobile API and the ratatoskr-client KMP app, then identify the smallest set of implementation, QA, or documentation follow-ups needed for a mobile release-readiness baseline.
 
-## Context
+## Inputs available from this repo
 
-Ratatoskr CLAUDE.md, docs/SPEC.md, docs/reference/mobile-api.md, DESIGN.md, ratatoskr-client AGENTS.md, composeApp/AGENTS.md, DESIGN.md, and docs/ARCHITECTURE.md were read for context. The backend mobile API source of truth is docs/openapi/mobile_api.yaml/json and uses /v1 envelope responses, bearer auth, Telegram initData, secret-login, session sync, summaries/articles aliases, collections, search, digest, signals, and mixed-source aggregation surfaces. The KMP client uses Kotlin Multiplatform, Decompose navigation, SQLDelight/offline-first data, Ktor auth refresh, secure storage, and Frost design rules. Do not edit docs/openapi/mobile_api.yaml directly.
+- `docs/openapi/mobile_api.yaml` / `mobile_api.json` — backend
+  surface (auth, refresh/logout, summaries/articles aliases,
+  sync sessions/full/delta/apply, collections, search, digest,
+  signals, system/health)
+- `docs/reference/mobile-api.md` — long-form contract notes
+- `docs/SPEC.md` data model section
+- `app/api/routers/auth/` — actual handler shapes
+- `app/api/routers/sync.py` — sync endpoints
 
-## Owner
+## Inputs needed from the ratatoskr-client repo
 
-CTO. Coordinate with Senior Python Backend Engineer, Senior KMP/Compose Engineer, and Security Engineer as needed.
+- `AGENTS.md`, `composeApp/AGENTS.md`, `DESIGN.md`,
+  `docs/ARCHITECTURE.md`
+- Client DTOs, repositories, tests
+- Decompose component graph for the consuming features
 
 ## Acceptance criteria
 

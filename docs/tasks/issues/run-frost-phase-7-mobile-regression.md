@@ -1,6 +1,6 @@
 ---
-title: Run Frost Phase 7 mobile regression pass
-status: backlog
+title: Run Frost Phase 7 mobile regression pass (ratatoskr-web repo)
+status: blocked
 area: testing
 priority: medium
 owner: unassigned
@@ -10,13 +10,27 @@ created: 2026-04-30
 updated: 2026-05-17
 ---
 
-- [ ] #task Run Frost Phase 7 mobile regression pass #repo/ratatoskr #area/testing #status/backlog 🔼
+- [ ] #task Run Frost Phase 7 mobile regression pass (ratatoskr-web repo) #repo/ratatoskr #area/testing #status/blocked #blocked 🔼
+
+    - blocked_reason: Work lives in the `ratatoskr-web` frontend repository, not in this backend repo. New spec file path `ratatoskr-web/tests/playwright/mobile-phase7.spec.ts` is not part of this checkout. Also requires real touch hardware for the touch-target verification leg.
 
 ## Goal
 
 Prove the mobile rollout shipped in commits 8aa4ec8b..7092000d (Phase 7a–7d, Group A–E) holds up across a real viewport sweep and on touch hardware.
 
-## Scope
+## Where this work belongs
+
+This task targets the frontend repository, **not** this backend repo.
+The new spec lives at
+`ratatoskr-web/tests/playwright/mobile-phase7.spec.ts` and the
+viewport-sweep snapshots under
+`ratatoskr-web/tests/playwright/__snapshots__/`.
+
+The touch-target leg (44×44 verification, drawer focus trap, modal
+scroll lock) needs real iOS/Android hardware in addition to the
+desktop viewport sweep.
+
+## Scope (in the ratatoskr-web repo)
 
 - Playwright mobile spec covering: Library, Articles, Article detail, Search, TagManagement, Collections, Submit, Ingestion, Settings, Dashboard, Automation, Login.
 - Viewport sweep: 360, 390, 414, 480, 600, 768 px wide; both portrait and landscape.
