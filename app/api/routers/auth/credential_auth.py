@@ -43,16 +43,16 @@ GENERIC_AUTH_FAILURE_MESSAGE = "Invalid credentials"
 # a future rotation window.
 CURRENT_PEPPER_VERSION = 1
 
-_cfg: AppConfig | None = None
-_hasher: PasswordHasher | None = None
-_DECOY_PHC: str | None = None
+# Single-element holders so the lazy-init sites do not need `global`.
+_cfg_holder: list[AppConfig | None] = [None]
+_hasher_holder: list[PasswordHasher | None] = [None]
+_decoy_phc_holder: list[str | None] = [None]
 
 
 def _get_cfg() -> AppConfig:
-    global _cfg
-    if _cfg is None:
-        _cfg = load_config(allow_stub_telegram=True)
-    return _cfg
+    if _cfg_holder[0] is None:
+        _cfg_holder[0] = load_config(allow_stub_telegram=True)
+    return _cfg_holder[0]
 
 
 def _get_auth_config() -> Any:
@@ -69,10 +69,9 @@ def _build_hasher() -> PasswordHasher:
 
 
 def _get_hasher() -> PasswordHasher:
-    global _hasher
-    if _hasher is None:
-        _hasher = _build_hasher()
-    return _hasher
+    if _hasher_holder[0] is None:
+        _hasher_holder[0] = _build_hasher()
+    return _hasher_holder[0]
 
 
 def _get_decoy_phc() -> str:
@@ -83,10 +82,9 @@ def _get_decoy_phc() -> str:
     so an attacker can't differentiate "no such user" from "wrong password"
     by timing alone.
     """
-    global _DECOY_PHC
-    if _DECOY_PHC is None:
-        _DECOY_PHC = _get_hasher().hash("decoy-not-a-real-password")
-    return _DECOY_PHC
+    if _decoy_phc_holder[0] is None:
+        _decoy_phc_holder[0] = _get_hasher().hash("decoy-not-a-real-password")
+    return _decoy_phc_holder[0]
 
 
 def _get_credentials_pepper(version: int = CURRENT_PEPPER_VERSION) -> str:

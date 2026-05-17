@@ -16,7 +16,7 @@ if TYPE_CHECKING:
 
 logger = get_logger(__name__)
 
-_cached_runtime_db: Database | None = None
+_cached_runtime_db_holder: list[Database | None] = [None]
 _cached_runtime_db_lock = threading.Lock()
 
 
@@ -43,33 +43,35 @@ def get_or_create_runtime_database_from_env(
     migrate: bool = True,
 ) -> Database:
     """Lazily build the shared API database outside FastAPI lifespan when needed."""
-    global _cached_runtime_db
-    if _cached_runtime_db is not None:
+    cached = _cached_runtime_db_holder[0]
+    if cached is not None:
         if connect:
-            asyncio.run(_cached_runtime_db.healthcheck())
-        return _cached_runtime_db
+            asyncio.run(cached.healthcheck())
+        return cached
 
     with _cached_runtime_db_lock:
-        if _cached_runtime_db is not None:
+        cached = _cached_runtime_db_holder[0]
+        if cached is not None:
             if connect:
-                asyncio.run(_cached_runtime_db.healthcheck())
-            return _cached_runtime_db
+                asyncio.run(cached.healthcheck())
+            return cached
 
-        _cached_runtime_db = Database(config=_get_env_db_config())
+        db = Database(config=_get_env_db_config())
         if migrate:
-            asyncio.run(_cached_runtime_db.migrate())
+            asyncio.run(db.migrate())
         if connect:
-            asyncio.run(_cached_runtime_db.healthcheck())
+            asyncio.run(db.healthcheck())
+        _cached_runtime_db_holder[0] = db
         logger.info("runtime_database_initialized")
-        return _cached_runtime_db
+        return db
 
 
 def clear_cached_runtime_database() -> None:
     """Reset the fallback runtime DB cache used outside managed lifespans."""
-    global _cached_runtime_db
-    if _cached_runtime_db is not None:
-        asyncio.run(_cached_runtime_db.dispose())
-    _cached_runtime_db = None
+    cached = _cached_runtime_db_holder[0]
+    if cached is not None:
+        asyncio.run(cached.dispose())
+    _cached_runtime_db_holder[0] = None
     cache_clear = getattr(_get_env_db_config, "cache_clear", None)
     if callable(cache_clear):
         cache_clear()

@@ -43,17 +43,16 @@ logger = get_logger(__name__)
 # auto_error=False so missing Bearer token doesn't 403 before we check WebApp auth
 security = HTTPBearer(auto_error=False)
 
-# Cached instances for dependency injection
-_auth_token_cache: Any = None
-_redis_cache: Any = None
+# Cached instances for dependency injection. Holders wrap mutable
+# lazy-init state so the call site does not need the `global` keyword.
+_auth_token_cache_holder: list[Any] = [None]
+_redis_cache_holder: list[Any] = [None]
 
 
 def _get_auth_token_cache() -> Any:
     """Get or create the auth token cache singleton."""
-    global _auth_token_cache, _redis_cache
-
-    if _auth_token_cache is not None:
-        return _auth_token_cache
+    if _auth_token_cache_holder[0] is not None:
+        return _auth_token_cache_holder[0]
 
     try:
         from app.config import load_config
@@ -64,11 +63,11 @@ def _get_auth_token_cache() -> Any:
         if not config.redis.enabled:
             return None
 
-        if _redis_cache is None:
-            _redis_cache = RedisCache(config)
+        if _redis_cache_holder[0] is None:
+            _redis_cache_holder[0] = RedisCache(config)
 
-        _auth_token_cache = AuthTokenCache(_redis_cache, config)
-        return _auth_token_cache
+        _auth_token_cache_holder[0] = AuthTokenCache(_redis_cache_holder[0], config)
+        return _auth_token_cache_holder[0]
     except Exception as exc:
         logger.warning(
             "auth_token_cache_init_failed",

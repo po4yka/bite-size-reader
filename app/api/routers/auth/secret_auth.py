@@ -22,16 +22,16 @@ from app.core.time_utils import UTC
 
 logger = get_logger(__name__)
 
-# Module-level cached config
-_cfg: AppConfig | None = None
+# Module-level cached config. Wrapped in a single-element list so the
+# lazy-init site does not need the `global` keyword.
+_cfg_holder: list[AppConfig | None] = [None]
 
 
 def _get_cfg() -> AppConfig:
     """Load and cache application configuration."""
-    global _cfg
-    if _cfg is None:
-        _cfg = load_config(allow_stub_telegram=True)
-    return _cfg
+    if _cfg_holder[0] is None:
+        _cfg_holder[0] = load_config(allow_stub_telegram=True)
+    return _cfg_holder[0]
 
 
 def _get_auth_config() -> Any:

@@ -28,16 +28,38 @@ logger = get_logger(__name__)
 
 router = APIRouter()
 _DATABASE_DETAILS_TTL_SECONDS = 30.0
-_database_details_cache: dict[str, Any] | None = None
-_database_details_cached_at = 0.0
-_database_details_lock = asyncio.Lock()
+
+
+class _DatabaseDetailsCache:
+    """Tiny TTL cache for the expensive database diagnostics call.
+
+    Encapsulates the two legacy globals (_database_details_cache,
+    _database_details_cached_at) so health.py no longer needs the
+    `global` keyword.
+    """
+
+    def __init__(self) -> None:
+        self.value: dict[str, Any] | None = None
+        self.cached_at: float = 0.0
+        self.lock = asyncio.Lock()
+
+    def fresh(self, now: float) -> bool:
+        return (
+            self.value is not None
+            and now - self.cached_at < _DATABASE_DETAILS_TTL_SECONDS
+        )
+
+    def clear(self) -> None:
+        self.value = None
+        self.cached_at = 0.0
+
+
+_database_details = _DatabaseDetailsCache()
 
 
 def clear_health_check_cache() -> None:
     """Reset cached component details used by health endpoints."""
-    global _database_details_cache, _database_details_cached_at
-    _database_details_cache = None
-    _database_details_cached_at = 0.0
+    _database_details.clear()
 
 
 async def _compute_database_details(db: Any) -> dict[str, Any]:
@@ -58,22 +80,16 @@ async def _compute_database_details(db: Any) -> dict[str, Any]:
 
 async def _get_cached_database_details(request: Request | None = None) -> dict[str, Any]:
     """Return cached database diagnostics, recomputing only when stale."""
-    global _database_details_cache, _database_details_cached_at
-
     now = time.monotonic()
-    if (
-        _database_details_cache is not None
-        and now - _database_details_cached_at < _DATABASE_DETAILS_TTL_SECONDS
-    ):
-        return dict(_database_details_cache)
+    if _database_details.fresh(now):
+        assert _database_details.value is not None  # narrowed by fresh()
+        return dict(_database_details.value)
 
-    async with _database_details_lock:
+    async with _database_details.lock:
         now = time.monotonic()
-        if (
-            _database_details_cache is not None
-            and now - _database_details_cached_at < _DATABASE_DETAILS_TTL_SECONDS
-        ):
-            return dict(_database_details_cache)
+        if _database_details.fresh(now):
+            assert _database_details.value is not None
+            return dict(_database_details.value)
 
         _db: Any = None
         with contextlib.suppress(RuntimeError):
@@ -81,8 +97,8 @@ async def _get_cached_database_details(request: Request | None = None) -> dict[s
         if _db is None:
             _db = get_session_manager()
         details = await _compute_database_details(_db)
-        _database_details_cache = details
-        _database_details_cached_at = now
+        _database_details.value = details
+        _database_details.cached_at = now
         return dict(details)
 
 

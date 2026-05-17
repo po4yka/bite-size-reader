@@ -30,7 +30,10 @@ Role = Literal["owner", "editor", "viewer"]
 ROLE_RANK = {"owner": 3, "editor": 2, "viewer": 1}
 
 # Module-level repo factory; set once at startup via ``CollectionService.configure()``.
-_repo_factory: Callable[[], Any] | None = None
+# Single-element holder so configure() does not need `global`. The
+# longer-term fix (constructor injection from ApiRuntime) is tracked
+# in [[eliminate-module-globals]].
+_repo_factory_holder: list[Callable[[], Any] | None] = [None]
 
 
 class CollectionService:
@@ -42,15 +45,15 @@ class CollectionService:
 
         Must be called once during application bootstrap (e.g. in the DI layer).
         """
-        global _repo_factory
-        _repo_factory = repo_factory
+        _repo_factory_holder[0] = repo_factory
 
     @staticmethod
     def _repo() -> Any:
         """Get a collection repository bound to the shared session manager."""
-        if _repo_factory is None:
+        factory = _repo_factory_holder[0]
+        if factory is None:
             raise RuntimeError("CollectionService.configure() must be called before use")
-        return _repo_factory()
+        return factory()
 
     # ---- access helpers ----
     @staticmethod

@@ -60,21 +60,21 @@ def _load_secret_key() -> str:
     return secret
 
 
-# JWT configuration
-_SECRET_KEY: str | None = None
+# JWT configuration. Holders wrap mutable lazy-init / one-shot
+# warning state so call sites don't need the `global` keyword.
+_secret_key_holder: list[str | None] = [None]
 ALGORITHM = "HS256"
-_allowlist_empty_warned = False
+_allowlist_empty_warned_holder: list[bool] = [False]
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 REFRESH_TOKEN_EXPIRE_DAYS = 30
 
 
 def _get_secret_key() -> str:
     """Return the JWT secret key, loading it lazily on first call."""
-    global _SECRET_KEY
-    if _SECRET_KEY is None:
-        _SECRET_KEY = _load_secret_key()
+    if _secret_key_holder[0] is None:
+        _secret_key_holder[0] = _load_secret_key()
         logger.info("JWT authentication initialized")
-    return _SECRET_KEY
+    return _secret_key_holder[0]
 
 
 def create_token(
@@ -249,13 +249,12 @@ def validate_client_id(client_id: str | None) -> None:
 
     # If allowlist is empty, allow all clients (backward compatible)
     if not allowed_client_ids:
-        global _allowlist_empty_warned
-        if not _allowlist_empty_warned:
+        if not _allowlist_empty_warned_holder[0]:
             logger.warning(
                 "ALLOWED_CLIENT_IDS is empty -- all client IDs are accepted. "
                 "Set ALLOWED_CLIENT_IDS to restrict access."
             )
-            _allowlist_empty_warned = True
+            _allowlist_empty_warned_holder[0] = True
         return
 
     # Otherwise, client must be in allowlist

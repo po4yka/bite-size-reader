@@ -56,3 +56,21 @@ class TestGlobalKeywordEliminated:
         # The three legacy `global _current_runtime` declarations must
         # be gone. Single-element holder pattern eliminates the need.
         assert "global _current_runtime" not in src
+
+    def test_app_api_app_di_have_no_module_globals(self) -> None:
+        """Ratchet: no new ``global _foo`` allowed in app/api/ or app/di/.
+
+        Acceptance criterion of [[eliminate-module-globals]]:
+        ``rg 'global _' app/api/ app/di/`` returns zero results.
+        """
+        import re
+
+        repo_root = Path(di_api.__file__).resolve().parents[2]
+        pattern = re.compile(r"^\s+global\s+_", re.MULTILINE)
+        offenders: list[str] = []
+        for sub in ("app/api", "app/di"):
+            for path in (repo_root / sub).rglob("*.py"):
+                src = path.read_text(encoding="utf-8")
+                if pattern.search(src):
+                    offenders.append(str(path.relative_to(repo_root)))
+        assert offenders == [], f"global _* declarations remain in: {offenders}"
