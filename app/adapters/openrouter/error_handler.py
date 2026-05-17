@@ -47,6 +47,30 @@ class ErrorHandler:
         """Check if error is non-retryable."""
         return status_code in (400, 401, 402, 403)
 
+    def is_schema_construct_rejection(self, data: dict) -> bool:
+        """Detect 400s caused by specific JSON Schema constructs.
+
+        Differentiates "this provider does not accept ``additionalProperties``
+        / ``oneOf`` / ``$ref``" from blanket "response_format not supported".
+        The former is worth progressively simplifying via
+        :mod:`app.adapters.openrouter.schema_simplifier` before falling
+        through to the existing binary ``json_schema -> json_object -> off``
+        downgrade.
+        """
+        if not isinstance(data, dict):
+            return False
+        import json as _json
+
+        err_dump = _json.dumps(data).lower()
+        construct_keywords = (
+            "additionalproperties",
+            "oneof",
+            "anyof",
+            "$ref",
+            "$defs",
+        )
+        return any(keyword in err_dump for keyword in construct_keywords)
+
     def is_provider_specific_rejection(self, data: dict) -> bool:
         """Check if a 400 error is from an upstream provider, not OpenRouter.
 

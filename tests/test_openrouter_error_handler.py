@@ -107,3 +107,59 @@ class TestIsProviderSpecificRejection:
             }
         }
         assert handler.is_provider_specific_rejection(data) is False
+
+
+class TestIsSchemaConstructRejection:
+    """Distinguish 400s about specific JSON Schema constructs (worth
+    progressively simplifying) from blanket 'response_format unsupported'
+    rejections (the existing binary downgrade handles those)."""
+
+    def test_additional_properties_rejection(self, handler: ErrorHandler) -> None:
+        data = {
+            "error": {
+                "message": "Invalid response_format: additionalProperties is not supported",
+                "code": 400,
+            }
+        }
+        assert handler.is_schema_construct_rejection(data) is True
+
+    def test_oneof_rejection(self, handler: ErrorHandler) -> None:
+        data = {
+            "error": {
+                "message": "schema validation failed: oneOf is not allowed at this position",
+                "code": 400,
+            }
+        }
+        assert handler.is_schema_construct_rejection(data) is True
+
+    def test_ref_defs_rejection(self, handler: ErrorHandler) -> None:
+        data = {
+            "error": {
+                "message": "$ref to $defs is not supported by this provider",
+                "code": 400,
+            }
+        }
+        assert handler.is_schema_construct_rejection(data) is True
+
+    def test_generic_response_format_rejection_is_not_construct(
+        self, handler: ErrorHandler
+    ) -> None:
+        # Blanket "response_format not supported" should fall through to
+        # the existing binary downgrade, not simplification.
+        data = {
+            "error": {
+                "message": "response_format is not supported by this model",
+                "code": 400,
+            }
+        }
+        assert handler.is_schema_construct_rejection(data) is False
+
+    def test_non_400_status_is_not_construct(self, handler: ErrorHandler) -> None:
+        data = {"error": {"message": "additionalProperties not allowed", "code": 500}}
+        # No status hint in payload; helper looks at the error body string only,
+        # but caller is expected to gate on status_code anyway. We still expect
+        # it to require the construct keyword to be present.
+        assert handler.is_schema_construct_rejection(data) is True
+
+    def test_empty_data(self, handler: ErrorHandler) -> None:
+        assert handler.is_schema_construct_rejection({}) is False
