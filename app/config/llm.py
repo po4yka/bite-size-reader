@@ -406,6 +406,17 @@ class ModelRoutingConfig(BaseModel):
             "before consulting the latency stats repository again."
         ),
     )
+    max_escalations: int = Field(
+        default=2,
+        validation_alias="MODEL_ROUTING_MAX_ESCALATIONS",
+        description=(
+            "Cap on soft-failure escalations per request. A 'soft failure' "
+            "is a 200 response that cannot be parsed as JSON or fails "
+            "strict-contract validation. Each escalation advances to the "
+            "next model in the fallback chain instead of re-spending the "
+            "retry budget on the same model. Set to 0 to disable."
+        ),
+    )
 
     @field_validator(
         "default_model",
