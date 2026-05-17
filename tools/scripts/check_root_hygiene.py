@@ -37,7 +37,6 @@ TRACKED_ROOT_ALLOWLIST = {
     "requirements-all.txt",
     "requirements-dev.txt",
     "requirements.txt",
-    "skills-lock.json",
     "tests",
     "tools",
     "uv.lock",
