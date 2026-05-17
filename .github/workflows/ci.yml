@@ -399,7 +399,7 @@ jobs:
       - name: Upload coverage reports
         uses: codecov/codecov-action@v6
         with:
-          file: ./coverage.xml
+          files: ./coverage.xml
           flags: unittests
           name: codecov-umbrella
           fail_ci_if_error: false
@@ -837,7 +837,7 @@ jobs:
   pr-summary:
     name: PR Summary
     if: github.event_name == 'pull_request'
-    needs: [prepare-environment, web-static-check, lint-and-format, type-check, test, integration-tests, bandit-scan, pip-audit-scan, safety-scan, secrets]
+    needs: [prepare-environment, markdown-lint, link-check, lint-and-format, type-check, test, integration-tests, bandit-scan, pip-audit-scan, safety-scan, secrets, migration-smoke-test]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -851,11 +851,11 @@ jobs:
             // Lockfile drift is a hard CI failure — if this job runs, lockfiles are current.
             summary += '✅ Lockfiles are up to date\n\n';
             summary += '### Checks Completed\n';
-            summary += '- ✅ Frontend build\n';
-            summary += '- ✅ Web static checks (lint + typecheck)\n';
+            summary += '- ✅ Markdown lint and link checks\n';
             summary += '- ✅ Code linting and formatting\n';
             summary += '- ✅ Type checking (mypy)\n';
             summary += '- ✅ Unit tests with coverage\n';
+            summary += '- ✅ Integration and migration smoke tests\n';
             summary += '- ✅ Security scanning\n';
             summary += '- ✅ Secret scanning\n\n';
             summary += '_See [full workflow run](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}) for detailed results._';
@@ -945,7 +945,7 @@ jobs:
   status-check:
     name: CI Status Check
     if: always()
-    needs: [prepare-environment, web-static-check, web-playwright-visual, lint-and-format, type-check, test, bandit-scan, pip-audit-scan, safety-scan, docker-build, compose-config-check, secrets, integration-tests, migration-smoke-test]
+    needs: [prepare-environment, markdown-lint, link-check, lint-and-format, type-check, test, bandit-scan, pip-audit-scan, safety-scan, docker-build, docker-api-browser-smoke, compose-config-check, secrets, integration-tests, migration-smoke-test]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -974,16 +974,13 @@ jobs:
             exit 1
           fi
 
-          if [[ "${{ needs.web-static-check.result }}" != "success" ]]; then
-            echo "::error::web-static-check job failed"
+          if [[ "${{ needs.markdown-lint.result }}" != "success" ]]; then
+            echo "::error::markdown-lint job failed"
             exit 1
           fi
 
-          # web-playwright-visual is the canonical Frost parity reference. Steps
-          # are gated by the paths filter so the job reports success when no web
-          # inputs changed; only an explicit failure should block status-check.
-          if [[ "${{ needs.web-playwright-visual.result }}" == "failure" ]]; then
-            echo "::error::web-playwright-visual job failed"
+          if [[ "${{ needs.link-check.result }}" != "success" ]]; then
+            echo "::error::link-check job failed"
             exit 1
           fi
 
@@ -1010,6 +1007,11 @@ jobs:
             exit 1
           fi
 
+          if [[ "${{ needs.docker-api-browser-smoke.result }}" == "failure" ]]; then
+            echo "::error::docker-api-browser-smoke job failed"
+            exit 1
+          fi
+
           if [[ "${{ needs.compose-config-check.result }}" != "success" ]]; then
             echo "::error::compose-config-check job failed"
             exit 1
@@ -1023,6 +1025,11 @@ jobs:
           # Integration tests may be skipped when not required
           if [[ "${{ needs.integration-tests.result }}" == "failure" ]]; then
             echo "::error::integration-tests job failed"
+            exit 1
+          fi
+
+          if [[ "${{ needs.migration-smoke-test.result }}" != "success" ]]; then
+            echo "::error::migration-smoke-test job failed"
             exit 1
           fi
 
