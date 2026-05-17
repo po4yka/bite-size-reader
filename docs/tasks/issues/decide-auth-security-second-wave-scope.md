@@ -1,6 +1,6 @@
 ---
 title: Decide second-wave Ratatoskr auth/security policy scope
-status: doing
+status: review
 area: auth
 priority: high
 owner: CTO
@@ -10,7 +10,19 @@ created: 2026-04-30
 updated: 2026-05-17
 ---
 
-- [ ] #task Decide second-wave Ratatoskr auth/security policy scope #repo/ratatoskr #area/auth #status/doing ⏫
+- [ ] #task Decide second-wave Ratatoskr auth/security policy scope #repo/ratatoskr #area/auth #status/review ⏫
+
+## Status
+
+A structured decision-memo frame is checked in at
+`docs/decisions/2026-05-17-auth-security-second-wave.md`. The memo
+covers the five policy questions from the original task spec (TLS
+pinning, secret show-once, AuditLog retention, hosted MCP/CLI
+exposure scope, default `clearSavedCredentials` UX) with the
+evidence laid out for each. **Every numbered decision is marked
+`_AWAITING CTO_`** — the memo is a frame, not a substitute for
+the CTO's call. Filling those decisions in unblocks
+[[review-mobile-auth-threat-model]].
 
 ## Objective
 
@@ -42,3 +54,7 @@ Security marked Ratatoskr mobile auth, secret-login, and client storage not rele
 ## Definition of done
 
 The decision memo has been posted, deferred follow-ups created or explicitly rejected, and [[review-mobile-auth-threat-model]] left with a clear Security/AppSec re-review path.
+
+## References
+
+- `docs/decisions/2026-05-17-auth-security-second-wave.md` (frame; awaiting CTO calls)

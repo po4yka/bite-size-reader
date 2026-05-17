@@ -12,6 +12,19 @@ updated: 2026-05-17
 
 - [ ] #task Review Ratatoskr mobile auth, secret-login, and client storage threat model #repo/ratatoskr #area/auth #status/blocked #blocked ⏫
 
+    - blocked_reason: Per the original spec, this review is gated by the CTO decisions in [[decide-auth-security-second-wave-scope]]. The per-flow risk classification, release-blocker calls, and approval signoff cannot be completed until those policy decisions are recorded.
+
+## Status
+
+A structured security-review frame is checked in at
+`docs/security/2026-05-17-mobile-auth-storage-review.md`. It
+pre-populates the mechanical flow inventory (file pointers, surface
+list, AuditLog write paths) from the codebase as of HEAD. The
+**per-flow risk classification table**, the **release-blocker
+calls**, and the **must-have-test list** are marked
+`_AWAITING SECURITY ENGINEER_` — they require Security Engineer
+judgement and are blocked on the CTO decision memo.
+
 ## Objective
 
 Produce a focused security review plan for Ratatoskr mobile auth and client storage before mobile release readiness is claimed.
@@ -42,3 +55,8 @@ Mobile auth drift can create token persistence, unauthorized access, stale refre
 ## Definition of done
 
 Security has a concrete release-readiness checklist or has filed blocking follow-up issues for unresolved auth/storage risks.
+
+## References
+
+- `docs/security/2026-05-17-mobile-auth-storage-review.md` (frame; awaiting Security Engineer judgements + CTO decisions)
+- `docs/decisions/2026-05-17-auth-security-second-wave.md` (CTO decisions blocking this review)
