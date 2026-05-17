@@ -62,6 +62,35 @@ class SummaryReadModelUseCase:
             search=cleaned_search,
         )
 
+    _BULK_MAX_IDS = 500
+
+    async def bulk_mark_as_read(
+        self, *, user_id: int, summary_ids: list[int]
+    ) -> int:
+        """Bulk mark summaries as read for *user_id*.
+
+        Empty input is a no-op (returns 0 without hitting the repo).
+        Duplicate IDs are deduplicated in caller order. Batches over
+        :attr:`_BULK_MAX_IDS` are rejected to bound the SQL
+        ``WHERE id IN (...)`` size.
+
+        Returns the number of rows actually updated by the repository.
+        """
+        if not summary_ids:
+            return 0
+        seen: dict[int, None] = {}
+        for sid in summary_ids:
+            seen.setdefault(sid, None)
+        deduped = list(seen)
+        if len(deduped) > self._BULK_MAX_IDS:
+            raise ValueError(
+                f"bulk_mark_as_read accepts at most {self._BULK_MAX_IDS} ids; "
+                f"got {len(deduped)}"
+            )
+        return await self._summary_repo.async_bulk_mark_summaries_as_read(
+            user_id=user_id, summary_ids=deduped
+        )
+
     async def get_summary_by_id_for_user(
         self, user_id: int, summary_id: int
     ) -> dict[str, Any] | None:

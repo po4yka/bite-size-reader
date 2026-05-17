@@ -11,7 +11,9 @@ from typing import Any, Literal, cast
 from fastapi import APIRouter, Depends, Query
 
 from app.api.dependencies.database import get_summary_read_model_use_case
-from app.api.exceptions import ResourceNotFoundError
+from pydantic import BaseModel as _BulkBaseModel
+
+from app.api.exceptions import ResourceNotFoundError, ValidationError
 from app.api.models.requests import (
     SaveReadingPositionRequest,
     SubmitFeedbackRequest,
@@ -606,6 +608,35 @@ async def delete_summary(
             deleted_at=datetime.now(UTC).isoformat().replace("+00:00", "Z"),
         )
     )
+
+
+class _BulkMarkReadRequest(_BulkBaseModel):
+    summary_ids: list[int]
+
+
+class _BulkMarkReadResponse(_BulkBaseModel):
+    updated: int
+
+
+@router.post("/bulk/mark-read")
+async def bulk_mark_read(
+    body: _BulkMarkReadRequest,
+    user: dict[str, Any] = Depends(get_current_user),
+    use_case: SummaryReadModelUseCase = Depends(_get_summary_use_case),
+) -> Any:
+    """Mark multiple summaries as read in one round-trip.
+
+    Accepts up to 500 summary IDs. Cross-user IDs are silently skipped
+    (never raises) so a single malformed batch cannot enumerate
+    another user's summary IDs.
+    """
+    try:
+        updated = await use_case.bulk_mark_as_read(
+            user_id=user["user_id"], summary_ids=body.summary_ids
+        )
+    except ValueError as exc:
+        raise ValidationError(str(exc), details={"field": "summary_ids"}) from exc
+    return success_response(_BulkMarkReadResponse(updated=updated))
 
 
 @router.post("/{summary_id}/favorite")

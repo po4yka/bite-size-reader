@@ -95,6 +95,16 @@ class SummaryRepositoryPort(Protocol):
     async def async_mark_summary_as_read(self, summary_id: int) -> None:
         """Mark summary as read."""
 
+    async def async_bulk_mark_summaries_as_read(
+        self, *, user_id: int, summary_ids: list[int]
+    ) -> int:
+        """Bulk-mark summaries as read; return rows updated.
+
+        Implementations MUST scope the UPDATE to summaries whose
+        ``Request.user_id == user_id`` to prevent privilege escalation
+        via crafted summary IDs from another user.
+        """
+
     async def async_mark_summary_as_unread(self, summary_id: int) -> None:
         """Mark summary as unread."""
 

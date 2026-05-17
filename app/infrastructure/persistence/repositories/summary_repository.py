@@ -300,6 +300,39 @@ class SummaryRepositoryAdapter:
             data.update(request_data)
             return data
 
+    async def async_bulk_mark_summaries_as_read(
+        self, *, user_id: int, summary_ids: list[int]
+    ) -> int:
+        """Bulk-mark summaries as read scoped to *user_id*.
+
+        Returns the count of rows actually updated. The UPDATE joins
+        through Request so a summary belonging to another user is
+        silently skipped — never raises on cross-user IDs.
+        """
+        if not summary_ids:
+            return 0
+        async with self._database.session() as session:
+            # Two-step: collect owned IDs, then UPDATE.
+            owned_rows = await session.execute(
+                select(Summary.id)
+                .join(Request, Summary.request_id == Request.id)
+                .where(
+                    Summary.id.in_(summary_ids),
+                    Request.user_id == user_id,
+                    Summary.is_deleted.is_(False),
+                    Summary.is_read.is_(False),
+                )
+            )
+            owned_ids = [row[0] for row in owned_rows]
+            if not owned_ids:
+                return 0
+            await session.execute(
+                update(Summary)
+                .where(Summary.id.in_(owned_ids))
+                .values(is_read=True, updated_at=_utcnow())
+            )
+            return len(owned_ids)
+
     async def async_mark_summary_as_read(self, summary_id: int) -> None:
         """Mark a summary as read."""
         await self._set_summary_values(summary_id, is_read=True)
