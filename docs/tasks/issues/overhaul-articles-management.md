@@ -46,5 +46,5 @@ Make the All Articles + Library screens usable as a real workspace. Today users 
 
 - `ratatoskr-web/src/features/articles/ArticlesPage.tsx`
 - `ratatoskr-web/src/features/library/LibraryPage.tsx`
-- `app/api/routers/summaries.py`, `app/api/routers/search.py`
+- `app/api/routers/content/summaries.py`, `app/api/routers/content/search.py`
 - [[run-frost-phase-7-mobile-regression]]

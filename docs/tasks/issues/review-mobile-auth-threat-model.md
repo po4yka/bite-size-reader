@@ -5,7 +5,7 @@ area: auth
 priority: high
 owner: Security Engineer
 blocks: []
-blocked_by: [unify-allowed-user-ids-allowlist-semantics, decouple-secret-login-pepper-from-jwt-key, use-constant-time-compare-telegram-nonce, decide-auth-security-second-wave-scope]
+blocked_by: [decide-auth-security-second-wave-scope]
 created: 2026-04-30
 updated: 2026-05-17
 ---

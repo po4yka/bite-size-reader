@@ -32,6 +32,6 @@ Make refresh-token issuance safe under replay and device loss. Companion to [[ad
 
 ## References
 
-- `app/api/routers/auth.py`
-- `app/db/models.py` (`RefreshToken`, `UserDevice`, `AuditLog`)
+- `app/api/routers/auth/` (`endpoints.py`, `tokens.py`, `dependencies.py`)
+- `app/db/models/core.py` (`RefreshToken`, `UserDevice`, `AuditLog`)
 - [[add-nickname-password-login-remember-me]], [[review-mobile-auth-threat-model]]
