@@ -47,9 +47,9 @@ def _configure_env(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("FIRECRAWL_API_KEY", "dummy-firecrawl-key")
     monkeypatch.setenv("OPENROUTER_API_KEY", "dummy-openrouter-key")
     # Reset module-level caches so the new env wins.
-    credential_auth._cfg = None
-    credential_auth._hasher = None
-    credential_auth._DECOY_PHC = None
+    credential_auth._cfg_holder[0] = None
+    credential_auth._hasher_holder[0] = None
+    credential_auth._decoy_phc_holder[0] = None
 
 
 async def _create_owner_with_credential(
@@ -201,7 +201,7 @@ async def test_credentials_login_user_not_in_allowlist_returns_generic_401(
 ) -> None:
     _configure_env(monkeypatch)
     monkeypatch.setenv("ALLOWED_USER_IDS", "999999")  # owner not in list
-    credential_auth._cfg = None
+    credential_auth._cfg_holder[0] = None
     await _create_owner_with_credential(db)
 
     with pytest.raises(AuthenticationError, match="Invalid credentials"):
@@ -285,9 +285,9 @@ async def test_credentials_login_without_pepper_raises_configuration_error(
 
     monkeypatch.delenv("CREDENTIALS_LOGIN_PEPPER", raising=False)
     clear_config_cache()
-    credential_auth._cfg = None
-    credential_auth._hasher = None
-    credential_auth._DECOY_PHC = None
+    credential_auth._cfg_holder[0] = None
+    credential_auth._hasher_holder[0] = None
+    credential_auth._decoy_phc_holder[0] = None
 
     with pytest.raises(ConfigurationError):
         await auth_endpoints.credentials_login(_login_request(), _mock_response())
