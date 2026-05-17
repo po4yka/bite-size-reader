@@ -1,5 +1,5 @@
 ---
-title: Add scraper chain failure correlation and metrics
+title: Wire scraper-chain attempt_log into chain orchestrator and crawl_results
 status: backlog
 area: observability
 priority: medium
@@ -10,27 +10,48 @@ created: 2026-04-30
 updated: 2026-05-17
 ---
 
-- [ ] #task Add scraper chain failure correlation and metrics #repo/ratatoskr #area/observability #status/backlog 🔼
+- [ ] #task Wire scraper-chain attempt_log into chain orchestrator and crawl_results #repo/ratatoskr #area/observability #status/backlog 🔼
 
 ## Goal
 
-Make scraper-chain failures debuggable end-to-end. Motivated by recent provider drift — per-provider telemetry is missing.
+The Prometheus signals
+(`ratatoskr_scraper_attempts_total{provider,status}`,
+`ratatoskr_scraper_attempt_latency_seconds{provider}`) plus the
+`ratatoskr-scraper-chain` Grafana dashboard and the
+`ScraperAttemptRecorder` / `serialize_attempt_log` helpers
+(`app/adapters/content/scraper/attempt_log.py`) are in place. What
+remains is the *wiring* so every real scraper-chain run emits the
+counters and persists the attempt log on the `crawl_results` row.
 
 ## Scope
 
-- Emit a structured `scraper.attempt` event per provider call with: provider name, correlation_id, url host, latency_ms, status (success|error|timeout|skipped), error class.
-- Prometheus counters: `scraper_attempts_total{provider,status}`, histogram `scraper_attempt_latency_seconds{provider}`.
-- Tag every `crawl_results` row with the winning provider; persist failed-provider list in a new `crawl_results.attempt_log` JSON column (or sibling table).
-- Add a Grafana panel under `ops/monitoring/grafana/` showing per-provider success rate + p95 latency.
+- In `app/adapters/content/scraper/` chain orchestrator, instantiate
+  one `ScraperAttemptRecorder` per request and call
+  `record_scraper_attempt(...)` /
+  `record_scraper_attempt_latency(...)` for each provider call.
+- Emit a structured `scraper.attempt` log event per attempt (provider,
+  correlation_id, url host, latency_ms, status, error class).
+- Add a nullable `attempt_log` JSON column to `crawl_results`
+  (Alembic migration) and tag the row with the winning provider name
+  in an existing column (or add `winning_provider`).
+- Persist `serialize_attempt_log(recorder.entries)` into the new
+  column at chain end.
 
 ## Acceptance criteria
 
-- [ ] Logs include `scraper.attempt` for every chain step; correlation_id present.
-- [ ] `/metrics` exposes the new counters and histogram.
-- [ ] One Grafana JSON dashboard checked into `ops/monitoring/grafana/`.
-- [ ] Unit tests cover attempt-log serialization and partial-failure paths.
+- [ ] Every chain run records one entry per provider call in the
+  Prometheus counter + the attempt_log payload.
+- [ ] `crawl_results.attempt_log` populated for new runs; downgrade
+  migration tested.
+- [ ] Structured `scraper.attempt` event includes `correlation_id`
+  and is visible in JSON logs.
+- [ ] No regression in
+  `tests/adapters/content/scraper/` or chain happy-path tests.
 
 ## References
 
-- `app/adapters/content/scraper/`
-- `app/observability/`
+- Metrics + recorder helpers: `app/observability/metrics.py`
+  (`record_scraper_attempt`, `record_scraper_attempt_latency`)
+- Attempt log payload: `app/adapters/content/scraper/attempt_log.py`
+- Grafana dashboard: `ops/monitoring/grafana/provisioning/dashboards/ratatoskr-scraper-chain.json`
+- Chain code: `app/adapters/content/scraper/`

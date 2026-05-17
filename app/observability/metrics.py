@@ -123,6 +123,24 @@ if PROMETHEUS_AVAILABLE:
         registry=REGISTRY,
     )
 
+    # ---- Scraper chain telemetry ---------------------------------------
+    # Per-provider attempt counter (status: success | error | timeout |
+    # skipped) and per-provider latency histogram. Lets operators see
+    # provider drift and pick which provider to drop from the chain.
+    SCRAPER_ATTEMPTS_TOTAL = Counter(
+        "ratatoskr_scraper_attempts_total",
+        "Total scraper provider attempts by outcome",
+        ["provider", "status"],
+        registry=REGISTRY,
+    )
+    SCRAPER_ATTEMPT_LATENCY_SECONDS = Histogram(
+        "ratatoskr_scraper_attempt_latency_seconds",
+        "Latency of a single scraper provider attempt in seconds",
+        ["provider"],
+        buckets=[0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0, 30.0, 60.0],
+        registry=REGISTRY,
+    )
+
     # Circuit breaker metrics
     CIRCUIT_BREAKER_STATE = Gauge(
         "ratatoskr_circuit_breaker_state",
@@ -321,6 +339,8 @@ else:
     LLM_CALL_ATTEMPTS_TOTAL = None
     LLM_CALL_RETRY_EXHAUSTION_TOTAL = None
     LLM_CALL_LATENCY_SECONDS = None
+    SCRAPER_ATTEMPTS_TOTAL = None
+    SCRAPER_ATTEMPT_LATENCY_SECONDS = None
 
 
 def get_metrics() -> bytes:
@@ -746,3 +766,30 @@ def record_llm_call_latency(*, model: str, latency_seconds: float) -> None:
     if latency_seconds < 0:
         return
     LLM_CALL_LATENCY_SECONDS.labels(model=model).observe(latency_seconds)
+
+
+def record_scraper_attempt(*, provider: str, status: str) -> None:
+    """Record a single scraper-chain provider attempt.
+
+    Args:
+        provider: One of the chain providers (``scrapling``, ``crawl4ai``,
+            ``firecrawl``, ``defuddle``, ``playwright``, ``crawlee``,
+            ``direct_html``, ``scrapegraph_ai``).
+        status: ``success`` | ``error`` | ``timeout`` | ``skipped``.
+    """
+    if not PROMETHEUS_AVAILABLE:
+        return
+    SCRAPER_ATTEMPTS_TOTAL.labels(provider=provider, status=status).inc()
+
+
+def record_scraper_attempt_latency(
+    *, provider: str, latency_seconds: float
+) -> None:
+    """Record per-attempt scraper provider latency."""
+    if not PROMETHEUS_AVAILABLE:
+        return
+    if latency_seconds < 0:
+        return
+    SCRAPER_ATTEMPT_LATENCY_SECONDS.labels(provider=provider).observe(
+        latency_seconds
+    )
