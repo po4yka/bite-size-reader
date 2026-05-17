@@ -29,9 +29,18 @@ Make the All Articles + Library screens usable as a real workspace. Today users 
 - Add server-side `search`, `tag`, `collection`, `domain`, `language`,
   `favorited`, `read`, `from`, `to` query parameters to
   `GET /v1/summaries` (`app/api/routers/content/summaries.py`).
-- Add server-side `signal_score` field to the `SummaryCompact`
-  response model so HIGH SIGNAL filter is server-side; document
-  contract in `docs/SPEC.md`.
+- **NOTE (2026-05-17 audit):** `SummaryCompact` at
+  `app/api/models/responses/summaries.py:35` already exposes
+  `confidence: float` (required). The frontend's
+  `confidence?: number` cast in `LibraryPage.tsx` looks like
+  stale defensive code rather than a missing backend field.
+  Verify before adding a new `signal_score` field — the original
+  task scope may have been resolved upstream and only the
+  frontend cast needs cleanup. If a distinct `signal_score`
+  semantic is still wanted, document the contract in
+  `docs/SPEC.md` and back it with a deterministic computation
+  (confidence × hallucination_risk_factor, say) rather than
+  introducing a second free-form score.
 - Add bulk-action POST endpoints: `/v1/summaries/bulk/mark-read`,
   `/v1/summaries/bulk/favorite`, `/v1/summaries/bulk/tag`,
   `/v1/summaries/bulk/add-to-collection`, `/v1/summaries/bulk/delete`.
