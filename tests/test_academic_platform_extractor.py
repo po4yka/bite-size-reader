@@ -60,7 +60,7 @@ def test_extract_abstract_when_no_subsequent_heading() -> None:
 
 def test_extract_abstract_handles_empty_markdown() -> None:
     assert _extract_abstract("") is None
-    assert _extract_abstract(None) is None  # type: ignore[arg-type]
+    assert _extract_abstract(None) is None
 
 
 # ---------------------------------------------------------------------------
@@ -163,7 +163,7 @@ def test_supports_delegates_to_url_parser() -> None:
         cfg=None,
         scraper=None,
         firecrawl_sem=_NullSem(),
-        lifecycle=None,  # type: ignore[arg-type]
+        lifecycle=None,
     )
     assert extractor.supports("https://arxiv.org/abs/2301.00001") is True
     assert extractor.supports("https://papers.ssrn.com/sol3/papers.cfm?abstract_id=1") is True

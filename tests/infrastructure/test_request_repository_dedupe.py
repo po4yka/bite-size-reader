@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import os
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 import pytest
 from sqlalchemy import delete
@@ -54,7 +54,7 @@ async def test_find_recent_returns_processing_row(database: Database) -> None:
     repo = RequestRepositoryAdapter(database)
     await repo.async_create_request(
         type_="url",
-        status=RequestStatus.PROCESSING,
+        status=cast("RequestStatus", "processing"),
         correlation_id="cid-proc-1",
         user_id=1,
         chat_id=1,

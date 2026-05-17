@@ -65,7 +65,7 @@ def _extract_runtime_routes(spec: dict[str, Any]) -> set[tuple[str, str]]:
                 routes.add((method_upper, path))
     # ``IGNORED_APP_ROUTES`` uses Starlette-style paths (with ``:converter``);
     # the runtime spec uses the stripped form. Normalise both before diffing.
-    return routes - _normalise(IGNORED_APP_ROUTES)
+    return routes - _normalise(set(IGNORED_APP_ROUTES))
 
 
 def _extract_yaml_routes(spec: dict[str, Any]) -> set[tuple[str, str]]:

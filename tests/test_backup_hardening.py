@@ -6,10 +6,11 @@ import io
 import json
 import zipfile
 from contextlib import asynccontextmanager
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from pydantic import ValidationError
+from pydantic import SecretStr, ValidationError
 
 from app.config.backup import BackupConfig
 
@@ -20,7 +21,7 @@ from app.config.backup import BackupConfig
 
 class TestBackupConfig:
     def test_encryption_enabled_when_key_set(self) -> None:
-        cfg = BackupConfig(encryption_key="placeholder_will_be_replaced")
+        cfg = BackupConfig(encryption_key=SecretStr("placeholder_will_be_replaced"))
         assert cfg.is_encryption_enabled is True
 
     def test_encryption_not_enabled_without_key(self) -> None:
@@ -28,7 +29,10 @@ class TestBackupConfig:
         assert cfg.is_encryption_enabled is False
 
     def test_explicit_false_overrides_key(self) -> None:
-        cfg = BackupConfig(encryption_key="placeholder_will_be_replaced", encryption_enabled=False)
+        cfg = BackupConfig(
+            encryption_key=SecretStr("placeholder_will_be_replaced"),
+            encryption_enabled=False,
+        )
         assert cfg.is_encryption_enabled is False
 
     def test_explicit_true_without_key_raises(self) -> None:
@@ -108,7 +112,7 @@ class TestBackupCrypto:
 # ZIP safety
 # ---------------------------------------------------------------------------
 
-_LIMITS = {
+_LIMITS: dict[str, Any] = {
     "max_entries": 10,
     "max_compressed_bytes": 10 * 1024 * 1024,
     "max_decompressed_bytes": 1000,
@@ -277,15 +281,13 @@ def _make_mock_db() -> MagicMock:
 
 class TestRestoreHardening:
     async def test_restore_accepts_encrypted_archive(self) -> None:
-        from pydantic import SecretStr
-
         from app.infrastructure.persistence.backup_archive_service import (
             async_restore_from_archive,
         )
         from app.infrastructure.persistence.backup_crypto import encrypt_backup
 
         encrypted = encrypt_backup(_minimal_backup_zip(), SecretStr(_TEST_KEY_STR))
-        cfg = BackupConfig(encryption_key=_TEST_KEY_STR)
+        cfg = BackupConfig(encryption_key=SecretStr(_TEST_KEY_STR))
         result = await async_restore_from_archive(1, encrypted, db=_make_mock_db(), cfg=cfg)
         assert result["errors"] == []
         assert result["restored"]["requests"] == 0
@@ -302,8 +304,6 @@ class TestRestoreHardening:
         assert result["errors"] == []
 
     async def test_restore_rejects_encrypted_without_key(self) -> None:
-        from pydantic import SecretStr
-
         from app.infrastructure.persistence.backup_archive_service import (
             async_restore_from_archive,
         )
@@ -315,15 +315,13 @@ class TestRestoreHardening:
         assert any("BACKUP_ENCRYPTION_KEY" in e for e in result["errors"])
 
     async def test_restore_rejects_wrong_key(self) -> None:
-        from pydantic import SecretStr
-
         from app.infrastructure.persistence.backup_archive_service import (
             async_restore_from_archive,
         )
         from app.infrastructure.persistence.backup_crypto import encrypt_backup
 
         encrypted = encrypt_backup(_minimal_backup_zip(), SecretStr(_TEST_KEY_STR))
-        cfg = BackupConfig(encryption_key=_OTHER_KEY)
+        cfg = BackupConfig(encryption_key=SecretStr(_OTHER_KEY))
         result = await async_restore_from_archive(1, encrypted, cfg=cfg)
         assert any("decrypt" in e.lower() for e in result["errors"])
 

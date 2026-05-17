@@ -32,7 +32,7 @@ class _FakeRawClient:
 
 def _bot_with(fake_client: _FakeRawClient) -> TelethonBotClient:
     bot = TelethonBotClient.__new__(TelethonBotClient)
-    bot._client = fake_client  # type: ignore[attr-defined]
+    bot._client = fake_client
     return bot
 
 

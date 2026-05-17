@@ -100,7 +100,7 @@ async def test_truncation_recovery_skipped_when_budget_over_60_percent() -> None
     assert state.last_error_text == "truncation_recovery_skipped_budget_tight"
     assert state.last_error_context == {"reason": "budget_tight"}
     # The guard fired after the first attempt — no retry happened.
-    runner._attempt_transport.assert_awaited_once()  # type: ignore[attr-defined]
+    runner._attempt_transport.assert_awaited_once()
 
 
 @pytest.mark.asyncio
@@ -125,7 +125,7 @@ async def test_truncation_recovery_proceeds_when_budget_under_60_percent() -> No
 
     # Budget was not tight — truncation retry was allowed and the second attempt succeeded.
     assert state.terminal_result is not None
-    assert runner._attempt_transport.await_count == 2  # type: ignore[attr-defined]
+    assert runner._attempt_transport.await_count == 2
 
 
 @pytest.mark.asyncio
@@ -144,4 +144,4 @@ async def test_truncation_recovery_no_budget_no_guard() -> None:
     )
 
     assert state.terminal_result is not None
-    assert runner._attempt_transport.await_count == 2  # type: ignore[attr-defined]
+    assert runner._attempt_transport.await_count == 2

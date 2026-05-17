@@ -10,6 +10,8 @@ Tests are skipped when prometheus_client is not installed.
 
 from __future__ import annotations
 
+from typing import Any
+
 import pytest
 
 import app.observability.metrics as _metrics_mod
@@ -20,12 +22,21 @@ pytestmark = pytest.mark.skipif(
 )
 
 
-def _counter_value(counter, **labels) -> float:  # type: ignore[no-untyped-def]
+def _counter_value(counter: Any, **labels: Any) -> float:
     return counter.labels(**labels)._value.get()
 
 
-def _gauge_value(gauge, **labels) -> float:  # type: ignore[no-untyped-def]
+def _gauge_value(gauge: Any, **labels: Any) -> float:
     return gauge.labels(**labels)._value.get()
+
+
+def _histogram_count(histogram: Any, **labels: Any) -> float:
+    labelled = histogram.labels(**labels)
+    for metric in labelled.collect():
+        for sample in metric.samples:
+            if sample.name.endswith("_count"):
+                return float(sample.value)
+    raise AssertionError("histogram count sample not found")
 
 
 def test_record_per_model_timeout_increments_counter() -> None:
@@ -50,13 +61,13 @@ def test_record_per_model_timeout_is_noop_without_prometheus(
 def test_record_per_model_latency_observes_histogram() -> None:
     from app.observability.metrics import OPENROUTER_PER_MODEL_LATENCY, record_per_model_latency
 
-    before_count = OPENROUTER_PER_MODEL_LATENCY.labels(
-        model="test/model-b", outcome="success"
-    )._count.get()
+    before_count = _histogram_count(
+        OPENROUTER_PER_MODEL_LATENCY, model="test/model-b", outcome="success"
+    )
     record_per_model_latency(model="test/model-b", outcome="success", seconds=1.5)
-    after_count = OPENROUTER_PER_MODEL_LATENCY.labels(
-        model="test/model-b", outcome="success"
-    )._count.get()
+    after_count = _histogram_count(
+        OPENROUTER_PER_MODEL_LATENCY, model="test/model-b", outcome="success"
+    )
     assert after_count == before_count + 1
 
 

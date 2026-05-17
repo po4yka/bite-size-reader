@@ -135,7 +135,7 @@ def client_no_db(monkeypatch: pytest.MonkeyPatch) -> Any:
         from app.api import middleware as _mw
 
         _mw._local_rate_limits.clear()
-        _mw._cfg = None  # reset cached config so it picks up new env vars
+        _mw._cfg_holder[0] = None  # reset cached config so it picks up new env vars
     except Exception:
         pass
 

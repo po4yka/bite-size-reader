@@ -127,7 +127,7 @@ async def test_loop_does_not_send_after_stop_set() -> None:
         calls.append("__sleep_done__")
 
     ind = _make_indicator(calls)
-    ind._interval = 0.01  # type: ignore[attr-defined]
+    ind._interval = 0.01
 
     await ind.start()
 
@@ -152,7 +152,7 @@ async def test_start_clears_stop_event_before_initial_send() -> None:
     ind = _make_indicator(calls)
 
     # Pre-set the stop event (simulates a re-use after stop)
-    ind._stop_event.set()  # type: ignore[attr-defined]
+    ind._stop_event.set()
 
     await ind.start()
 
@@ -177,7 +177,7 @@ async def test_stop_handles_base_exception_from_task() -> None:
     await ind.start()
 
     # Inject a raw BaseException into the task result path
-    ind._task = asyncio.create_task(_raise_base_exception())  # type: ignore[attr-defined]
+    ind._task = asyncio.create_task(_raise_base_exception())
 
     # Must not raise
     await ind.stop()

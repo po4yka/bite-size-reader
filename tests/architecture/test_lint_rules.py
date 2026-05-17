@@ -293,7 +293,7 @@ def test_none_is_comparison_ignores_custom_eq() -> None:
     """
 
     class AlwaysEqualToNone:
-        __hash__ = None  # type: ignore[assignment]  # unhashable by design
+        __hash__ = None  # unhashable by design
 
         def __eq__(self, other: object) -> bool:
             return other is None  # broken: equals None but is not None
@@ -305,7 +305,8 @@ def test_none_is_comparison_ignores_custom_eq() -> None:
 
 def test_falsy_non_none_values_are_not_none() -> None:
     """Falsy values (0, '', [], {}) are not None; both checks must agree."""
-    for falsy in (0, "", [], {}, 0.0, False):
+    falsy_values: tuple[object, ...] = (0, "", [], {}, 0.0, False)
+    for falsy in falsy_values:
         assert falsy is not None, f"{falsy!r} is falsy but is not None"
         assert falsy != None, f"{falsy!r} is falsy but != None must hold"  # noqa: E711
 

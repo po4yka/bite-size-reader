@@ -63,6 +63,12 @@ class FakeLLMClient:
             error_text=None if self.status is CallStatus.OK else "boom",
         )
 
+    async def chat_structured(self, *args: Any, **kwargs: Any) -> Any:
+        raise NotImplementedError
+
+    async def aclose(self) -> None:
+        return None
+
 
 @pytest.fixture
 def client() -> FakeLLMClient:

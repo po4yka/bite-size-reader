@@ -36,6 +36,7 @@ typing.NotRequired = NotRequired  # type: ignore[assignment]
 
 from sqlalchemy import select
 
+from app.api.routers.user import get_user_preferences, safe_isoformat
 from app.db.models import Request, Summary, User
 
 if TYPE_CHECKING:
@@ -99,14 +100,10 @@ async def _create_summary(
 
 
 def test_safe_isoformat_with_none() -> None:
-    from app.api.routers.user import safe_isoformat  # type: ignore[attr-defined]
-
     assert safe_isoformat(None) is None
 
 
 def test_safe_isoformat_with_datetime() -> None:
-    from app.api.routers.user import safe_isoformat  # type: ignore[attr-defined]
-
     dt = datetime(2023, 1, 15, 10, 30, 0)
     result = safe_isoformat(dt)
     assert result == "2023-01-15T10:30:00Z"
@@ -114,37 +111,27 @@ def test_safe_isoformat_with_datetime() -> None:
 
 
 def test_safe_isoformat_with_iso_string() -> None:
-    from app.api.routers.user import safe_isoformat  # type: ignore[attr-defined]
-
     result = safe_isoformat("2023-01-15T10:30:00Z")
     assert result is not None
     assert result.endswith("Z")
 
 
 def test_safe_isoformat_with_iso_string_plus_timezone() -> None:
-    from app.api.routers.user import safe_isoformat  # type: ignore[attr-defined]
-
     result = safe_isoformat("2023-01-15T10:30:00+00:00")
     assert result is not None
     assert result.endswith("Z")
 
 
 def test_safe_isoformat_with_invalid_string() -> None:
-    from app.api.routers.user import safe_isoformat  # type: ignore[attr-defined]
-
     result = safe_isoformat("not-a-date")
     assert result == "not-a-date" or result is None
 
 
 def test_safe_isoformat_with_empty_string() -> None:
-    from app.api.routers.user import safe_isoformat  # type: ignore[attr-defined]
-
     assert safe_isoformat("") is None
 
 
 def test_safe_isoformat_with_integer() -> None:
-    from app.api.routers.user import safe_isoformat  # type: ignore[attr-defined]
-
     assert safe_isoformat(12345) is None
 
 
@@ -158,8 +145,6 @@ async def test_get_preferences_default_for_new_user(
 ) -> None:
     _configure_env(monkeypatch)
     await _create_user(db, telegram_user_id=123456789, username="testuser")
-
-    from app.api.routers.user import get_user_preferences  # type: ignore[attr-defined]
 
     response = await get_user_preferences(user={"user_id": 123456789, "username": "testuser"})
     assert response["success"] is True
@@ -188,8 +173,6 @@ async def test_get_preferences_with_stored_preferences(
         },
     )
 
-    from app.api.routers.user import get_user_preferences  # type: ignore[attr-defined]
-
     response = await get_user_preferences(user={"user_id": 123456789, "username": "testuser"})
     data = response["data"]
     assert data["langPreference"] == "ru"
@@ -201,8 +184,6 @@ async def test_get_preferences_user_not_found(
     db: Database, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     _configure_env(monkeypatch)
-
-    from app.api.routers.user import get_user_preferences  # type: ignore[attr-defined]
 
     response = await get_user_preferences(user={"user_id": 999999, "username": "ghost"})
     assert response["success"] is True
