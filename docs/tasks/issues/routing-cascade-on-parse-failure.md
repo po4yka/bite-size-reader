@@ -7,7 +7,7 @@ owner: TBD
 blocks: []
 blocked_by: []
 created: 2026-05-08
-updated: 2026-05-08
+updated: 2026-05-17
 ---
 
 - [ ] #task Cascade to stronger model on JSON-parse failure during summarization #repo/ratatoskr #area/llm #status/backlog 🔽

@@ -7,7 +7,7 @@ owner: CTO
 blocks: []
 blocked_by: []
 created: 2026-04-30
-updated: 2026-05-04
+updated: 2026-05-17
 ---
 
 - [ ] #task Map Ratatoskr mobile API contract to KMP client readiness #repo/ratatoskr #area/kmp #status/doing ⏫

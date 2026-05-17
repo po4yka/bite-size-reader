@@ -7,7 +7,7 @@ owner: TBD
 blocks: []
 blocked_by: []
 created: 2026-05-08
-updated: 2026-05-08
+updated: 2026-05-17
 ---
 
 - [ ] #task Re-order fallback chain by observed P95 latency to minimise time-to-response #repo/ratatoskr #area/llm #status/backlog 🔽

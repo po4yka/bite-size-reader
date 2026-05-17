@@ -7,7 +7,7 @@ owner: CTO
 blocks: [review-mobile-auth-threat-model]
 blocked_by: []
 created: 2026-04-30
-updated: 2026-05-04
+updated: 2026-05-17
 ---
 
 - [ ] #task Decide second-wave Ratatoskr auth/security policy scope #repo/ratatoskr #area/auth #status/doing ⏫

@@ -7,7 +7,7 @@ owner: TBD
 blocks: []
 blocked_by: []
 created: 2026-05-08
-updated: 2026-05-08
+updated: 2026-05-17
 ---
 
 - [ ] #task Progressively simplify JSON schema before binary structured-output downgrade #repo/ratatoskr #area/llm #status/backlog 🔽

@@ -7,7 +7,7 @@ owner: unassigned
 blocks: []
 blocked_by: []
 created: 2026-05-04
-updated: 2026-05-04
+updated: 2026-05-17
 ---
 
 - [ ] #task Eliminate 23 module-level singletons and fold into ApiRuntime DI graph #repo/ratatoskr #area/api #status/backlog 🔼

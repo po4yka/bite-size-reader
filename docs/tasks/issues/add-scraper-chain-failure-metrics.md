@@ -7,7 +7,7 @@ owner: unassigned
 blocks: []
 blocked_by: []
 created: 2026-04-30
-updated: 2026-05-04
+updated: 2026-05-17
 ---
 
 - [ ] #task Add scraper chain failure correlation and metrics #repo/ratatoskr #area/observability #status/backlog 🔼

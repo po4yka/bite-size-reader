@@ -7,7 +7,7 @@ owner: Security Engineer
 blocks: []
 blocked_by: [unify-allowed-user-ids-allowlist-semantics, decouple-secret-login-pepper-from-jwt-key, use-constant-time-compare-telegram-nonce, decide-auth-security-second-wave-scope]
 created: 2026-04-30
-updated: 2026-05-04
+updated: 2026-05-17
 ---
 
 - [ ] #task Review Ratatoskr mobile auth, secret-login, and client storage threat model #repo/ratatoskr #area/auth #status/blocked #blocked ⏫
