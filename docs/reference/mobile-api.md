@@ -185,6 +185,7 @@ Backend toggle: `URL_FLOW_STREAMING_ENABLED` (default `true`).
 - `POST /v1/auth/telegram-login`
 - `POST /v1/auth/refresh`
 - `POST /v1/auth/logout`
+- `POST /v1/auth/logout-all`
 - `GET /v1/auth/me`
 - `DELETE /v1/auth/me`
 - `GET /v1/auth/sessions`
@@ -231,8 +232,15 @@ External CLI and hosted MCP clients usually use the secret-key flow instead of T
 2. `POST /v1/auth/secret-login` exchanges that secret for an access token, refresh token, and session ID.
 3. `POST /v1/auth/refresh` rotates the refresh token and returns a fresh access token.
 4. `POST /v1/auth/logout` revokes the supplied refresh token or the refresh cookie-backed session.
-5. `POST /v1/auth/secret-keys/{key_id}/rotate` replaces the old plaintext secret for future logins.
-6. `POST /v1/auth/secret-keys/{key_id}/revoke` is idempotent and prevents future `secret-login` exchanges with that secret.
+5. `POST /v1/auth/logout-all` (bearer-auth required) revokes every active refresh-token family for the current user across all devices and writes one `AuditLog` row per revoked family. Returns `{ revokedFamilies, revokedTokens }` inside the standard envelope. Use this for the lost-device flow.
+6. `POST /v1/auth/secret-keys/{key_id}/rotate` replaces the old plaintext secret for future logins.
+7. `POST /v1/auth/secret-keys/{key_id}/revoke` is idempotent and prevents future `secret-login` exchanges with that secret.
+
+Refresh-token family rotation (since `0016_add_refresh_token_family_columns`):
+
+- Every refresh token belongs to a family identified by `family_id`. The first token of a session is the root (no `parent_token_hash`); each rotation issues a child carrying the predecessor's `family_id` and `parent_token_hash = sha256(presented_token)`.
+- Presenting a retired (already-rotated) token is replay evidence: the `/refresh` endpoint revokes the entire matching family — not every active session — so a stolen mobile token does not log the user out on their desktop. One `AuditLog` row (`event = refresh_family_revoked`, `reason = retired_token_replay`) is written per cascade.
+- Presenting an expired token (but not revoked) returns `401` without cascading — benign client mistake.
 
 Example `secret-login` request:
 

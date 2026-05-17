@@ -43,8 +43,17 @@ class AuthRepositoryAdapter:
         ip_address: str | None,
         expires_at: dt.datetime,
         remember_me: bool = True,
+        family_id: str,
+        parent_token_hash: str | None = None,
     ) -> int:
-        """Create a new refresh token record."""
+        """Create a new refresh token record.
+
+        ``family_id`` is REQUIRED: callers must either generate a fresh UUID
+        for the root of a new family (first login) or pass the predecessor's
+        family_id when rotating. ``parent_token_hash`` is the sha256 of the
+        token being rotated out (NULL for the family root). Both columns
+        feed the :class:`TokenFamilyPolicy` decision in /refresh.
+        """
         async with self._database.transaction() as session:
             record = RefreshToken(
                 user_id=user_id,
@@ -55,6 +64,8 @@ class AuthRepositoryAdapter:
                 expires_at=expires_at,
                 is_revoked=False,
                 remember_me=remember_me,
+                family_id=family_id,
+                parent_token_hash=parent_token_hash,
             )
             session.add(record)
             await session.flush()
@@ -77,6 +88,78 @@ class AuthRepositoryAdapter:
                 )
 
         return token_id
+
+    async def async_get_family_records(self, family_id: str) -> list[dict[str, Any]]:
+        """Return every refresh-token row sharing ``family_id``.
+
+        Always reads from the DB (no cache) so the policy sees a consistent
+        snapshot — required to decide REVOKE_FAMILY vs ROTATE correctly under
+        concurrent refresh.
+        """
+        async with self._database.session() as session:
+            rows = (
+                await session.execute(
+                    select(RefreshToken)
+                    .where(RefreshToken.family_id == family_id)
+                    .order_by(RefreshToken.id)
+                )
+            ).scalars()
+            return [_token_to_dict(row) or {} for row in rows]
+
+    async def async_revoke_family(self, family_id: str) -> list[str]:
+        """Mark every token in ``family_id`` revoked.
+
+        Returns the list of token hashes that flipped to revoked so the
+        caller can invalidate the token cache. Already-revoked rows are
+        not re-touched.
+        """
+        async with self._database.transaction() as session:
+            hashes = list(
+                (
+                    await session.execute(
+                        update(RefreshToken)
+                        .where(
+                            RefreshToken.family_id == family_id,
+                            RefreshToken.is_revoked.is_(False),
+                        )
+                        .values(is_revoked=True)
+                        .returning(RefreshToken.token_hash)
+                    )
+                ).scalars()
+            )
+
+        if hashes and self._token_cache:
+            for token_hash in hashes:
+                try:
+                    await self._token_cache.mark_revoked(token_hash)
+                except Exception as exc:
+                    logger.warning(
+                        "auth_token_cache_revoke_failed",
+                        extra={"error": str(exc), "token_hash_prefix": token_hash[:8]},
+                    )
+
+        return hashes
+
+    async def async_list_active_family_records_for_user(
+        self, user_id: int
+    ) -> list[dict[str, Any]]:
+        """Return every active (non-revoked, non-expired) refresh-token row
+        for a user. Used by ``POST /v1/auth/logout-all`` to enumerate the
+        distinct families to revoke.
+        """
+        async with self._database.session() as session:
+            rows = (
+                await session.execute(
+                    select(RefreshToken)
+                    .where(
+                        RefreshToken.user_id == user_id,
+                        RefreshToken.is_revoked.is_(False),
+                        RefreshToken.expires_at > _utcnow(),
+                    )
+                    .order_by(RefreshToken.id)
+                )
+            ).scalars()
+            return [_token_to_dict(row) or {} for row in rows]
 
     async def async_get_refresh_token_by_hash(self, token_hash: str) -> dict[str, Any] | None:
         """Get a refresh token by hash, using cache when available."""

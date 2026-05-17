@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import hashlib
 import secrets
+import uuid
 from datetime import datetime, timedelta
 from typing import Any
 
@@ -144,6 +145,8 @@ async def create_refresh_token(
     *,
     ttl_seconds: float | None = None,
     remember_me: bool = True,
+    parent_family_id: str | None = None,
+    parent_token_hash: str | None = None,
 ) -> tuple[str, int]:
     """Create and persist JWT refresh token.
 
@@ -158,6 +161,12 @@ async def create_refresh_token(
         remember_me: Tag persisted on the refresh-token row so /refresh rotation
             preserves the TTL family. Defaults to True for Telegram/secret-login
             callers (existing 30-day behavior unchanged).
+        parent_family_id: When rotating an existing token, the predecessor's
+            ``family_id`` so the new token inherits the family. ``None`` for
+            first-login tokens — a fresh UUID4 family is generated.
+        parent_token_hash: sha256 of the rotated-out token. ``None`` for the
+            root of a family. Stored on the row so the policy can walk the
+            chain on the next refresh.
 
     Returns:
         Tuple of (token_string, session_id) where session_id is the refresh token record ID.
@@ -175,6 +184,9 @@ async def create_refresh_token(
 
         auth_repo = get_auth_repository()
 
+    # Family ID: inherit from rotation parent, otherwise root of a new family.
+    family_id = parent_family_id if parent_family_id is not None else str(uuid.uuid4())
+
     session_id = await auth_repo.async_create_refresh_token(
         user_id=user_id,
         token_hash=token_hash,
@@ -183,6 +195,8 @@ async def create_refresh_token(
         ip_address=ip_address,
         expires_at=expires_at,
         remember_me=remember_me,
+        family_id=family_id,
+        parent_token_hash=parent_token_hash,
     )
 
     return token, session_id

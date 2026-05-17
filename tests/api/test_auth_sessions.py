@@ -188,7 +188,13 @@ async def test_refresh_rotates_refresh_token_and_revokes_previous(db, user_facto
 
 
 @pytest.mark.asyncio
-async def test_refresh_with_revoked_token_raises_and_revokes_all_user_tokens(db, user_factory):
+async def test_refresh_with_revoked_token_revokes_only_its_family_not_other_families(
+    db, user_factory
+):
+    """Token-family policy: replay of a retired token revokes ONLY its own
+    family, not every active session the user owns. Sessions on other devices
+    (different family_id) must survive.
+    """
     user = await user_factory(telegram_user_id=987654322, username="replay-victim")
 
     revoked_token, _ = await create_refresh_token(
@@ -202,7 +208,7 @@ async def test_refresh_with_revoked_token_raises_and_revokes_all_user_tokens(db,
 
     # Pre-revoke one token to simulate a stale/stolen refresh that an attacker
     # later replays. The other token represents the user's still-live session
-    # on a different device.
+    # on a different device — its family_id must be different.
     revoked_hash = hashlib.sha256(revoked_token.encode()).hexdigest()
     async with db.transaction() as session:
         row = await session.scalar(
@@ -219,13 +225,277 @@ async def test_refresh_with_revoked_token_raises_and_revokes_all_user_tokens(db,
     with pytest.raises(TokenRevokedError):
         await refresh_access_token(request, response, payload, auth_repo=auth_repo)
 
-    # Reuse detection: ALL of this user's refresh tokens must now be revoked.
+    # Family-scoped revocation: the OTHER family (different device) survives.
+    other_hash = hashlib.sha256(other_token.encode()).hexdigest()
+    async with db.session() as session:
+        other_row = await session.scalar(
+            sa_select(RefreshTokenModel).where(RefreshTokenModel.token_hash == other_hash)
+        )
+        revoked_row = await session.scalar(
+            sa_select(RefreshTokenModel).where(RefreshTokenModel.token_hash == revoked_hash)
+        )
+    assert other_row is not None
+    assert other_row.is_revoked is False, (
+        "family-scoped revoke must NOT touch tokens in other families"
+    )
+    assert revoked_row is not None
+    assert revoked_row.is_revoked is True
+    assert other_row.family_id != revoked_row.family_id, (
+        "preconditions: tokens from separate create_refresh_token calls must "
+        "live in distinct families"
+    )
+
+
+# ----- Token-family rotation regression tests --------------------------------
+
+
+@pytest.mark.asyncio
+async def test_create_refresh_token_persists_with_fresh_family_id(db, auth_user):
+    """First-login token gets a fresh family_id (no parent). The id should be
+    UUID4-shaped (36 chars with dashes).
+    """
+    token, _ = await create_refresh_token(
+        user_id=auth_user.telegram_user_id,
+        client_id="mobile-app",
+    )
+
+    token_hash = hashlib.sha256(token.encode()).hexdigest()
+    async with db.session() as session:
+        row = await session.scalar(
+            sa_select(RefreshTokenModel).where(RefreshTokenModel.token_hash == token_hash)
+        )
+
+    assert row is not None
+    assert row.family_id is not None
+    # UUID4: 36 chars with 4 dashes
+    assert len(row.family_id) == 36
+    assert row.family_id.count("-") == 4
+    assert row.parent_token_hash is None  # root of family
+
+
+@pytest.mark.asyncio
+async def test_refresh_persists_family_id_and_parent_token_hash_on_rotation(db, user_factory):
+    """Rotation inherits family_id from parent and records parent_token_hash."""
+    user = await user_factory(telegram_user_id=987654323, username="chain-walker")
+
+    old_token, _ = await create_refresh_token(
+        user_id=user.telegram_user_id,
+        client_id="mobile-app",
+    )
+    old_hash = hashlib.sha256(old_token.encode()).hexdigest()
+
+    async with db.session() as session:
+        old_row = await session.scalar(
+            sa_select(RefreshTokenModel).where(RefreshTokenModel.token_hash == old_hash)
+        )
+    assert old_row is not None
+    original_family_id = old_row.family_id
+
+    request, response = _mock_request_response()
+    payload = RefreshTokenRequest(refresh_token=old_token, client_id="mobile-app")
+    auth_repo = get_auth_repository()
+
+    result = await refresh_access_token(request, response, payload, auth_repo=auth_repo)
+    new_token = result["data"]["tokens"]["refreshToken"]
+    new_hash = hashlib.sha256(new_token.encode()).hexdigest()
+
+    async with db.session() as session:
+        new_row = await session.scalar(
+            sa_select(RefreshTokenModel).where(RefreshTokenModel.token_hash == new_hash)
+        )
+
+    assert new_row is not None
+    assert new_row.family_id == original_family_id, (
+        "rotation must inherit the parent's family_id"
+    )
+    assert new_row.parent_token_hash == old_hash, (
+        "rotation must chain parent_token_hash to the predecessor"
+    )
+
+
+@pytest.mark.asyncio
+async def test_refresh_family_revoke_writes_one_audit_log_row(db, user_factory):
+    """REVOKE_FAMILY path writes exactly one AuditLog row with the
+    family_id + presented_token_hash_prefix in the payload.
+    """
+    from app.db.models import AuditLog as AuditLogModel
+
+    user = await user_factory(telegram_user_id=987654324, username="audit-victim")
+
+    revoked_token, _ = await create_refresh_token(
+        user_id=user.telegram_user_id,
+        client_id="mobile-app",
+    )
+    revoked_hash = hashlib.sha256(revoked_token.encode()).hexdigest()
+    async with db.transaction() as session:
+        row = await session.scalar(
+            sa_select(RefreshTokenModel).where(RefreshTokenModel.token_hash == revoked_hash)
+        )
+        assert row is not None
+        row.is_revoked = True
+        await session.flush()
+        family_id = row.family_id
+
+    request, response = _mock_request_response()
+    payload = RefreshTokenRequest(refresh_token=revoked_token, client_id="mobile-app")
+    auth_repo = get_auth_repository()
+
+    with pytest.raises(TokenRevokedError):
+        await refresh_access_token(request, response, payload, auth_repo=auth_repo)
+
+    async with db.session() as session:
+        audit_rows = list(
+            (
+                await session.execute(
+                    sa_select(AuditLogModel).where(
+                        AuditLogModel.event == "refresh_family_revoked"
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+
+    assert len(audit_rows) == 1, "expected exactly one refresh_family_revoked audit row"
+    payload_json = audit_rows[0].details_json
+    assert payload_json is not None
+    assert payload_json.get("family_id") == family_id
+    assert payload_json.get("user_id") == user.telegram_user_id
+    assert payload_json.get("presented_token_hash_prefix") == revoked_hash[:8]
+
+
+@pytest.mark.asyncio
+async def test_refresh_expired_token_rejects_without_cascading(db, user_factory):
+    """REJECT path: expired (not revoked) token rejects without revoking
+    sibling family rows or any other family.
+    """
+    from app.api.exceptions import TokenExpiredError, TokenInvalidError
+
+    user = await user_factory(telegram_user_id=987654325, username="expired-victim")
+
+    # Token that we'll expire post-creation.
+    expired_token, _ = await create_refresh_token(
+        user_id=user.telegram_user_id,
+        client_id="mobile-app",
+    )
+    other_token, _ = await create_refresh_token(
+        user_id=user.telegram_user_id,
+        client_id="desktop-app",
+    )
+
+    expired_hash = hashlib.sha256(expired_token.encode()).hexdigest()
+    async with db.transaction() as session:
+        row = await session.scalar(
+            sa_select(RefreshTokenModel).where(RefreshTokenModel.token_hash == expired_hash)
+        )
+        assert row is not None
+        row.expires_at = datetime.now(UTC) - timedelta(days=1)
+        await session.flush()
+
+    request, response = _mock_request_response()
+    payload = RefreshTokenRequest(refresh_token=expired_token, client_id="mobile-app")
+    auth_repo = get_auth_repository()
+
+    # JWT-level expiry triggers TokenExpiredError before our handler logic;
+    # row-level expiry past JWT exp is the same outcome. Either way we want
+    # NO cascade.
+    with pytest.raises((TokenExpiredError, TokenInvalidError)):
+        await refresh_access_token(request, response, payload, auth_repo=auth_repo)
+
     other_hash = hashlib.sha256(other_token.encode()).hexdigest()
     async with db.session() as session:
         other_row = await session.scalar(
             sa_select(RefreshTokenModel).where(RefreshTokenModel.token_hash == other_hash)
         )
     assert other_row is not None
-    assert other_row.is_revoked is True, (
-        "reuse-detection must revoke all sibling refresh tokens, not just the replayed one"
+    assert other_row.is_revoked is False, "expired-token reject must NOT cascade"
+
+
+# ----- POST /v1/auth/logout-all ----------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_logout_all_revokes_every_active_family_for_user(db, user_factory):
+    """POST /v1/auth/logout-all revokes every active family for the current
+    user, leaving other users' tokens untouched.
+    """
+    from app.api.routers.auth.endpoints_sessions import logout_all
+
+    user = await user_factory(telegram_user_id=987654326, username="logout-all-user")
+    other_user = await user_factory(telegram_user_id=987654327, username="bystander")
+
+    # Three families for the target user.
+    tok1, _ = await create_refresh_token(user.telegram_user_id, "mobile-app")
+    tok2, _ = await create_refresh_token(user.telegram_user_id, "desktop-app")
+    tok3, _ = await create_refresh_token(user.telegram_user_id, "web-app")
+    # Other user's token must NOT be affected.
+    other_tok, _ = await create_refresh_token(other_user.telegram_user_id, "mobile-app")
+
+    response = MagicMock()
+    current_user = {"user_id": user.telegram_user_id}
+    auth_repo = get_auth_repository()
+
+    result = await logout_all(
+        response=response, current_user=current_user, auth_repo=auth_repo
     )
+    assert result["data"]["revokedFamilies"] == 3
+
+    for tok in (tok1, tok2, tok3):
+        tok_hash = hashlib.sha256(tok.encode()).hexdigest()
+        async with db.session() as session:
+            row = await session.scalar(
+                sa_select(RefreshTokenModel).where(RefreshTokenModel.token_hash == tok_hash)
+            )
+        assert row is not None
+        assert row.is_revoked is True, f"logout-all must revoke {tok_hash[:8]}"
+
+    other_hash = hashlib.sha256(other_tok.encode()).hexdigest()
+    async with db.session() as session:
+        other_row = await session.scalar(
+            sa_select(RefreshTokenModel).where(RefreshTokenModel.token_hash == other_hash)
+        )
+    assert other_row is not None
+    assert other_row.is_revoked is False, (
+        "logout-all must NOT revoke other users' tokens"
+    )
+
+
+@pytest.mark.asyncio
+async def test_logout_all_writes_one_audit_log_per_revoked_family(db, user_factory):
+    """logout-all writes one AuditLog row per revoked family with the
+    family_id + user_id in the payload.
+    """
+    from app.api.routers.auth.endpoints_sessions import logout_all
+    from app.db.models import AuditLog as AuditLogModel
+
+    user = await user_factory(telegram_user_id=987654328, username="audit-logout-all")
+
+    await create_refresh_token(user.telegram_user_id, "mobile-app")
+    await create_refresh_token(user.telegram_user_id, "desktop-app")
+
+    response = MagicMock()
+    current_user = {"user_id": user.telegram_user_id}
+    auth_repo = get_auth_repository()
+
+    await logout_all(response=response, current_user=current_user, auth_repo=auth_repo)
+
+    async with db.session() as session:
+        audit_rows = list(
+            (
+                await session.execute(
+                    sa_select(AuditLogModel).where(
+                        AuditLogModel.event == "refresh_family_revoked"
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+
+    # One audit row per family.
+    assert len(audit_rows) == 2
+    for row in audit_rows:
+        assert row.details_json is not None
+        assert row.details_json.get("user_id") == user.telegram_user_id
+        assert row.details_json.get("reason") == "logout_all"
+        assert row.details_json.get("family_id") is not None

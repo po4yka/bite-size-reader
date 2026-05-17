@@ -47,4 +47,5 @@ change_password = endpoints_credentials.change_password
 
 refresh_access_token = endpoints_sessions.refresh_access_token
 logout = endpoints_sessions.logout
+logout_all = endpoints_sessions.logout_all
 list_sessions = endpoints_sessions.list_sessions

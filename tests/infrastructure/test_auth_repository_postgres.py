@@ -99,6 +99,7 @@ async def test_auth_repository_refresh_token_sessions_and_cache(database: Databa
         device_info="iPhone",
         ip_address="127.0.0.1",
         expires_at=expires_at,
+        family_id="fam-a",
     )
     second_id = await repo.async_create_refresh_token(
         user_id=user_id,
@@ -107,6 +108,7 @@ async def test_auth_repository_refresh_token_sessions_and_cache(database: Databa
         device_info="Safari",
         ip_address="127.0.0.2",
         expires_at=expires_at,
+        family_id="fam-b",
     )
 
     cached = await repo.async_get_refresh_token_by_hash("token-a")
@@ -148,6 +150,7 @@ async def test_auth_repository_revokes_all_user_tokens(database: Database) -> No
             device_info=None,
             ip_address=None,
             expires_at=expires_at,
+            family_id=f"fam-{token_hash}",
         )
 
     assert await repo.async_revoke_all_user_tokens(user_id) == 2
