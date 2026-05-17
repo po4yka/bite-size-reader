@@ -417,6 +417,17 @@ class ModelRoutingConfig(BaseModel):
             "retry budget on the same model. Set to 0 to disable."
         ),
     )
+    max_provider_rotations: int = Field(
+        default=2,
+        validation_alias="MODEL_ROUTING_MAX_PROVIDER_ROTATIONS",
+        description=(
+            "On a provider-specific rejection (OpenRouter "
+            "metadata.provider_name set), retry the same model up to this "
+            "many times with an updated provider_order header excluding "
+            "the offending provider before advancing to the next model. "
+            "Set to 0 to keep the legacy 'advance model immediately' behaviour."
+        ),
+    )
 
     @field_validator(
         "default_model",
