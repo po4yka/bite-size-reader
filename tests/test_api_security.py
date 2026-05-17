@@ -192,7 +192,7 @@ class TestJWTSecretValidation:
         from app.api.routers.auth import tokens
 
         with patch("app.api.routers.auth.tokens.Config.get", return_value=""):
-            tokens._SECRET_KEY = None
+            tokens._secret_key_holder[0] = None
             with pytest.raises(RuntimeError) as exc_info:
                 tokens._get_secret_key()
 
@@ -203,7 +203,7 @@ class TestJWTSecretValidation:
         from app.api.routers.auth import tokens
 
         with patch("app.api.routers.auth.tokens.Config.get", return_value="short"):
-            tokens._SECRET_KEY = None
+            tokens._secret_key_holder[0] = None
             with pytest.raises(RuntimeError) as exc_info:
                 tokens._get_secret_key()
 
