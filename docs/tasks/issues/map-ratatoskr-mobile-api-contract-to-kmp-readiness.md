@@ -12,7 +12,7 @@ updated: 2026-05-17
 
 - [ ] #task Map Ratatoskr mobile API contract to KMP client readiness #repo/ratatoskr #area/kmp #status/blocked #blocked ⏫
 
-    - blocked_reason: The KMP client lives in the separate `ratatoskr-client` repository which is not part of this checkout. The cross-repo contract map requires read access to that repo to identify consuming modules. The mobile-API source-of-truth (`docs/openapi/mobile_api.yaml`, `docs/reference/mobile-api.md`) IS in this repo and ready to feed the comparison.
+    - blocked_reason: The KMP client lives in the separate `ratatoskr-client` repository which is not part of this checkout. The cross-repo contract map requires read access to that repo to identify consuming modules. The mobile-API source-of-truth (`docs/openapi/mobile_api.yaml`, `docs/reference/mobile-api.md`) IS in this repo and ready to feed the comparison. **Backend-side half** of the contract map is now published at `docs/reference/kmp-contract-map-backend.md`; merging it with the client-side half requires access to the `ratatoskr-client` repo.
 
 ## Objective
 
