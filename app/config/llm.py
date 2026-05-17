@@ -389,6 +389,23 @@ class ModelRoutingConfig(BaseModel):
             "Must be a fast, cheap model — single-word reply, ~100 tokens."
         ),
     )
+    latency_stickiness_factor: float = Field(
+        default=2.0,
+        validation_alias="MODEL_ROUTING_LATENCY_STICKINESS_FACTOR",
+        description=(
+            "Re-order fallback chain only when a candidate's P95 latency is "
+            "at least this factor smaller than the next configured model. "
+            "Prevents thrashing when latencies are similar. Default 2.0x."
+        ),
+    )
+    latency_cache_ttl_seconds: float = Field(
+        default=300.0,
+        validation_alias="MODEL_ROUTING_LATENCY_CACHE_TTL_SECONDS",
+        description=(
+            "How long the fallback orderer caches per-model P95 latency "
+            "before consulting the latency stats repository again."
+        ),
+    )
 
     @field_validator(
         "default_model",
