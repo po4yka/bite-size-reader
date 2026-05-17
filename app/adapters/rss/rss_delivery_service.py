@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import uuid
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from app.core.content_cleaner import clean_content_for_llm
@@ -21,6 +22,12 @@ if TYPE_CHECKING:
     )
 
 logger = get_logger(__name__)
+
+
+@dataclass(frozen=True)
+class _PreparedRSSItem:
+    text: str | None
+    skipped: bool = False
 
 
 def _format_rss_summary(
@@ -101,9 +108,43 @@ class RSSDeliveryService:
 
         for item in items:
             subscriber_ids = list(item.get("subscriber_ids") or [])
+            if not subscriber_ids:
+                continue
+
+            try:
+                prepared = await self._prepare_item(item, sem)
+            except Exception:
+                logger.exception(
+                    "rss_delivery_item_prepare_failed",
+                    extra={
+                        "item_id": item.get("id"),
+                        "subscriber_count": len(subscriber_ids),
+                    },
+                )
+                stats["errors"] += len(subscriber_ids)
+                continue
+
+            if prepared.skipped:
+                for user_id in subscriber_ids:
+                    try:
+                        await self._rss_repo.async_mark_item_delivered(
+                            user_id=user_id, item_id=int(item["id"])
+                        )
+                        stats["skipped"] += 1
+                    except Exception:
+                        logger.exception(
+                            "rss_delivery_skip_mark_failed",
+                            extra={"item_id": item.get("id"), "user_id": user_id},
+                        )
+                        stats["errors"] += 1
+                continue
+
+            if prepared.text is None:
+                continue
+
             for user_id in subscriber_ids:
                 try:
-                    await self._deliver_one(item, user_id, send_func, sem)
+                    await self._send_prepared_item(item, user_id, prepared.text, send_func)
                     stats["delivered"] += 1
                 except Exception:
                     logger.exception(
@@ -130,6 +171,20 @@ class RSSDeliveryService:
         sem: asyncio.Semaphore,
     ) -> None:
         """Summarize a single RSS item and deliver to one user."""
+        prepared = await self._prepare_item(item, sem)
+        if prepared.skipped:
+            await self._rss_repo.async_mark_item_delivered(user_id=user_id, item_id=int(item["id"]))
+            return
+        if prepared.text is None:
+            return
+        await self._send_prepared_item(item, user_id, prepared.text, send_func)
+
+    async def _prepare_item(
+        self,
+        item: dict[str, Any],
+        sem: asyncio.Semaphore,
+    ) -> _PreparedRSSItem:
+        """Build a delivery message for an RSS item once, shared by all subscribers."""
         correlation_id = f"rss_{uuid.uuid4().hex[:12]}"
         content = str(item.get("content") or "")
 
@@ -139,10 +194,7 @@ class RSSDeliveryService:
                     "rss_delivery_skip_no_content",
                     extra={"item_id": item.get("id"), "cid": correlation_id},
                 )
-                await self._rss_repo.async_mark_item_delivered(
-                    user_id=user_id, item_id=int(item["id"])
-                )
-                return
+                return _PreparedRSSItem(text=None, skipped=True)
             scraped_content = await self._try_scrape_url(item["url"], correlation_id)
             if scraped_content and len(scraped_content) >= self._cfg.min_content_length:
                 content = scraped_content
@@ -156,10 +208,7 @@ class RSSDeliveryService:
                         "cid": correlation_id,
                     },
                 )
-                await self._rss_repo.async_mark_item_delivered(
-                    user_id=user_id, item_id=int(item["id"])
-                )
-                return
+                return _PreparedRSSItem(text=None, skipped=True)
 
         cleaned = clean_content_for_llm(content)
         lang = detect_language(cleaned)
@@ -178,6 +227,16 @@ class RSSDeliveryService:
             summary = await self._pure.summarize(request)
 
         text = _format_rss_summary(summary, item.get("title"), item.get("url"))
+        return _PreparedRSSItem(text=text)
+
+    async def _send_prepared_item(
+        self,
+        item: dict[str, Any],
+        user_id: int,
+        text: str,
+        send_func: Callable[[int, str], Awaitable[None]],
+    ) -> None:
+        """Send a precomputed RSS item message and mark the user/item delivery."""
         await send_func(user_id, text)
 
         await self._rss_repo.async_mark_item_delivered(user_id=user_id, item_id=int(item["id"]))
@@ -186,7 +245,6 @@ class RSSDeliveryService:
             extra={
                 "item_id": item.get("id"),
                 "user_id": user_id,
-                "cid": correlation_id,
             },
         )
 

@@ -84,7 +84,7 @@ async def backfill_repository_embeddings(
         errors = 0
         would_create = 0
 
-        offset = 0
+        last_seen_id = 0
         while True:
             async with db.session() as session:
                 # LEFT OUTER JOIN: include repos regardless of embedding presence
@@ -94,8 +94,8 @@ async def backfill_repository_embeddings(
                         RepositoryEmbedding,
                         RepositoryEmbedding.repository_id == Repository.id,
                     )
+                    .where(Repository.id > last_seen_id)
                     .order_by(Repository.id.asc())
-                    .offset(offset)
                     .limit(batch_size)
                 )
 
@@ -115,6 +115,8 @@ async def backfill_repository_embeddings(
 
             if not rows:
                 break
+
+            last_seen_id = rows[-1][0].id
 
             for repo, existing_embedding in rows:
                 repo_id = repo.id
@@ -168,7 +170,6 @@ async def backfill_repository_embeddings(
 
             if len(rows) < batch_size:
                 break
-            offset += batch_size
 
         summary: dict[str, Any] = {
             "processed": processed,

@@ -158,7 +158,7 @@ async def test_rss_feed_repository_items_and_delivery_targets(database: Database
     await repo.async_set_subscription_active(int(inactive_sub["id"]), is_active=False)
 
     published_at = dt.datetime(2026, 5, 1, 12, tzinfo=UTC)
-    item = await repo.async_create_feed_item(
+    older_item = await repo.async_create_feed_item(
         feed_id=int(feed["id"]),
         guid="guid-1",
         title="Post",
@@ -167,9 +167,19 @@ async def test_rss_feed_repository_items_and_delivery_targets(database: Database
         author="Author",
         published_at=published_at,
     )
-    assert item is not None
-    assert item["feed"] == feed["id"]
-    assert item["published_at"] == published_at
+    newer_item = await repo.async_create_feed_item(
+        feed_id=int(feed["id"]),
+        guid="guid-2",
+        title="Newer Post",
+        url="https://example.com/newer-post",
+        content="newer content",
+        author="Author",
+        published_at=published_at + dt.timedelta(hours=1),
+    )
+    assert older_item is not None
+    assert newer_item is not None
+    assert older_item["feed"] == feed["id"]
+    assert older_item["published_at"] == published_at
     duplicate = await repo.async_create_feed_item(
         feed_id=int(feed["id"]),
         guid="guid-1",
@@ -182,26 +192,37 @@ async def test_rss_feed_repository_items_and_delivery_targets(database: Database
     assert duplicate is None
 
     items = await repo.async_list_feed_items(int(feed["id"]))
-    assert [row["guid"] for row in items] == ["guid-1"]
+    assert [row["guid"] for row in items] == ["guid-2", "guid-1"]
 
-    targets = await repo.async_list_delivery_targets([int(item["id"])])
-    assert targets == [
-        {
-            **targets[0],
-            "guid": "guid-1",
-            "subscriber_ids": [owner.telegram_user_id, other.telegram_user_id],
-        }
+    targets = await repo.async_list_delivery_targets([int(older_item["id"]), int(newer_item["id"])])
+    assert [target["guid"] for target in targets] == ["guid-2", "guid-1"]
+    assert [target["subscriber_ids"] for target in targets] == [
+        [owner.telegram_user_id, other.telegram_user_id],
+        [owner.telegram_user_id, other.telegram_user_id],
     ]
 
-    await repo.async_mark_item_delivered(user_id=owner.telegram_user_id, item_id=int(item["id"]))
-    await repo.async_mark_item_delivered(user_id=owner.telegram_user_id, item_id=int(item["id"]))
+    await repo.async_mark_item_delivered(
+        user_id=owner.telegram_user_id, item_id=int(older_item["id"])
+    )
+    await repo.async_mark_item_delivered(
+        user_id=owner.telegram_user_id, item_id=int(older_item["id"])
+    )
+    await repo.async_mark_item_delivered(
+        user_id=other.telegram_user_id, item_id=int(newer_item["id"])
+    )
 
-    remaining = await repo.async_list_delivery_targets([int(item["id"])])
-    assert remaining[0]["subscriber_ids"] == [other.telegram_user_id]
+    remaining = await repo.async_list_delivery_targets(
+        [int(older_item["id"]), int(newer_item["id"])]
+    )
+    assert [target["guid"] for target in remaining] == ["guid-2", "guid-1"]
+    assert [target["subscriber_ids"] for target in remaining] == [
+        [owner.telegram_user_id],
+        [other.telegram_user_id],
+    ]
 
     async with database.session() as session:
         deliveries = list(await session.scalars(select(RSSItemDelivery)))
-    assert len(deliveries) == 1
+    assert len(deliveries) == 2
 
 
 @pytest.mark.asyncio

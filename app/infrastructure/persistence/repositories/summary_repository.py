@@ -500,20 +500,35 @@ class SummaryRepositoryAdapter:
         if limit <= 0:
             return []
         async with self._database.session() as session:
-            rows = (
-                await session.execute(
-                    select(Summary)
-                    .join(Request, Summary.request_id == Request.id)
-                    .where(
-                        Request.user_id == user_id,
-                        Request.created_at >= request_created_after,
-                        Summary.is_deleted.is_(False),
-                    )
-                    .order_by(Request.created_at.desc())
-                    .limit(limit)
+            rows = await session.execute(
+                select(
+                    Summary.id,
+                    Summary.request_id,
+                    Summary.lang,
+                    Summary.json_payload,
+                    Summary.version,
+                    Request.created_at.label("request_created_at"),
                 )
-            ).scalars()
-            return [model_to_dict(row) or {} for row in rows]
+                .join(Request, Summary.request_id == Request.id)
+                .where(
+                    Request.user_id == user_id,
+                    Request.created_at >= request_created_after,
+                    Summary.is_deleted.is_(False),
+                )
+                .order_by(Request.created_at.desc())
+                .limit(limit)
+            )
+            return [
+                {
+                    "id": row.id,
+                    "request_id": row.request_id,
+                    "lang": row.lang,
+                    "json_payload": row.json_payload,
+                    "version": row.version,
+                    "request": {"created_at": row.request_created_at},
+                }
+                for row in rows
+            ]
 
     async def async_get_user_summary_activity_dates(
         self,

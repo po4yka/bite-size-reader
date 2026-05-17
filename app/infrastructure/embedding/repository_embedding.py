@@ -227,16 +227,10 @@ class RepositoryEmbeddingGenerator:
                         "language": language,
                     },
                 )
-                .returning(RepositoryEmbedding.id)
+                .returning(RepositoryEmbedding)
             )
             result = await session.execute(stmt)
-            row_id = result.scalar_one()
-
-        async with self._db.session() as session:
-            row = await session.get(RepositoryEmbedding, row_id)
-
-        assert row is not None  # just inserted above — cannot be None
-        return row
+            return result.scalar_one()
 
     async def _upsert_qdrant(
         self,

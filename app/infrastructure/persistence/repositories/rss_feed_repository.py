@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import exists, select, update
+from sqlalchemy import select, update
 from sqlalchemy.dialects.postgresql import insert
 
 from app.db.models import (
@@ -283,37 +283,40 @@ class RSSFeedRepositoryAdapter:
     ) -> list[dict[str, Any]]:
         """Return undelivered item rows with subscriber IDs."""
         async with self._database.session() as session:
-            item_stmt = select(RSSFeedItem)
+            stmt = (
+                select(RSSFeedItem, RSSFeedSubscription.user_id)
+                .join(
+                    RSSFeedSubscription,
+                    RSSFeedSubscription.feed_id == RSSFeedItem.feed_id,
+                )
+                .outerjoin(
+                    RSSItemDelivery,
+                    (RSSItemDelivery.item_id == RSSFeedItem.id)
+                    & (RSSItemDelivery.user_id == RSSFeedSubscription.user_id),
+                )
+                .where(
+                    RSSFeedSubscription.is_active.is_(True),
+                    RSSItemDelivery.id.is_(None),
+                )
+                .order_by(
+                    RSSFeedItem.published_at.desc(),
+                    RSSFeedSubscription.created_at.asc(),
+                )
+            )
             if new_item_ids:
-                item_stmt = item_stmt.where(RSSFeedItem.id.in_(new_item_ids))
-            items = (
-                await session.execute(item_stmt.order_by(RSSFeedItem.published_at.desc()))
-            ).scalars()
+                stmt = stmt.where(RSSFeedItem.id.in_(new_item_ids))
 
-            result: list[dict[str, Any]] = []
-            for item in items:
-                delivered_exists = exists(
-                    select(RSSItemDelivery.id).where(
-                        RSSItemDelivery.user_id == RSSFeedSubscription.user_id,
-                        RSSItemDelivery.item_id == item.id,
-                    )
-                )
-                subscriber_ids = list(
-                    await session.scalars(
-                        select(RSSFeedSubscription.user_id)
-                        .where(
-                            RSSFeedSubscription.feed_id == item.feed_id,
-                            RSSFeedSubscription.is_active.is_(True),
-                            ~delivered_exists,
-                        )
-                        .order_by(RSSFeedSubscription.created_at.asc())
-                    )
-                )
-                if subscriber_ids:
+            rows = await session.execute(stmt)
+            grouped: dict[int, dict[str, Any]] = {}
+            for item, user_id in rows:
+                item_id = int(item.id)
+                item_dict = grouped.get(item_id)
+                if item_dict is None:
                     item_dict = self._feed_item_dict(item)
-                    item_dict["subscriber_ids"] = subscriber_ids
-                    result.append(item_dict)
-            return result
+                    item_dict["subscriber_ids"] = []
+                    grouped[item_id] = item_dict
+                item_dict["subscriber_ids"].append(user_id)
+            return list(grouped.values())
 
     async def async_mark_item_delivered(self, *, user_id: int, item_id: int) -> None:
         """Create an RSS delivery record for a user and item."""

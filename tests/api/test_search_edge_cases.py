@@ -6,6 +6,7 @@ from datetime import datetime
 from unittest.mock import AsyncMock, patch
 
 from app.api.models.responses import SearchResult
+from app.api.search_insights import compute_search_insights_payload
 from app.api.services.search_service import SearchService
 from app.core.time_utils import UTC
 from tests.api.conftest import _build_search_results
@@ -220,3 +221,65 @@ def test_search_insights_success(client, search_data, search_token):
     assert "source_diversity" in data
     assert "language_mix" in data
     assert "coverage_gaps" in data
+
+
+def test_search_insights_payload_preserves_windowed_counts():
+    """Insights payload keeps existing response shape with projected repository rows."""
+    now = datetime(2026, 5, 17, 12, 0, tzinfo=UTC)
+    current_start = datetime(2026, 5, 10, 12, 0, tzinfo=UTC)
+    previous_start = datetime(2026, 5, 3, 12, 0, tzinfo=UTC)
+
+    rows = [
+        {
+            "lang": "en",
+            "request": {"created_at": datetime(2026, 5, 16, 9, 0, tzinfo=UTC)},
+            "json_payload": {
+                "topic_tags": ["#AI", "#Search"],
+                "entities": {"people": ["Ada"], "organizations": ["OpenAI"], "locations": []},
+                "seo_keywords": ["retrieval", "retrieval"],
+                "metadata": {"domain": "Example.com"},
+            },
+        },
+        {
+            "lang": "ru",
+            "request": {"created_at": datetime(2026, 5, 12, 9, 0, tzinfo=UTC)},
+            "json_payload": {
+                "topic_tags": ["#ai"],
+                "entities": {"people": ["Ada"], "organizations": [], "locations": []},
+                "seo_keywords": ["retrieval"],
+                "metadata": {"domain": "docs.example.com"},
+            },
+        },
+        {
+            "lang": "en",
+            "request": {"created_at": datetime(2026, 5, 5, 9, 0, tzinfo=UTC)},
+            "json_payload": {
+                "topic_tags": ["#ai"],
+                "entities": {"people": ["Grace"], "organizations": [], "locations": []},
+                "seo_keywords": ["archives"],
+                "metadata": {"domain": "Example.com"},
+            },
+        },
+    ]
+
+    payload = compute_search_insights_payload(
+        rows=rows,
+        now=now,
+        current_start=current_start,
+        previous_start=previous_start,
+        days=7,
+        limit=5,
+    )
+
+    assert payload["period_days"] == 7
+    assert payload["topic_trends"][0] == {
+        "tag": "#ai",
+        "count": 2,
+        "prev_count": 1,
+        "trend_delta": 1,
+        "trend_score": 1.0,
+    }
+    assert payload["rising_entities"][0] == {"entity": "Ada", "count": 2}
+    assert payload["source_diversity"]["unique_domains"] == 2
+    assert payload["language_mix"]["total"] == 3
+    assert payload["coverage_gaps"][0]["term"] == "retrieval"

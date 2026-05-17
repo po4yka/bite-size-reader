@@ -55,6 +55,64 @@ if TYPE_CHECKING:
 _PROMPT_DIR = Path(__file__).parent.parent / "prompts"
 
 
+class _SentenceCache:
+    """Run-scoped cache for sentence splits derived from immutable DTO content."""
+
+    def __init__(self) -> None:
+        self._documents: dict[
+            tuple[int, str | None, str, tuple[tuple[int, str, str], ...]], list[str]
+        ] = {}
+        self._blocks: dict[tuple[int, str | None, int, str, str], list[str]] = {}
+
+    def document_sentences(self, document: NormalizedSourceDocument) -> list[str]:
+        key = (
+            id(document),
+            document.title,
+            document.text,
+            tuple((id(block), block.kind.value, block.text) for block in document.text_blocks),
+        )
+        if key not in self._documents:
+            sentences: list[str] = []
+            if document.title:
+                sentences.append(document.title)
+            for block in document.text_blocks:
+                block_sentences = self._split_text(block.text)
+                self._blocks[self._block_key(document, block)] = [
+                    *([document.title] if document.title else []),
+                    *block_sentences,
+                ]
+                sentences.extend(block_sentences)
+            if not sentences and document.text.strip():
+                sentences.extend(self._split_text(document.text))
+            self._documents[key] = sentences
+        return self._documents[key]
+
+    def block_sentences(
+        self,
+        document: NormalizedSourceDocument,
+        block: Any,
+    ) -> list[str]:
+        key = self._block_key(document, block)
+        if key not in self._blocks:
+            sentences: list[str] = []
+            if document.title:
+                sentences.append(document.title)
+            sentences.extend(self._split_text(block.text))
+            self._blocks[key] = sentences
+        return self._blocks[key]
+
+    @staticmethod
+    def _block_key(
+        document: NormalizedSourceDocument,
+        block: Any,
+    ) -> tuple[int, str | None, int, str, str]:
+        return (id(document), document.title, id(block), block.kind.value, block.text)
+
+    @staticmethod
+    def _split_text(text: str) -> list[str]:
+        return [sentence.strip() for sentence in _SENTENCE_SPLIT_RE.split(text) if sentence.strip()]
+
+
 class _AggregationLLMResponse(BaseModel):
     key_claims: list[Any] = []
     contradictions: list[Any] = []
@@ -127,8 +185,15 @@ class MultiSourceAggregationAgent(
         try:
             source_weights = [self._build_source_weight(item) for item in extracted_items]
             weight_by_source_id = {weight.source_item_id: weight for weight in source_weights}
-            duplicate_signals = self._detect_duplicate_signals(extracted_items)
-            contradiction_hints = self._detect_contradiction_hints(extracted_items)
+            sentence_cache = _SentenceCache()
+            duplicate_signals = self._detect_duplicate_signals(
+                extracted_items,
+                sentence_cache=sentence_cache,
+            )
+            contradiction_hints = self._detect_contradiction_hints(
+                extracted_items,
+                sentence_cache=sentence_cache,
+            )
 
             output, llm_cost_usd = await self._generate_with_llm(
                 input_data=input_data,
@@ -136,6 +201,7 @@ class MultiSourceAggregationAgent(
                 source_weights=source_weights,
                 duplicate_signals=duplicate_signals,
                 contradiction_hints=contradiction_hints,
+                sentence_cache=sentence_cache,
             )
             if output is None:
                 output = self._build_fallback_output(
@@ -144,6 +210,7 @@ class MultiSourceAggregationAgent(
                     source_weights=source_weights,
                     duplicate_signals=duplicate_signals,
                     contradiction_hints=contradiction_hints,
+                    sentence_cache=sentence_cache,
                 )
 
             coverage = self._build_source_coverage(
@@ -195,6 +262,7 @@ class MultiSourceAggregationAgent(
         source_weights: list[AggregationSourceWeight],
         duplicate_signals: list[DuplicateSignal],
         contradiction_hints: list[AggregatedContradiction],
+        sentence_cache: _SentenceCache,
     ) -> tuple[MultiSourceAggregationOutput | None, float]:
         if self._llm is None:
             return None, 0.0
@@ -232,6 +300,7 @@ class MultiSourceAggregationAgent(
                     source_weights=source_weights,
                     fallback_duplicates=duplicate_signals,
                     fallback_contradictions=contradiction_hints,
+                    sentence_cache=sentence_cache,
                 ),
                 float(result.cost_usd or 0.0),
             )
@@ -248,6 +317,7 @@ class MultiSourceAggregationAgent(
         source_weights: list[AggregationSourceWeight],
         fallback_duplicates: list[DuplicateSignal],
         fallback_contradictions: list[AggregatedContradiction],
+        sentence_cache: _SentenceCache | None = None,
     ) -> MultiSourceAggregationOutput:
         valid_source_ids = {
             item.normalized_document.source_item_id
@@ -256,7 +326,11 @@ class MultiSourceAggregationAgent(
         }
         claims = self._parse_claims(parsed.get("key_claims"), valid_source_ids)
         if not claims:
-            claims = self._fallback_claims(extracted_items, source_weights)
+            claims = self._fallback_claims(
+                extracted_items,
+                source_weights,
+                sentence_cache=sentence_cache,
+            )
 
         contradictions = self._parse_contradictions(
             parsed.get("contradictions"),
@@ -315,6 +389,7 @@ class MultiSourceAggregationAgent(
         source_weights: list[AggregationSourceWeight],
         duplicate_signals: list[DuplicateSignal],
         contradiction_hints: list[AggregatedContradiction],
+        sentence_cache: _SentenceCache | None = None,
     ) -> MultiSourceAggregationOutput:
         return MultiSourceAggregationOutput(
             session_id=input_data.session_id,
@@ -325,7 +400,11 @@ class MultiSourceAggregationAgent(
             extracted_items=len(extracted_items),
             used_source_count=0,
             overview=self._build_overview(extracted_items),
-            key_claims=self._fallback_claims(extracted_items, source_weights),
+            key_claims=self._fallback_claims(
+                extracted_items,
+                source_weights,
+                sentence_cache=sentence_cache,
+            ),
             contradictions=contradiction_hints,
             complementary_points=self._build_complementary_points(extracted_items),
             duplicate_signals=duplicate_signals,
@@ -606,7 +685,9 @@ class MultiSourceAggregationAgent(
         self,
         extracted_items: list[SourceExtractionItemResult],
         source_weights: list[AggregationSourceWeight],
+        sentence_cache: _SentenceCache | None = None,
     ) -> list[AggregatedClaim]:
+        sentence_cache = sentence_cache or _SentenceCache()
         weights_by_source = {weight.source_item_id: weight for weight in source_weights}
         sorted_items = sorted(
             extracted_items,
@@ -618,7 +699,7 @@ class MultiSourceAggregationAgent(
             document = item.normalized_document
             if document is None:
                 continue
-            snippet = self._best_claim_snippet(document)
+            snippet = self._best_claim_snippet(document, sentence_cache=sentence_cache)
             if not snippet:
                 continue
             weight = weights_by_source[document.source_item_id]
@@ -667,15 +748,19 @@ class MultiSourceAggregationAgent(
         return points[:4]
 
     def _detect_duplicate_signals(
-        self, extracted_items: list[SourceExtractionItemResult]
+        self,
+        extracted_items: list[SourceExtractionItemResult],
+        *,
+        sentence_cache: _SentenceCache | None = None,
     ) -> list[DuplicateSignal]:
+        sentence_cache = sentence_cache or _SentenceCache()
         sentence_sources: dict[str, set[str]] = defaultdict(set)
         sentence_examples: dict[str, str] = {}
         for item in extracted_items:
             document = item.normalized_document
             if document is None:
                 continue
-            for sentence in self._document_sentences(document):
+            for sentence in self._document_sentences(document, sentence_cache=sentence_cache):
                 canonical = _canonical_sentence(sentence)
                 if len(canonical.split()) < 6:
                     continue
@@ -696,14 +781,18 @@ class MultiSourceAggregationAgent(
         return duplicate_signals[:5]
 
     def _detect_contradiction_hints(
-        self, extracted_items: list[SourceExtractionItemResult]
+        self,
+        extracted_items: list[SourceExtractionItemResult],
+        *,
+        sentence_cache: _SentenceCache | None = None,
     ) -> list[AggregatedContradiction]:
+        sentence_cache = sentence_cache or _SentenceCache()
         sentence_groups: dict[str, list[tuple[str, str, tuple[str, ...]]]] = defaultdict(list)
         for item in extracted_items:
             document = item.normalized_document
             if document is None:
                 continue
-            for sentence in self._document_sentences(document):
+            for sentence in self._document_sentences(document, sentence_cache=sentence_cache):
                 numbers = tuple(sorted(_NUMBER_RE.findall(sentence)))
                 if len(numbers) == 0:
                     continue
@@ -805,23 +894,14 @@ class MultiSourceAggregationAgent(
             )
         return _normalize_tags(tags)
 
-    def _document_sentences(self, document: NormalizedSourceDocument) -> list[str]:
-        sentences: list[str] = []
-        if document.title:
-            sentences.append(document.title)
-        for block in document.text_blocks:
-            sentences.extend(
-                sentence.strip()
-                for sentence in _SENTENCE_SPLIT_RE.split(block.text)
-                if sentence.strip()
-            )
-        if not sentences and document.text.strip():
-            sentences.extend(
-                sentence.strip()
-                for sentence in _SENTENCE_SPLIT_RE.split(document.text)
-                if sentence.strip()
-            )
-        return sentences
+    def _document_sentences(
+        self,
+        document: NormalizedSourceDocument,
+        *,
+        sentence_cache: _SentenceCache | None = None,
+    ) -> list[str]:
+        cache = sentence_cache or _SentenceCache()
+        return cache.document_sentences(document)
 
     def _document_snippet(self, document: NormalizedSourceDocument) -> str:
         if document.text.strip():
@@ -829,7 +909,13 @@ class MultiSourceAggregationAgent(
         snippets = [block.text for block in document.text_blocks if block.text.strip()]
         return _truncate(" ".join(snippets), 900)
 
-    def _best_claim_snippet(self, document: NormalizedSourceDocument) -> str:
+    def _best_claim_snippet(
+        self,
+        document: NormalizedSourceDocument,
+        *,
+        sentence_cache: _SentenceCache | None = None,
+    ) -> str:
+        cache = sentence_cache or _SentenceCache()
         preferred_kinds = (
             ExtractedTextKind.BODY,
             ExtractedTextKind.CAPTION,
@@ -844,9 +930,7 @@ class MultiSourceAggregationAgent(
                 sentence = next(
                     (
                         candidate
-                        for candidate in self._document_sentences(
-                            document.model_copy(update={"text_blocks": [block], "text": block.text})
-                        )
+                        for candidate in cache.block_sentences(document, block)
                         if len(candidate.split()) >= 6
                     ),
                     None,

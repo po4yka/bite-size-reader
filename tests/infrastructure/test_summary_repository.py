@@ -221,11 +221,13 @@ async def test_summary_repository_user_lists_and_topic_filter(database: Database
         (await repo.async_get_summary_by_request(second_request_id))["id"],
     ]
     assert await repo.async_get_max_server_version(505) is not None
-    assert (
-        await repo.async_get_user_summaries_for_insights(
-            505, dt.datetime.now(UTC) - dt.timedelta(days=1), 5
-        )
-    )[0]["version"] == first_version
+    insight_rows = await repo.async_get_user_summaries_for_insights(
+        505, dt.datetime.now(UTC) - dt.timedelta(days=1), 5
+    )
+    assert insight_rows[0]["version"] == first_version
+    assert insight_rows[0]["json_payload"]["topic_tags"] == ["postgres"]
+    assert insight_rows[0]["request"]["created_at"] is not None
+    assert "insights_json" not in insight_rows[0]
     assert (
         len(
             await repo.async_get_user_summary_activity_dates(
