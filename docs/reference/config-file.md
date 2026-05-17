@@ -1,8 +1,6 @@
 # Optional YAML Configuration
 
-`ratatoskr.yaml` is the Phase 1 home for power-user settings. Keep first-run
-secrets in `.env`; use YAML for scraper tuning, provider model choices, YouTube,
-Twitter/X, MCP, monitoring-adjacent settings, and other optional behavior.
+`ratatoskr.yaml` is the Phase 1 home for power-user settings. Keep first-run secrets in `.env`; use YAML for scraper tuning, provider model choices, YouTube, Twitter/X, MCP, monitoring-adjacent settings, and other optional behavior.
 
 ## Search Order
 
@@ -17,8 +15,7 @@ Merge precedence is:
 
 `code defaults < config/models.yaml < ratatoskr.yaml < .env < process env`
 
-Environment variables remain the final override for container platforms and
-secret managers. Deprecated env vars fail startup with an actionable message.
+Environment variables remain the final override for container platforms and secret managers. Deprecated env vars fail startup with an actionable message.
 
 ## Minimal `.env`
 
@@ -32,8 +29,7 @@ ALLOWED_USER_IDS=123456789
 OPENROUTER_API_KEY=sk-or-replace_with_openrouter_key
 ```
 
-`JWT_SECRET_KEY` is required only when web/API/browser-extension JWT auth is
-enabled. Generate it with `openssl rand -hex 32`.
+`JWT_SECRET_KEY` is required only when web/API/browser-extension JWT auth is enabled. Generate it with `openssl rand -hex 32`.
 
 ## Example `ratatoskr.yaml`
 
@@ -113,39 +109,10 @@ mcp:
 ## Notes
 
 - OpenRouter is the primary supported provider path for first-run setup.
-- Cloud Ollama uses an OpenAI-compatible `/v1` endpoint. Structured output
-  quality varies by hosted model, so `ollama.enable_structured_outputs` defaults
-  to `false`. When using `LLM_PROVIDER=ollama`, failures usually fall into four
-  buckets: `/models` is unreachable, the model name is not installed by the
-  remote provider, the provider times out on long articles, or the model returns
-  weak/invalid JSON. Prefer models that advertise OpenAI-compatible chat
-  completions and test summaries before using them unattended.
-- The default scraper chain order is Scrapling → Crawl4AI → Firecrawl →
-  Defuddle → Playwright → Crawlee → direct HTML → Scrapegraph-AI. Each
-  provider is skipped when its sidecar is unavailable or its enabled flag is
-  false. See [`docs/explanation/scraper-chain.md`](../explanation/scraper-chain.md)
-  for the full chain reference.
-- The `firecrawl` provider slot activates only when
-  `scraper.firecrawl_self_hosted_enabled: true`; cloud Firecrawl is not
-  used for article scraping. `FIRECRAWL_API_KEY` is only consumed by the
-  web-search enrichment path (`TopicSearchService`), not by the scraper chain.
-- Defuddle defaults to enabled (`scraper.defuddle_enabled: true`) but
-  requires a reachable `defuddle-api` sidecar (default:
-  `http://defuddle-api:3003`). The sidecar can be replaced by the public
-  `https://defuddle.md` API for development by setting
-  `SCRAPER_DEFUDDLE_API_BASE_URL=https://defuddle.md`.
-- The `with-scrapers` Docker Compose profile starts an in-compose self-hosted
-  Firecrawl stack at `http://firecrawl-api:3002`. Set
-  `scraper.firecrawl_self_hosted_enabled: true` to use it; self-hosted
-  Firecrawl takes precedence when both self-hosted and cloud Firecrawl are
-  configured.
-- Signal ingestion optional sources are disabled unless `signal_ingestion.enabled`
-  and the per-source flag are both true. Hacker News uses the official Firebase
-  API and has no credentials. Reddit uses public subreddit JSON with a default
-  60 requests/minute guard, below the free-tier 100 requests/minute ceiling.
-  Substack is handled as RSS via `/feed`; use existing RSS subscription flows.
-- Twitter/X extraction is optional and should stay disabled unless explicitly
-  needed. X/Twitter proactive ingestion is also disabled by default and requires
-  explicit `twitter_ack_cost: true` / `TWITTER_INGESTION_ACK_COST=true`; the
-  Basic tier is approximately $200/month and the project uses a bring-your-own
-  token model for any future polling adapter.
+- Cloud Ollama uses an OpenAI-compatible `/v1` endpoint. Structured output quality varies by hosted model, so `ollama.enable_structured_outputs` defaults to `false`. When using `LLM_PROVIDER=ollama`, failures usually fall into four buckets: `/models` is unreachable, the model name is not installed by the remote provider, the provider times out on long articles, or the model returns weak/invalid JSON. Prefer models that advertise OpenAI-compatible chat completions and test summaries before using them unattended.
+- The default scraper chain order is Scrapling → Crawl4AI → Firecrawl → Defuddle → Playwright → Crawlee → direct HTML → Scrapegraph-AI. Each provider is skipped when its sidecar is unavailable or its enabled flag is false. See [`docs/explanation/scraper-chain.md`](../explanation/scraper-chain.md) for the full chain reference.
+- The `firecrawl` provider slot activates only when `scraper.firecrawl_self_hosted_enabled: true`; cloud Firecrawl is not used for article scraping. `FIRECRAWL_API_KEY` is only consumed by the web-search enrichment path (`TopicSearchService`), not by the scraper chain.
+- Defuddle defaults to enabled (`scraper.defuddle_enabled: true`) but requires a reachable `defuddle-api` sidecar (default: `http://defuddle-api:3003`). The sidecar can be replaced by the public `https://defuddle.md` API for development by setting `SCRAPER_DEFUDDLE_API_BASE_URL=https://defuddle.md`.
+- The `with-scrapers` Docker Compose profile starts an in-compose self-hosted Firecrawl stack at `http://firecrawl-api:3002`. Set `scraper.firecrawl_self_hosted_enabled: true` to use it; self-hosted Firecrawl takes precedence when both self-hosted and cloud Firecrawl are configured.
+- Signal ingestion optional sources are disabled unless `signal_ingestion.enabled` and the per-source flag are both true. Hacker News uses the official Firebase API and has no credentials. Reddit uses public subreddit JSON with a default 60 requests/minute guard, below the free-tier 100 requests/minute ceiling. Substack is handled as RSS via `/feed`; use existing RSS subscription flows.
+- Twitter/X extraction is optional and should stay disabled unless explicitly needed. X/Twitter proactive ingestion is also disabled by default and requires explicit `twitter_ack_cost: true` / `TWITTER_INGESTION_ACK_COST=true`; the Basic tier is approximately $200/month and the project uses a bring-your-own token model for any future polling adapter.

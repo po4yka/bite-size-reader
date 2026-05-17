@@ -111,8 +111,7 @@ Before changing task-related files, use the `repo-task-board` skill if available
 
 **Source of truth:** `docs/tasks/issues/<slug>.md` — one note per task (kebab-case title) with YAML frontmatter.
 
-**Query views** (do not add task lines here):
-`docs/tasks/active.md` · `docs/tasks/backlog.md` · `docs/tasks/blocked.md` · `docs/tasks/dashboard.md`
+**Query views** (do not add task lines here): `docs/tasks/active.md` · `docs/tasks/backlog.md` · `docs/tasks/blocked.md` · `docs/tasks/dashboard.md`
 
 Canonical syntax (lives inside `issues/<slug>.md`):
 

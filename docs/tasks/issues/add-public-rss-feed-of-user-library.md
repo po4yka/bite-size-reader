@@ -14,39 +14,26 @@ updated: 2026-05-17
 
 ## Objective
 
-RSS is inbound only today — `app/adapters/rss/` ingests *into*
-the user, and `app/api/routers/social/rss.py` manages subscriptions.
-There is no outbound user-facing feed (grep for `feed\.xml`,
-`users.*rss`, `output.*rss` returns zero). Adding one is a tiny
-add (one router + `feedgen` template) that gives Obsidian /
-Readwise / IFTTT a pull integration without writing per-vendor
-connectors.
+RSS is inbound only today — `app/adapters/rss/` ingests *into* the user, and `app/api/routers/social/rss.py` manages subscriptions. There is no outbound user-facing feed (grep for `feed\.xml`, `users.*rss`, `output.*rss` returns zero). Adding one is a tiny add (one router + `feedgen` template) that gives Obsidian / Readwise / IFTTT a pull integration without writing per-vendor connectors.
 
 ## User story
 
-As a user with tools like Obsidian, Readwise, or IFTTT, I want a
-private RSS feed URL of my saved summaries, so that I can wire
-Ratatoskr into the rest of my stack without bespoke connectors.
+As a user with tools like Obsidian, Readwise, or IFTTT, I want a private RSS feed URL of my saved summaries, so that I can wire Ratatoskr into the rest of my stack without bespoke connectors.
 
 ## Context
 
-- Inbound RSS subscriptions:
-  `app/api/routers/social/rss.py`.
+- Inbound RSS subscriptions: `app/api/routers/social/rss.py`.
 - No outbound feed endpoint.
 - `SummaryService` already has "read-by-user" query paths.
 
 ## Scope
 
-- New `GET /v1/users/me/feed.xml?token=<rss-token>` returns Atom
-  feed of the latest N summaries for the user.
-- Token storage: extend existing `ClientSecret` OR add an
-  `rss_feed_tokens` table.
+- New `GET /v1/users/me/feed.xml?token=<rss-token>` returns Atom feed of the latest N summaries for the user.
+- Token storage: extend existing `ClientSecret` OR add an `rss_feed_tokens` table.
 - Token rotation endpoint + revocation.
 - `ETag` + `Cache-Control: private, max-age=300` headers.
-- Optional query params: `tag=...`, `collection=...`,
-  `language=en|ru`.
-- Document in OpenAPI spec + reference doc + add a usage
-  example with Obsidian.
+- Optional query params: `tag=...`, `collection=...`, `language=en|ru`.
+- Document in OpenAPI spec + reference doc + add a usage example with Obsidian.
 
 ## Acceptance criteria
 
@@ -57,7 +44,5 @@ Ratatoskr into the rest of my stack without bespoke connectors.
 
 ## References
 
-- Inbound RSS:
-  `app/api/routers/social/rss.py`
-- Existing token storage pattern:
-  `app/db/models/core.py:ClientSecret`
+- Inbound RSS: `app/api/routers/social/rss.py`
+- Existing token storage pattern: `app/db/models/core.py:ClientSecret`

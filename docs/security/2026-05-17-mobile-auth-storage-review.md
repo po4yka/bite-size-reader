@@ -8,25 +8,15 @@
 | blocked_by | [[decide-auth-security-second-wave-scope]] |
 | references | [[review-mobile-auth-threat-model]] |
 
-This note is a structured frame for the Security Engineer to record
-the threat model and release-readiness checklist for mobile auth and
-client storage. The mechanical flow inventory (file pointers, surface
-list) is pre-populated from the codebase as of commit HEAD. The
-**risk classification per flow**, the **release-blocker calls**, and
-the **must-have-test list** require Security Engineer judgement and
-are marked `_AWAITING SECURITY ENGINEER_`.
+This note is a structured frame for the Security Engineer to record the threat model and release-readiness checklist for mobile auth and client storage. The mechanical flow inventory (file pointers, surface list) is pre-populated from the codebase as of commit HEAD. The **risk classification per flow**, the **release-blocker calls**, and the **must-have-test list** require Security Engineer judgement and are marked `_AWAITING SECURITY ENGINEER_`.
 
-This review is gated by the CTO decisions in
-[[decide-auth-security-second-wave-scope]]; until those decisions
-are recorded, the release-readiness checklist below cannot be
-completed.
+This review is gated by the CTO decisions in [[decide-auth-security-second-wave-scope]]; until those decisions are recorded, the release-readiness checklist below cannot be completed.
 
 ---
 
 ## Flow inventory
 
-Mechanical inventory of auth/session/client-storage surfaces in
-this repo as of HEAD.
+Mechanical inventory of auth/session/client-storage surfaces in this repo as of HEAD.
 
 ### Backend (this repo)
 
@@ -48,10 +38,7 @@ this repo as of HEAD.
 
 ### Client (ratatoskr-client repo — not in this checkout)
 
-Per the task spec, the KMP client stores tokens in platform secure
-storage (Tink AEAD / DataStore on Android, KeychainSettings on iOS)
-and uses Ktor bearer refresh. **File-level inventory for the client
-must be filled in from the ratatoskr-client repo.**
+Per the task spec, the KMP client stores tokens in platform secure storage (Tink AEAD / DataStore on Android, KeychainSettings on iOS) and uses Ktor bearer refresh. **File-level inventory for the client must be filled in from the ratatoskr-client repo.**
 
 | Flow | File (in ratatoskr-client) |
 | --- | --- |
@@ -91,10 +78,7 @@ The task spec asks for explicit flags on:
 
 ### Fail-open allowlist behaviour
 
-`ALLOWED_USER_IDS` is read into a static `set[int]` at startup.
-Open question: does the dependency _fail open_ when the env var is
-empty or malformed (allowing any user) or _fail closed_ (denying
-all)?
+`ALLOWED_USER_IDS` is read into a static `set[int]` at startup. Open question: does the dependency _fail open_ when the env var is empty or malformed (allowing any user) or _fail closed_ (denying all)?
 
 **_AWAITING SECURITY ENGINEER call_** — verification probe:
 
@@ -104,35 +88,26 @@ ALLOWED_USER_IDS="" pytest tests/api/test_auth_allowlist.py
 
 ### External client IDs
 
-Open question: are external client_id values rate-limited or
-distinguishable from owner clients? `app/db/models/core.py:ClientSecret`
-holds the secrets table; review the issuance flow for trust-elevation
-mistakes.
+Open question: are external client_id values rate-limited or distinguishable from owner clients? `app/db/models/core.py:ClientSecret` holds the secrets table; review the issuance flow for trust-elevation mistakes.
 
 **_AWAITING SECURITY ENGINEER call_**
 
 ### Hosted MCP / CLI access
 
-Per [[decide-auth-security-second-wave-scope]] §4, no external
-exposure expansion is permitted without explicit CTO approval. This
-flag remains **closed** unless that decision is recorded.
+Per [[decide-auth-security-second-wave-scope]] §4, no external exposure expansion is permitted without explicit CTO approval. This flag remains **closed** unless that decision is recorded.
 
 ---
 
 ## Items requiring explicit approval
 
-Per task constraints, the following changes need an approval line
-in this note before any code lands:
+Per task constraints, the following changes need an approval line in this note before any code lands:
 
 - [ ] External access expansion (MCP, CLI, web UI scope creep)
-- [ ] Credential policy changes (rotation cadence, complexity, show-once
-      strategy)
-- [ ] Telemetry / privacy scope changes (new fields persisted, new
-      retention windows, new analytics destinations)
+- [ ] Credential policy changes (rotation cadence, complexity, show-once strategy)
+- [ ] Telemetry / privacy scope changes (new fields persisted, new retention windows, new analytics destinations)
 - [ ] Production release sign-off
 
-Each item ships with: who approved, on what date, with what
-mitigations.
+Each item ships with: who approved, on what date, with what mitigations.
 
 ---
 
@@ -140,12 +115,8 @@ mitigations.
 
 This note is "done" when:
 
-1. CTO has recorded decisions in
-   [[decide-auth-security-second-wave-scope]].
-2. The per-flow risk classification table above is fully populated
-   by the Security Engineer.
+1. CTO has recorded decisions in [[decide-auth-security-second-wave-scope]].
+2. The per-flow risk classification table above is fully populated by the Security Engineer.
 3. The release-blocking ambiguities section has explicit verdicts.
-4. Every flag in "Items requiring explicit approval" has either an
-   approval line or an explicit "rejected with rationale".
-5. The release-readiness checklist is publishable to QA as a
-   completable list — not a draft.
+4. Every flag in "Items requiring explicit approval" has either an approval line or an explicit "rejected with rationale".
+5. The release-readiness checklist is publishable to QA as a completable list — not a draft.

@@ -1,8 +1,6 @@
 # Bounded Upload Handling — Design Spec
 
-**Date:** 2026-05-15
-**Area:** api / config
-**Status:** approved
+**Date:** 2026-05-15 **Area:** api / config **Status:** approved
 
 ---
 

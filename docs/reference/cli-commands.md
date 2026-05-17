@@ -2,9 +2,7 @@
 
 Complete reference for all command-line tools in Ratatoskr.
 
-**Audience:** Developers, Operators
-**Type:** Reference
-**Related:** [How-To Guides](../guides/), [TROUBLESHOOTING](troubleshooting.md)
+**Audience:** Developers, Operators **Type:** Reference **Related:** [How-To Guides](../guides/), [TROUBLESHOOTING](troubleshooting.md)
 
 ---
 
@@ -255,8 +253,7 @@ python -m app.cli.migrate_db
 
 **Location:** `app/db/alembic/versions/`
 
-Alembic owns schema DDL. The old hand-written SQLite migration package has been
-removed.
+Alembic owns schema DDL. The old hand-written SQLite migration package has been removed.
 
 ---
 
@@ -502,11 +499,7 @@ python -m app.cli.backfill_embeddings --limit 10
 
 **Command:** `python -m app.cli.backfill_vector_store`
 
-**Purpose:** Populate or refresh Qdrant vector points for searchable content.
-The default path scans summary embeddings from Postgres and writes summary
-points to Qdrant. `--use-cocoindex` delegates to the CocoIndex one-shot flow,
-which exports both summaries and analyzed GitHub repositories with the same
-deterministic point IDs used by the live updater.
+**Purpose:** Populate or refresh Qdrant vector points for searchable content. The default path scans summary embeddings from Postgres and writes summary points to Qdrant. `--use-cocoindex` delegates to the CocoIndex one-shot flow, which exports both summaries and analyzed GitHub repositories with the same deterministic point IDs used by the live updater.
 
 ### Basic Usage
 
@@ -580,10 +573,7 @@ python -m app.cli.backfill_vector_store --limit=1
 
 **Security note:** Some credential-bearing options (such as `--qdrant-api-key`) are intentionally minimized in inline CLI help text. They remain supported, but prefer environment variables/secrets managers in CI and production shells.
 
-**Rebuild note:** this CLI no longer deletes collections. To rebuild from
-scratch, delete or recreate the Qdrant collection with Qdrant tooling, then run
-`python -m app.cli.backfill_vector_store --force` or
-`python -m app.cli.backfill_vector_store --use-cocoindex`.
+**Rebuild note:** this CLI no longer deletes collections. To rebuild from scratch, delete or recreate the Qdrant collection with Qdrant tooling, then run `python -m app.cli.backfill_vector_store --force` or `python -m app.cli.backfill_vector_store --use-cocoindex`.
 
 ### Prerequisites
 
@@ -674,9 +664,7 @@ python -m app.cli.init_userbot_session
 - This CLI tool requires interactive terminal input (phone number, OTP code, optional 2FA password)
 - The preferred alternative is the `/init_session` bot command, which uses a Telegram Mini App to securely relay OTP/2FA codes without exposing them in chat
 - The session file is stored at the path configured by `DIGEST_SESSION_NAME` (default: `digest_userbot`)
-- Sessions created before the Telethon migration must be recreated. Existing
-  legacy `.session` files are preserved as `<DIGEST_SESSION_NAME>.legacy.bak.session`
-  after a new Telethon session authenticates successfully.
+- Sessions created before the Telethon migration must be recreated. Existing legacy `.session` files are preserved as `<DIGEST_SESSION_NAME>.legacy.bak.session` after a new Telethon session authenticates successfully.
 
 ## Check Userbot Session
 
@@ -861,12 +849,7 @@ python -m app.cli.sync_github_stars --dry-run
 
 **Command:** `python -m app.cli.backfill_repository_embeddings`
 
-**Purpose:** Generate or refresh Postgres-side vector embeddings for repository
-records that are missing them or have a stale `model_version` (stored in
-`repository_embeddings`). The analyzer fast path writes Qdrant immediately for
-new analysis results; run this command after changing the embedding model or
-after bulk imports, then run `backfill_vector_store --use-cocoindex` to export
-analyzed repositories to Qdrant in the same way as the live CocoIndex flow.
+**Purpose:** Generate or refresh Postgres-side vector embeddings for repository records that are missing them or have a stale `model_version` (stored in `repository_embeddings`). The analyzer fast path writes Qdrant immediately for new analysis results; run this command after changing the embedding model or after bulk imports, then run `backfill_vector_store --use-cocoindex` to export analyzed repositories to Qdrant in the same way as the live CocoIndex flow.
 
 **Prerequisites:** `GITHUB_TOKEN_ENCRYPTION_KEY` set; embedding provider configured (`EMBEDDING_PROVIDER`).
 

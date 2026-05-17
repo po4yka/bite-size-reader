@@ -7,15 +7,9 @@ last_updated: 2026-05-07
 
 # Pi SQLite to Postgres cutover runbook
 
-This runbook covers the one-shot migration of the live `raspi` deployment
-from SQLite + Peewee to PostgreSQL + SQLAlchemy 2.0. Read it end-to-end
-before opening the maintenance window — the rollback path requires both
-images to already be on the Pi, so prep is not optional.
+This runbook covers the one-shot migration of the live `raspi` deployment from SQLite + Peewee to PostgreSQL + SQLAlchemy 2.0. Read it end-to-end before opening the maintenance window — the rollback path requires both images to already be on the Pi, so prep is not optional.
 
-> **Status: draft.** Sections marked **`[VERIFY]`** must be exercised in a
-> dry-run on a developer laptop before this runbook is considered ready
-> for production. Dry-run results (timings, anomalies, deltas) are
-> recorded in [Appendix A](#appendix-a--dry-run-log).
+> **Status: draft.** Sections marked **`[VERIFY]`** must be exercised in a dry-run on a developer laptop before this runbook is considered ready for production. Dry-run results (timings, anomalies, deltas) are recorded in [Appendix A](#appendix-a--dry-run-log).
 
 ## Pi state at time of writing
 
@@ -30,23 +24,18 @@ images to already be on the Pi, so prep is not optional.
 
 ## Why image-revert is required
 
-Peewee and SQLAlchemy are mutually exclusive in code. A pure env-revert
-(`unset DATABASE_URL`, `restart`) cannot work because the application
-modules themselves no longer import Peewee. Rollback therefore requires
-both:
+Peewee and SQLAlchemy are mutually exclusive in code. A pure env-revert (`unset DATABASE_URL`, `restart`) cannot work because the application modules themselves no longer import Peewee. Rollback therefore requires both:
 
 1. an **image revert** to the last green pre-port image (`ratatoskr:pre-sqlalchemy`),
 2. an **env revert** that restores `DB_PATH` and removes `DATABASE_URL`.
 
-Both images must be present on the Pi via `docker pull` before the
-window opens.
+Both images must be present on the Pi via `docker pull` before the window opens.
 
 ---
 
 ## 1. Pre-flight (T-24h)
 
-**Goal:** lock down the inputs so the cutover window only contains
-mechanical steps.
+**Goal:** lock down the inputs so the cutover window only contains mechanical steps.
 
 ```bash
 # On a developer laptop, in the ratatoskr repo:
@@ -93,9 +82,7 @@ DATABASE_URL="postgresql+asyncpg://ratatoskr_app:devpw@localhost:5432/ratatoskr"
   | tee tmp/etl-dry-run-$(date +%F).log
 ```
 
-**Expected:** ETL exit code 0; validation report shows zero count
-mismatches; topic-search row count matches `(SELECT COUNT(*) FROM
-requests WHERE …)`.
+**Expected:** ETL exit code 0; validation report shows zero count mismatches; topic-search row count matches `(SELECT COUNT(*) FROM requests WHERE …)`.
 
 **If this fails:** do NOT open the window. Triage offline first.
 
@@ -107,12 +94,9 @@ requests WHERE …)`.
 ssh raspi 'cd ratatoskr && docker compose stop ratatoskr mobile-api'
 ```
 
-**Expected:** both containers transition to `Exit 0` within ~5 s. Verify
-via `docker compose ps`.
+**Expected:** both containers transition to `Exit 0` within ~5 s. Verify via `docker compose ps`.
 
-**If this fails:** force-stop with `docker compose kill ratatoskr
-mobile-api`. The bot does not write to SQLite during shutdown beyond
-flushing the WAL — `kill` is recoverable.
+**If this fails:** force-stop with `docker compose kill ratatoskr mobile-api`. The bot does not write to SQLite during shutdown beyond flushing the WAL — `kill` is recoverable.
 
 ---
 
@@ -124,11 +108,9 @@ ssh raspi 'cd ratatoskr && \
   ls -lh data/ratatoskr.db data/ratatoskr.db.pre-pg-*'
 ```
 
-**Expected:** the new copy exists and is the same size as the original
-(within a few KB). The original is left in place for the rollback path.
+**Expected:** the new copy exists and is the same size as the original (within a few KB). The original is left in place for the rollback path.
 
-**If this fails (out of disk):** abort and reclaim space. Do not proceed
-without a backup.
+**If this fails (out of disk):** abort and reclaim space. Do not proceed without a backup.
 
 ---
 
@@ -148,12 +130,9 @@ ssh raspi 'cd ratatoskr && \
   done | tail -5'
 ```
 
-**Expected:** `healthy` within ~10 s (the named volume already exists
-from a prior dev/dry-run, so first-boot init is skipped on the Pi if the
-volume was preseeded; if not, allow ~30 s for `initdb`).
+**Expected:** `healthy` within ~10 s (the named volume already exists from a prior dev/dry-run, so first-boot init is skipped on the Pi if the volume was preseeded; if not, allow ~30 s for `initdb`).
 
-**If this fails:** check `docker logs ratatoskr-postgres`. Common cause:
-`POSTGRES_PASSWORD` missing in `.env`. Set it and retry step 4.
+**If this fails:** check `docker logs ratatoskr-postgres`. Common cause: `POSTGRES_PASSWORD` missing in `.env`. Set it and retry step 4.
 
 ---
 
@@ -166,12 +145,9 @@ ssh raspi 'cd ratatoskr && \
     ratatoskr python -m app.cli.migrate_db'
 ```
 
-**Expected:** Alembic prints `Running upgrade … -> 0001_baseline_sqlalchemy`
-(or the current head). Exit code 0.
+**Expected:** Alembic prints `Running upgrade … -> 0001_baseline_sqlalchemy` (or the current head). Exit code 0.
 
-**If this fails:** any non-zero exit is fatal. Capture the full log,
-investigate offline, do **NOT** proceed to step 6 — running the ETL
-against an incomplete schema corrupts the migration.
+**If this fails:** any non-zero exit is fatal. Capture the full log, investigate offline, do **NOT** proceed to step 6 — running the ETL against an incomplete schema corrupts the migration.
 
 ---
 
@@ -194,16 +170,11 @@ ssh raspi 'cd ratatoskr && \
 - sequence values populated for every autoincrement table,
 - topic-search rebuild row count > 0 (or 0 only if there are no requests).
 
-**Wall-clock estimate:** the laptop dry-run (498 MB snapshot) measured
-**`[VERIFY]`** seconds; the Pi is roughly 3-4× slower for this workload,
-so budget **`[VERIFY]`** minutes.
+**Wall-clock estimate:** the laptop dry-run (498 MB snapshot) measured **`[VERIFY]`** seconds; the Pi is roughly 3-4× slower for this workload, so budget **`[VERIFY]`** minutes.
 
-**If this fails:** the Postgres database is now in an inconsistent
-state. Two options:
+**If this fails:** the Postgres database is now in an inconsistent state. Two options:
 
-1. **Reset Postgres and retry**: `docker compose stop postgres && docker
-   volume rm ratatoskr_postgres_data && docker compose up -d postgres`,
-   then retry from step 5.
+1. **Reset Postgres and retry**: `docker compose stop postgres && docker volume rm ratatoskr_postgres_data && docker compose up -d postgres`, then retry from step 5.
 2. **Roll back to SQLite**: jump to [Section 11](#11-rollback).
 
 Do not attempt manual Postgres surgery during the window.
@@ -229,11 +200,9 @@ ssh raspi 'cd ratatoskr && \
     ratatoskr python -m app.cli.healthcheck'
 ```
 
-**Expected:** dry-run reports zero pending rows (everything already in
-target). Healthcheck exits 0.
+**Expected:** dry-run reports zero pending rows (everything already in target). Healthcheck exits 0.
 
-**If this fails:** dry-run mismatches mean the live data drifted between
-backup and migration (unlikely if step 2 succeeded). Roll back.
+**If this fails:** dry-run mismatches mean the live data drifted between backup and migration (unlikely if step 2 succeeded). Roll back.
 
 ---
 
@@ -249,20 +218,15 @@ ssh raspi 'cd ratatoskr && \
   sed -i.bak "s|^DB_PATH=|# DB_PATH (deprecated post-cutover)=|g" .env'
 ```
 
-**Expected:** `.env.pre-pg-<date>` exists; `.env` contains
-`DATABASE_URL` and `POSTGRES_PASSWORD`; `DB_PATH` is commented out.
+**Expected:** `.env.pre-pg-<date>` exists; `.env` contains `DATABASE_URL` and `POSTGRES_PASSWORD`; `DB_PATH` is commented out.
 
-**If this fails (typo, missing var):** roll back env edits via the
-`.env.pre-pg-<date>` snapshot; re-do this section.
+**If this fails (typo, missing var):** roll back env edits via the `.env.pre-pg-<date>` snapshot; re-do this section.
 
 ---
 
 ## 9. Restart
 
-Compose tracks images by their `:latest` tag, so retag the staged
-post-sqlalchemy images as `:latest` immediately before the restart.
-The `:pre-sqlalchemy` and `:post-sqlalchemy` tags continue to point
-at their original hashes regardless — they survive this retag.
+Compose tracks images by their `:latest` tag, so retag the staged post-sqlalchemy images as `:latest` immediately before the restart. The `:pre-sqlalchemy` and `:post-sqlalchemy` tags continue to point at their original hashes regardless — they survive this retag.
 
 ```bash
 ssh raspi 'docker tag docker-ratatoskr:post-sqlalchemy docker-ratatoskr:latest && \
@@ -282,16 +246,11 @@ ssh raspi 'cd ratatoskr && docker compose logs -f --tail=200 mobile-api'
 **Expected:**
 
 - both containers transition to `healthy` within 60 s,
-- bot log shows `telethon_session_resumed` and a successful Postgres
-  healthcheck within the first minute,
-- mobile-api log shows the lifespan startup sequence and a successful
-  `/health` self-check,
-- no `database is locked`, `OperationalError`, `IntegrityError`, or
-  `database_proxy` traceback in the first 10 minutes.
+- bot log shows `telethon_session_resumed` and a successful Postgres healthcheck within the first minute,
+- mobile-api log shows the lifespan startup sequence and a successful `/health` self-check,
+- no `database is locked`, `OperationalError`, `IntegrityError`, or `database_proxy` traceback in the first 10 minutes.
 
-**If this fails:** stop the containers and roll back
-([Section 11](#11-rollback)). Do not attempt forward repairs in the
-window.
+**If this fails:** stop the containers and roll back ([Section 11](#11-rollback)). Do not attempt forward repairs in the window.
 
 ---
 
@@ -316,21 +275,15 @@ ssh raspi 'ls -lh /home/po4yka/ratatoskr/data/ratatoskr.db'
 # (The mtime should match the moment of step 3.)
 ```
 
-**Expected:** `pg_dump` produces a non-empty `.dump` file; topic search
-returns sensible results; the legacy SQLite file's mtime matches the
-backup time, confirming nothing wrote to it post-cutover.
+**Expected:** `pg_dump` produces a non-empty `.dump` file; topic search returns sensible results; the legacy SQLite file's mtime matches the backup time, confirming nothing wrote to it post-cutover.
 
-The legacy SQLite file stays on disk for ≥ 7 days as a hot rollback
-target. After 7 incident-free days it can be moved to
-`/home/po4yka/ratatoskr/backups/sqlite-archive/` and after 30 days
-deleted (per L1 task).
+The legacy SQLite file stays on disk for ≥ 7 days as a hot rollback target. After 7 incident-free days it can be moved to `/home/po4yka/ratatoskr/backups/sqlite-archive/` and after 30 days deleted (per L1 task).
 
 ---
 
 ## 11. Rollback
 
-Use this path if anything between sections 4 and 10 produces unrecoverable
-errors.
+Use this path if anything between sections 4 and 10 produces unrecoverable errors.
 
 ```bash
 ssh raspi 'cd ratatoskr && \
@@ -348,22 +301,15 @@ ssh raspi 'cd ratatoskr && \
   docker compose up -d ratatoskr mobile-api'
 ```
 
-**Expected:** both containers return to `healthy` within 60 s on the
-pre-port images. The bot resumes against SQLite. The Postgres data
-remains in `ratatoskr_postgres_data` for a future re-attempt — do
-**not** `docker volume rm` it during rollback.
+**Expected:** both containers return to `healthy` within 60 s on the pre-port images. The bot resumes against SQLite. The Postgres data remains in `ratatoskr_postgres_data` for a future re-attempt — do **not** `docker volume rm` it during rollback.
 
-**Recovery time estimate:** 30-90 seconds. Tag operations are
-metadata-only (sub-millisecond, verified on Pi 2026-05-07);
-`docker compose stop`/`up` is ~30-60 s; the SQLite `cp` restore
-is sub-second on the NVMe partition.
+**Recovery time estimate:** 30-90 seconds. Tag operations are metadata-only (sub-millisecond, verified on Pi 2026-05-07); `docker compose stop`/`up` is ~30-60 s; the SQLite `cp` restore is sub-second on the NVMe partition.
 
 ---
 
 ## Appendix A — Dry-run log
 
-Each row records one dry-run pass. Required before this runbook is
-marked ready for production.
+Each row records one dry-run pass. Required before this runbook is marked ready for production.
 
 | Date | Operator | Snapshot size | ETL dry-run wall-clock | ETL real-run wall-clock | Validation result | Notes |
 |---|---|---|---|---|---|---|
@@ -374,43 +320,12 @@ marked ready for production.
 
 ### Dry-run pass 1 findings (2026-05-07)
 
-The first dry-run against the live Pi snapshot exposed four
-production-data shape issues that the migrator did not handle. Each
-was either fixed in the same session or recorded as remaining work.
-Production source data is not clean; the migrator must defend
-against it.
+The first dry-run against the live Pi snapshot exposed four production-data shape issues that the migrator did not handle. Each was either fixed in the same session or recorded as remaining work. Production source data is not clean; the migrator must defend against it.
 
-- **Fixed: FK eager-fetch.** The migrator's `_legacy_row_to_dict`
-  used `getattr(row, field_name)` to read each column. For Peewee FK
-  fields this triggers an eager related-model lookup, which raises
-  `<Parent>DoesNotExist` on dangling FK rows. Switched to
-  `getattr(row, col_name)` (e.g. `request_id`) so the raw integer is
-  read directly. Source observed: `Summary.request_id=1058` with no
-  matching row in `requests`.
-- **Fixed: NUL chars in JSONB.** The Pi `summaries.json_payload`
-  contains string values with embedded ` `. Postgres `text` /
-  `jsonb` rejects them with
-  `asyncpg.UntranslatableCharacterError`. Added a
-  `_strip_nul_chars` recursive helper that removes `\x00` from all
-  string values inside JSON columns during migration. Non-destructive
-  in effect (the original SQLite file is preserved for rollback).
-- **Fixed: FK orphans (Postgres FK enforcement).** Legacy SQLite
-  did not enforce FK constraints (Peewee `ForeignKeyField` is
-  metadata-only without `pragmas={"foreign_keys": 1}`). Postgres
-  enforces them, so the bulk insert hit
-  `ForeignKeyViolationError`. Per the migration plan's risk table,
-  added `SET LOCAL session_replication_role = 'replica'` inside each
-  bulk-insert transaction, which suspends FK enforcement for the
-  duration of the transaction only. Source observed: dangling
-  `request_id=1058` again.
-- **Fixed: type-confused values (Bug 7).** `LLMCall.cost_usd` (FLOAT
-  column) held the string literal `'ok'` for at least one row,
-  rejected by asyncpg with `must be real number, not str`. Added a
-  `_coerce_scalar` helper that attempts type coercion based on the
-  SA column type (`Integer`/`BigInteger`, `Float`/`Numeric`,
-  `Boolean`) and nullifies the cell on failure with a WARNING log.
-  Other rows in the same batch still migrate; the bad cell becomes
-  NULL.
+- **Fixed: FK eager-fetch.** The migrator's `_legacy_row_to_dict` used `getattr(row, field_name)` to read each column. For Peewee FK fields this triggers an eager related-model lookup, which raises `<Parent>DoesNotExist` on dangling FK rows. Switched to `getattr(row, col_name)` (e.g. `request_id`) so the raw integer is read directly. Source observed: `Summary.request_id=1058` with no matching row in `requests`.
+- **Fixed: NUL chars in JSONB.** The Pi `summaries.json_payload` contains string values with embedded ` `. Postgres `text` / `jsonb` rejects them with `asyncpg.UntranslatableCharacterError`. Added a `_strip_nul_chars` recursive helper that removes `\x00` from all string values inside JSON columns during migration. Non-destructive in effect (the original SQLite file is preserved for rollback).
+- **Fixed: FK orphans (Postgres FK enforcement).** Legacy SQLite did not enforce FK constraints (Peewee `ForeignKeyField` is metadata-only without `pragmas={"foreign_keys": 1}`). Postgres enforces them, so the bulk insert hit `ForeignKeyViolationError`. Per the migration plan's risk table, added `SET LOCAL session_replication_role = 'replica'` inside each bulk-insert transaction, which suspends FK enforcement for the duration of the transaction only. Source observed: dangling `request_id=1058` again.
+- **Fixed: type-confused values (Bug 7).** `LLMCall.cost_usd` (FLOAT column) held the string literal `'ok'` for at least one row, rejected by asyncpg with `must be real number, not str`. Added a `_coerce_scalar` helper that attempts type coercion based on the SA column type (`Integer`/`BigInteger`, `Float`/`Numeric`, `Boolean`) and nullifies the cell on failure with a WARNING log. Other rows in the same batch still migrate; the bad cell becomes NULL.
 
 ### Dry-run pass 2 result (2026-05-07, after Bugs 4–7 fixed)
 
@@ -426,8 +341,7 @@ Per-table counts  : source == target on EVERY table (zero mismatches)
 STATUS: SUCCESS
 ```
 
-Notable per-table volumes from the live snapshot (used for sizing
-the maintenance window):
+Notable per-table volumes from the live snapshot (used for sizing the maintenance window):
 
 | Table | Rows | Table | Rows |
 |---|---|---|---|
@@ -440,9 +354,7 @@ the maintenance window):
 
 All other tables either zero rows or single-digit counts.
 
-**Wall-clock implication for the Pi**: laptop ran 12.7 s; the Pi is
-roughly 3–4× slower for this workload, so budget **45–60 s** for the
-ETL itself in section 6, well within the 60-min nominal window.
+**Wall-clock implication for the Pi**: laptop ran 12.7 s; the Pi is roughly 3–4× slower for this workload, so budget **45–60 s** for the ETL itself in section 6, well within the 60-min nominal window.
 
 | Date | Operator | Rollback path | Recovery time | Result |
 |---|---|---|---|---|
@@ -450,60 +362,17 @@ ETL itself in section 6, well within the 60-min nominal window.
 
 ## Appendix B — Open verification gates
 
-Acceptance items from
-`docs/tasks/issues/migrate-postgres-write-pi-runbook.md` that are not
-yet satisfied (must be cleared before C2 starts):
+Acceptance items from `docs/tasks/issues/migrate-postgres-write-pi-runbook.md` that are not yet satisfied (must be cleared before C2 starts):
 
-- [x] Pre/post-sqlalchemy images on the Pi (all four tags
-      re-verified 2026-05-07 23:08, post-fix builds shipped):
-      - `docker-ratatoskr:pre-sqlalchemy` -> `75cbe6374d48`
-        (the running bot image)
-      - `docker-mobile-api:pre-sqlalchemy` -> `3ac1eaee2d96`
-        (the running mobile-api image)
-      - `docker-ratatoskr:post-sqlalchemy` -> `13888e4a7de9`
-        (rebuilt from current main HEAD `9a0b6445`; includes
-        the auth-tz fix `c52330b6`, architecture-lint fixes
-        `0ff324e8`, config error wrapper fix `f7a54e5b`, and
-        the full T3 Phase 2 + extended test surface)
-      - `docker-mobile-api:post-sqlalchemy` -> `2f2494e2dfc2`
-        (same HEAD)
-      Local git tag: `post-sqlalchemy` -> commit `9a0b6445`
-      (force-moved from earlier `48860ae2`).
-      Note: `:latest` for both still points at the pre-port
-      hashes so compose-up does not auto-pick the new images
-      before cutover. Section 9 explicitly retags
-      `:post-sqlalchemy` -> `:latest` immediately before
-      `docker compose up`.
+- [x] Pre/post-sqlalchemy images on the Pi (all four tags re-verified 2026-05-07 23:08, post-fix builds shipped): - `docker-ratatoskr:pre-sqlalchemy` -> `75cbe6374d48` (the running bot image) - `docker-mobile-api:pre-sqlalchemy` -> `3ac1eaee2d96` (the running mobile-api image) - `docker-ratatoskr:post-sqlalchemy` -> `13888e4a7de9` (rebuilt from current main HEAD `9a0b6445`; includes the auth-tz fix `c52330b6`, architecture-lint fixes `0ff324e8`, config error wrapper fix `f7a54e5b`, and the full T3 Phase 2 + extended test surface) - `docker-mobile-api:post-sqlalchemy` -> `2f2494e2dfc2` (same HEAD) Local git tag: `post-sqlalchemy` -> commit `9a0b6445` (force-moved from earlier `48860ae2`). Note: `:latest` for both still points at the pre-port hashes so compose-up does not auto-pick the new images before cutover. Section 9 explicitly retags `:post-sqlalchemy` -> `:latest` immediately before `docker compose up`.
 - [x] Two laptop dry-runs of sections 1–10 against a Pi-DB snapshot. (passes 2 and 3, both green; see Appendix A)
-- [x] Rollback path verified on the Pi (2026-05-07 23:09).
-      The `:pre-sqlalchemy` tag is already pinned on the Pi against
-      the live running hash. Tag-flip operations measured at
-      <1 ms each (`docker tag` is metadata-only). The rollback
-      wall-clock is dominated by `docker compose stop` +
-      `docker compose up -d` -- typically 30-60 s on Pi for a
-      single container; the SQLite restore is a single `cp` on the
-      same partition (sub-second for the 521 MB file). Total
-      recovery time estimate: **30-90 seconds**, well within the
-      maintenance window. Live-fire validation will happen during
-      C2 if section 7 fails (the rollback path is identical
-      regardless of which forward step failed).
-- [x] Maintenance window estimate refined from dry-run timings.
-      Active downtime budget on the Pi (sections 2-9): ~5-10 min
-      (laptop ETL was 11-13 s in passes 2 + 3; Pi is ~3-4x slower,
-      so ETL itself is ~45 s; rest is short docker
-      stop/start/healthcheck cycles). Total window 30 min nominal,
-      60 min with one-σ buffer for surprises. Refined value is in
-      the front matter.
-- [x] Linked from `docs/SPEC.md` "Deployment and Operations" section
-      (line 84 of SPEC.md).
+- [x] Rollback path verified on the Pi (2026-05-07 23:09). The `:pre-sqlalchemy` tag is already pinned on the Pi against the live running hash. Tag-flip operations measured at <1 ms each (`docker tag` is metadata-only). The rollback wall-clock is dominated by `docker compose stop` + `docker compose up -d` -- typically 30-60 s on Pi for a single container; the SQLite restore is a single `cp` on the same partition (sub-second for the 521 MB file). Total recovery time estimate: **30-90 seconds**, well within the maintenance window. Live-fire validation will happen during C2 if section 7 fails (the rollback path is identical regardless of which forward step failed).
+- [x] Maintenance window estimate refined from dry-run timings. Active downtime budget on the Pi (sections 2-9): ~5-10 min (laptop ETL was 11-13 s in passes 2 + 3; Pi is ~3-4x slower, so ETL itself is ~45 s; rest is short docker stop/start/healthcheck cycles). Total window 30 min nominal, 60 min with one-σ buffer for surprises. Refined value is in the front matter.
+- [x] Linked from `docs/SPEC.md` "Deployment and Operations" section (line 84 of SPEC.md).
 
 ## Appendix C — C2 cutover log (2026-05-08)
 
-The first cutover attempt (2026-05-07 23:21) hit three startup bugs in
-the post-port image and rolled back. Three fixes landed under
-`19a0b08d fix(deploy): three startup bugs that blocked C2 cutover`,
-images were rebuilt, and the second attempt at 2026-05-08 08:36 went
-clean. Active downtime: ~5 min ETL + retry boot.
+The first cutover attempt (2026-05-07 23:21) hit three startup bugs in the post-port image and rolled back. Three fixes landed under `19a0b08d fix(deploy): three startup bugs that blocked C2 cutover`, images were rebuilt, and the second attempt at 2026-05-08 08:36 went clean. Active downtime: ~5 min ETL + retry boot.
 
 | Step | Section | Wall-clock |
 |---|---|---|
@@ -524,47 +393,16 @@ clean. Active downtime: ~5 min ETL + retry boot.
 
 ### Bugs surfaced during the first attempt
 
-- **A (image)**: `bot.py:51` called `build_runtime_database(cfg, migrate=True)`
-  which internally does `asyncio.run(db.migrate())`. Inside the bot's
-  `asyncio.run(main())` event loop this raises
-  `RuntimeError: asyncio.run() cannot be called from a running event loop`.
-  Fixed by dropping `migrate=True` and awaiting `db.migrate()` in the
-  surrounding async context.
-- **B (image)**: `app/di/api.py:75` (`build_api_runtime`) had the same
-  pattern under the FastAPI lifespan. Fixed identically.
-- **C (image)**: Dockerfile + Dockerfile.api CMDs passed
-  `${DB_PATH:-/data/ratatoskr.db}` as the first positional arg to
-  `migrate_db`, which the new alembic_runner strict-rejects (it expects
-  a `postgresql+asyncpg://` URL). Dropped the arg so migrate_db falls
-  through to env DATABASE_URL. Also flipped the bot HEALTHCHECK off the
-  stale `sqlite3.connect` probe onto `python -m app.cli.healthcheck`.
+- **A (image)**: `bot.py:51` called `build_runtime_database(cfg, migrate=True)` which internally does `asyncio.run(db.migrate())`. Inside the bot's `asyncio.run(main())` event loop this raises `RuntimeError: asyncio.run() cannot be called from a running event loop`. Fixed by dropping `migrate=True` and awaiting `db.migrate()` in the surrounding async context.
+- **B (image)**: `app/di/api.py:75` (`build_api_runtime`) had the same pattern under the FastAPI lifespan. Fixed identically.
+- **C (image)**: Dockerfile + Dockerfile.api CMDs passed `${DB_PATH:-/data/ratatoskr.db}` as the first positional arg to `migrate_db`, which the new alembic_runner strict-rejects (it expects a `postgresql+asyncpg://` URL). Dropped the arg so migrate_db falls through to env DATABASE_URL. Also flipped the bot HEALTHCHECK off the stale `sqlite3.connect` probe onto `python -m app.cli.healthcheck`.
 
 ### Bug surfaced during the second attempt
 
-- **D (compose)**: `mobile-api` healthcheck timeout of 10 s was tight
-  for the cold path (~15 s on Pi 5: Python startup + FastAPI/SQLAlchemy/
-  asyncpg imports + Alembic plugin scan + Postgres ping). Bot path was
-  ~3 s and within the ceiling. Bumped both healthcheck timeouts to 30 s.
+- **D (compose)**: `mobile-api` healthcheck timeout of 10 s was tight for the cold path (~15 s on Pi 5: Python startup + FastAPI/SQLAlchemy/ asyncpg imports + Alembic plugin scan + Postgres ping). Bot path was ~3 s and within the ceiling. Bumped both healthcheck timeouts to 30 s.
 
 ### Lessons
 
-- The runbook's section 9 ("retag :post-sqlalchemy → :latest immediately
-  before docker compose up") is necessary BEFORE section 5 too —
-  `docker compose run --rm ratatoskr ...` reads the `:latest` tag, which
-  in pre-port state still pointed at the old image without `app.cli.migrate_db`
-  awareness of Postgres. Moving the retag to section 4.5 would have caught
-  this earlier.
-- The `:pre-sqlalchemy` tag on the Pi was applied to a hash that
-  actually contains post-port code (the running bot image at pin time).
-  The "rollback to pre-port" path is a misnomer — it rolls back to a
-  post-port image that *happened* to work in production because no
-  DATABASE_URL was set, so the asyncpg-bound migrate_db code was hit
-  but errored silently inside the `&&` short-circuit. The compose YAML
-  also forces a Postgres `DATABASE_URL` default, so a true SQLite
-  rollback would have required compose-file edits too. Document this
-  clearly in any future "rollback drill" plan.
-- Bind mounts in compose (`./bot.py:/app/bot.py`, `./app:/app/app`)
-  override the image filesystem. Image fixes alone are not enough —
-  the host repo on the Pi must also be at the fixed commit. After this
-  cutover, the Pi is on `git pull --ff-only origin main` so the bind
-  mounts and image are coherent.
+- The runbook's section 9 ("retag :post-sqlalchemy → :latest immediately before docker compose up") is necessary BEFORE section 5 too — `docker compose run --rm ratatoskr ...` reads the `:latest` tag, which in pre-port state still pointed at the old image without `app.cli.migrate_db` awareness of Postgres. Moving the retag to section 4.5 would have caught this earlier.
+- The `:pre-sqlalchemy` tag on the Pi was applied to a hash that actually contains post-port code (the running bot image at pin time). The "rollback to pre-port" path is a misnomer — it rolls back to a post-port image that *happened* to work in production because no DATABASE_URL was set, so the asyncpg-bound migrate_db code was hit but errored silently inside the `&&` short-circuit. The compose YAML also forces a Postgres `DATABASE_URL` default, so a true SQLite rollback would have required compose-file edits too. Document this clearly in any future "rollback drill" plan.
+- Bind mounts in compose (`./bot.py:/app/bot.py`, `./app:/app/app`) override the image filesystem. Image fixes alone are not enough — the host repo on the Pi must also be at the fixed commit. After this cutover, the Pi is on `git pull --ff-only origin main` so the bind mounts and image are coherent.

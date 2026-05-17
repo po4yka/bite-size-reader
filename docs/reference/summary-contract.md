@@ -2,19 +2,15 @@
 
 Complete specification for the strict JSON schema enforced by Ratatoskr for all summaries.
 
-**Audience:** Developers, Integrators
-**Type:** Reference
-**Related:** [Summary Contract Design](../explanation/summary-contract-design.md), [SPEC.md § Summary JSON Contract](../SPEC.md#summary-json-contract-canonical)
+**Audience:** Developers, Integrators **Type:** Reference **Related:** [Summary Contract Design](../explanation/summary-contract-design.md), [SPEC.md § Summary JSON Contract](../SPEC.md#summary-json-contract-canonical)
 
 ---
 
 ## Contract Version
 
-**Current Version:** 3.0
-**Last Updated:** 2026-03-05
+**Current Version:** 3.0 **Last Updated:** 2026-03-05
 
-**Validation Location:** `app/core/summary_contract.py`
-**Pydantic Model:** `app/core/summary_schema.py`
+**Validation Location:** `app/core/summary_contract.py` **Pydantic Model:** `app/core/summary_schema.py`
 
 ---
 

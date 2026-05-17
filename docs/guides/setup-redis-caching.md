@@ -2,9 +2,7 @@
 
 Enable Redis for caching, rate limiting, and distributed locking.
 
-**Audience:** Operators
-**Difficulty:** Intermediate
-**Estimated Time:** 10 minutes
+**Audience:** Operators **Difficulty:** Intermediate **Estimated Time:** 10 minutes
 
 ---
 

@@ -41,12 +41,7 @@ This document helps AI assistants (like Claude) understand and work effectively 
 
 ## Architecture Overview
 
-The component diagram, request lifecycle, layered view, and the
-canonical subsystem index live in
-[`docs/explanation/architecture-overview.md`](docs/explanation/architecture-overview.md).
-Read that page first when orienting yourself; this file focuses on
-AI-assistant operating notes (where things live, what to touch, what
-not to touch) rather than re-stating the architecture.
+The component diagram, request lifecycle, layered view, and the canonical subsystem index live in [`docs/explanation/architecture-overview.md`](docs/explanation/architecture-overview.md). Read that page first when orienting yourself; this file focuses on AI-assistant operating notes (where things live, what to touch, what not to touch) rather than re-stating the architecture.
 
 ## Directory Structure
 
@@ -221,52 +216,19 @@ GitHub Actions (`.github/workflows/ci.yml`) enforces:
 
 ### When Making Changes
 
-1. **URL Flow Changes:**
-   - Respect URL normalization (`app/core/url_utils.py`) -- all URLs must be normalized before deduplication
-   - Preserve `dedupe_hash` (sha256) for idempotence
-   - Always persist scraper responses in `crawl_results` table (`FirecrawlResult` is the universal output model)
-   - Content extraction uses `ContentScraperChain` (ordered fallback: Scrapling -> Crawl4AI -> Firecrawl (self-hosted) -> Defuddle (self-hosted) -> Playwright -> Crawlee -> Direct HTML -> Scrapegraph-AI). See `app/adapters/content/scraper/` for protocol, chain, factory, and providers
-   - Check `app/adapters/content/url_processor.py` for orchestration logic
-   - **URL Flow models** (`app/adapters/content/url_flow_models.py`):
-     - `URLFlowRequest` -- request envelope: wraps the Telegram message, raw URL text, correlation ID, and Telegram-specific callbacks (progress tracker, phase-change callback)
-     - `URLFlowContext` -- prepared state bag: populated after extraction, holds dedupe_hash, req_id, extracted content, chosen language, prompt, chunking config. Passed from context builder into the LLM summarization step
-     - `URLProcessingFlowResult` -- batch-mode result: success/failure status and title for batch progress tracking
-     - When adding fields to `URLFlowContext`, also update `URLFlowContextBuilder` (`url_flow_context_builder.py`) and any callers that destructure the context
+1. **URL Flow Changes:** - Respect URL normalization (`app/core/url_utils.py`) -- all URLs must be normalized before deduplication - Preserve `dedupe_hash` (sha256) for idempotence - Always persist scraper responses in `crawl_results` table (`FirecrawlResult` is the universal output model) - Content extraction uses `ContentScraperChain` (ordered fallback: Scrapling -> Crawl4AI -> Firecrawl (self-hosted) -> Defuddle (self-hosted) -> Playwright -> Crawlee -> Direct HTML -> Scrapegraph-AI). See `app/adapters/content/scraper/` for protocol, chain, factory, and providers - Check `app/adapters/content/url_processor.py` for orchestration logic - **URL Flow models** (`app/adapters/content/url_flow_models.py`): - `URLFlowRequest` -- request envelope: wraps the Telegram message, raw URL text, correlation ID, and Telegram-specific callbacks (progress tracker, phase-change callback) - `URLFlowContext` -- prepared state bag: populated after extraction, holds dedupe_hash, req_id, extracted content, chosen language, prompt, chunking config. Passed from context builder into the LLM summarization step - `URLProcessingFlowResult` -- batch-mode result: success/failure status and title for batch progress tracking - When adding fields to `URLFlowContext`, also update `URLFlowContextBuilder` (`url_flow_context_builder.py`) and any callers that destructure the context
 
-2. **Summary Contract Changes:**
-   - Update `app/core/summary_contract.py` validation functions
-   - Update LLM prompts in `app/prompts/` (both `en/` and `ru/` versions)
-   - Update docs/SPEC.md to document new fields
-   - Ensure backward compatibility with existing DB summaries
+2. **Summary Contract Changes:** - Update `app/core/summary_contract.py` validation functions - Update LLM prompts in `app/prompts/` (both `en/` and `ru/` versions) - Update docs/SPEC.md to document new fields - Ensure backward compatibility with existing DB summaries
 
-3. **Database Schema Changes:**
-   - Add a SQLAlchemy 2.0 model under `app/db/models/<area>.py` and re-export from `app/db/models/__init__.py`
-   - Generate the Alembic revision: `alembic revision --autogenerate -m "<short summary>"`; hand-review the diff before committing
-   - Apply via `python -m app.cli.migrate_db` (runs `alembic upgrade head` against `DATABASE_URL`)
-   - Document in docs/SPEC.md data model section
+3. **Database Schema Changes:** - Add a SQLAlchemy 2.0 model under `app/db/models/<area>.py` and re-export from `app/db/models/__init__.py` - Generate the Alembic revision: `alembic revision --autogenerate -m "<short summary>"`; hand-review the diff before committing - Apply via `python -m app.cli.migrate_db` (runs `alembic upgrade head` against `DATABASE_URL`) - Document in docs/SPEC.md data model section
 
-4. **Telegram Message Handling:**
-   - All messages flow through `message_router.py`
-   - Access control is enforced in `access_controller.py` (check `ALLOWED_USER_IDS`)
-   - Full message snapshots are stored in `telegram_messages` table
-   - Use `ResponseFormatter` for all replies (centralizes logging and error handling)
+4. **Telegram Message Handling:** - All messages flow through `message_router.py` - Access control is enforced in `access_controller.py` (check `ALLOWED_USER_IDS`) - Full message snapshots are stored in `telegram_messages` table - Use `ResponseFormatter` for all replies (centralizes logging and error handling)
 
-5. **External API Changes:**
-   - Firecrawl: Check docs at https://docs.firecrawl.dev/api-reference/endpoint/scrape
-   - OpenRouter: Check docs at https://openrouter.ai/docs/api-reference/chat-completion
-   - Both services have retry logic with exponential backoff
-   - Always redact `Authorization` headers before logging
+5. **External API Changes:** - Firecrawl: Check docs at https://docs.firecrawl.dev/api-reference/endpoint/scrape - OpenRouter: Check docs at https://openrouter.ai/docs/api-reference/chat-completion - Both services have retry logic with exponential backoff - Always redact `Authorization` headers before logging
 
-6. **Error Handling:**
-   - All user-visible errors must include `Error ID: <correlation_id>`
-   - Correlation IDs tie Telegram messages -> DB requests -> logs
-   - Use structured logging (`app/core/logging_utils.py`)
-   - Persist all LLM failures in `llm_calls` table (even errors)
+6. **Error Handling:** - All user-visible errors must include `Error ID: <correlation_id>` - Correlation IDs tie Telegram messages -> DB requests -> logs - Use structured logging (`app/core/logging_utils.py`) - Persist all LLM failures in `llm_calls` table (even errors)
 
-7. **Concurrency:**
-   - Semaphore-based rate limiting for Firecrawl/OpenRouter (`MAX_CONCURRENT_CALLS`)
-   - Async/await throughout (Telethon, httpx, PostgreSQL via SQLAlchemy 2.0 `AsyncSession` + asyncpg). Postgres MVCC handles write concurrency natively — no application-level locking
-   - Optional `uvloop` for async performance
+7. **Concurrency:** - Semaphore-based rate limiting for Firecrawl/OpenRouter (`MAX_CONCURRENT_CALLS`) - Async/await throughout (Telethon, httpx, PostgreSQL via SQLAlchemy 2.0 `AsyncSession` + asyncpg). Postgres MVCC handles write concurrency natively — no application-level locking - Optional `uvloop` for async performance
 
 ### Security Considerations
 
@@ -509,8 +471,7 @@ For questions about the codebase, always refer to:
 
 ## Task Board
 
-This repository uses Obsidian Tasks-compatible Markdown task lines as the canonical task system.
-Use the `repo-task-board` skill for all task-related operations.
+This repository uses Obsidian Tasks-compatible Markdown task lines as the canonical task system. Use the `repo-task-board` skill for all task-related operations.
 
 Canonical files:
 

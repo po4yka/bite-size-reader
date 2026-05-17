@@ -2,9 +2,7 @@
 
 Complete reference for all Ratatoskr configuration. Source of truth: `app/config/` (entrypoint `app/config/settings.py`).
 
-**Phase 1 status**: `.env.example` is intentionally minimal. Optional
-power-user settings should move to `ratatoskr.yaml`; see
-[Optional YAML Configuration](config-file.md).
+**Phase 1 status**: `.env.example` is intentionally minimal. Optional power-user settings should move to `ratatoskr.yaml`; see [Optional YAML Configuration](config-file.md).
 
 **Last Updated**: 2026-04-30
 
@@ -22,15 +20,11 @@ Only these assignments remain active in `.env.example`:
 | `ALLOWED_USER_IDS` | Always for owner-only access | `app/config/telegram.py::TelegramConfig` |
 | `OPENROUTER_API_KEY` | Always for the default OpenRouter quickstart path | `app/config/llm.py::OpenRouterConfig` |
 
-`JWT_SECRET_KEY` is required only when web/API/browser-extension JWT auth is
-enabled. Firecrawl Cloud is optional; self-hosted Firecrawl and non-Firecrawl
-scraper providers exist.
+`JWT_SECRET_KEY` is required only when web/API/browser-extension JWT auth is enabled. Firecrawl Cloud is optional; self-hosted Firecrawl and non-Firecrawl scraper providers exist.
 
 ## Phase 1 `.env.example` Inventory
 
-This table categorizes every uncommented assignment that existed in
-`.env.example` before Phase 1 consolidation. The action column describes how
-the variable is handled after this change.
+This table categorizes every uncommented assignment that existed in `.env.example` before Phase 1 consolidation. The action column describes how the variable is handled after this change.
 
 | Variable | Owner | Category | Phase 1 action |
 | --- | --- | --- | --- |
@@ -55,10 +49,7 @@ the variable is handled after this change.
 | `MCP_*` | `app/config/integrations.py::McpConfig` | optional-defaulted | Move to `ratatoskr.yaml` or rely on code defaults |
 | `GRAFANA_ADMIN_PASSWORD` | `ops/docker/docker-compose.monitoring.yml` | optional-defaulted | Keep in monitoring deployment override, not first-run `.env.example` |
 
-The grouped rows above cover all 106 pre-consolidation active assignments:
-Telegram/access (6), Firecrawl/scraper (30), OpenRouter (8), YouTube (8),
-Twitter/X (12), database/runtime/migration (34), MCP (5), monitoring (1), and
-content limits (1).
+The grouped rows above cover all 106 pre-consolidation active assignments: Telegram/access (6), Firecrawl/scraper (30), OpenRouter (8), YouTube (8), Twitter/X (12), database/runtime/migration (34), MCP (5), monitoring (1), and content limits (1).
 
 ---
 
@@ -395,8 +386,7 @@ Controls which embedding backend generates vectors for semantic search.
 
 ## Vector-Index Sync (CocoIndex + Reconciler)
 
-See [`docs/cocoindex.md`](../cocoindex.md) for architecture, summary/repository
-indexing semantics, drift detection, and rollback procedure.
+See [`docs/cocoindex.md`](../cocoindex.md) for architecture, summary/repository indexing semantics, drift detection, and rollback procedure.
 
 ### CocoIndex live updater (opt-in)
 
@@ -574,9 +564,7 @@ indexing semantics, drift detection, and rollback procedure.
 
 ## Data Retention
 
-Configures scheduled nulling of raw artifact columns (scraped HTML, LLM payloads,
-Telegram message JSON, video transcripts). The summary, cost, and status columns are
-never purged. A TTL of `0` disables purge for that subsystem.
+Configures scheduled nulling of raw artifact columns (scraped HTML, LLM payloads, Telegram message JSON, video transcripts). The summary, cost, and status columns are never purged. A TTL of `0` disables purge for that subsystem.
 
 | Variable | Type | Default | Description |
 |---|---|---|---|
@@ -639,9 +627,7 @@ These knobs govern how long the OpenRouter chat engine spends per model and per 
 
 ## GitHub Integration
 
-Per-user GitHub credential storage, OAuth Device Flow, and daily stars sync.
-Configuration owner: `app/config/github.py::GitHubConfig`.
-Generate the Fernet key with: `python tools/scripts/generate_github_encryption_key.py`.
+Per-user GitHub credential storage, OAuth Device Flow, and daily stars sync. Configuration owner: `app/config/github.py::GitHubConfig`. Generate the Fernet key with: `python tools/scripts/generate_github_encryption_key.py`.
 
 | Variable | Default | Required | Description | Used by |
 |----------|---------|----------|-------------|---------|

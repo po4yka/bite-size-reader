@@ -2,9 +2,7 @@
 
 Reference for external service APIs used by Ratatoskr.
 
-**Audience:** Developers, Integrators
-**Type:** Reference
-**Related:** [SPEC.md § External Systems](../SPEC.md#external-systems--authoritative-docs), [TROUBLESHOOTING](troubleshooting.md)
+**Audience:** Developers, Integrators **Type:** Reference **Related:** [SPEC.md § External Systems](../SPEC.md#external-systems--authoritative-docs), [TROUBLESHOOTING](troubleshooting.md)
 
 ---
 
@@ -21,9 +19,7 @@ Ratatoskr integrates with four primary external services:
 
 ## Firecrawl API
 
-**Base URL:** `https://api.firecrawl.dev`
-**Authentication:** Bearer token via `Authorization` header
-**Documentation:** https://docs.firecrawl.dev/
+**Base URL:** `https://api.firecrawl.dev` **Authentication:** Bearer token via `Authorization` header **Documentation:** https://docs.firecrawl.dev/
 
 ### POST /v2/scrape
 
@@ -142,21 +138,14 @@ except httpx.HTTPStatusError as e:
 
 **Fallback Strategy:**
 
-- Primary extraction path uses `ScraperChain`:
-  1. Scrapling (in-process extraction)
-  2. Firecrawl (self-hosted/cloud API)
-  3. Playwright-rendered fallback
-  4. Crawlee hybrid fallback
-  5. Direct HTML extraction
+- Primary extraction path uses `ScraperChain`: 1. Scrapling (in-process extraction) 2. Firecrawl (self-hosted/cloud API) 3. Playwright-rendered fallback 4. Crawlee hybrid fallback 5. Direct HTML extraction
 - If all providers fail, the request is surfaced as a user-visible extraction failure with correlation metadata.
 
 ---
 
 ## OpenRouter API
 
-**Base URL:** `https://openrouter.ai/api/v1`
-**Authentication:** Bearer token via `Authorization` header
-**Documentation:** https://openrouter.ai/docs
+**Base URL:** `https://openrouter.ai/api/v1` **Authentication:** Bearer token via `Authorization` header **Documentation:** https://openrouter.ai/docs
 
 ### POST /chat/completions
 
@@ -302,9 +291,7 @@ cost_usd = (prompt_tokens * pricing["prompt"] + completion_tokens * pricing["com
 
 ## Telethon (Telegram)
 
-**Library:** Telethon
-**Protocol:** Telegram MTProto
-**Documentation:** https://docs.telethon.dev/
+**Library:** Telethon **Protocol:** Telegram MTProto **Documentation:** https://docs.telethon.dev/
 
 ### Authentication
 
@@ -421,8 +408,7 @@ except MessageNotModified:
 
 ## yt-dlp (YouTube)
 
-**Library:** yt-dlp (Python)
-**Documentation:** https://github.com/yt-dlp/yt-dlp
+**Library:** yt-dlp (Python) **Documentation:** https://github.com/yt-dlp/yt-dlp
 
 ### Video Download
 
@@ -544,9 +530,7 @@ except TranscriptsDisabled:
 
 ## Ratatoskr Mobile API: Repositories
 
-**Auth:** All endpoints require `Authorization: Bearer <access_token>` (JWT mode).
-**Models:** `app/api/models/responses/repositories.py`
-**Deep dive:** `docs/explanation/github-repository-ingestion.md`
+**Auth:** All endpoints require `Authorization: Bearer <access_token>` (JWT mode). **Models:** `app/api/models/responses/repositories.py` **Deep dive:** `docs/explanation/github-repository-ingestion.md`
 
 ### GET /v1/repositories
 

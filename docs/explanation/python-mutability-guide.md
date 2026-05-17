@@ -1,14 +1,10 @@
 # Python Mutability and Aliasing Guide
 
-This document explains the aliasing hazards that are automatically detected in
-this codebase and how to write safe alternatives.
+This document explains the aliasing hazards that are automatically detected in this codebase and how to write safe alternatives.
 
 ## The Problem
 
-Python variables hold *references*, not value copies.  When you assign a mutable
-object (list, dict, set) to multiple names or slots, every name shares the same
-underlying object.  A mutation through any one of them is visible through all
-the others — this is *aliasing*.
+Python variables hold *references*, not value copies.  When you assign a mutable object (list, dict, set) to multiple names or slots, every name shares the same underlying object.  A mutation through any one of them is visible through all the others — this is *aliasing*.
 
 ## High-Risk Patterns
 
@@ -191,15 +187,11 @@ if result is not None:
     ...
 ```
 
-Ruff `E711` (comparison-to-None) enforces this via the `"E"` selector in
-`pyproject.toml`. It catches `== None`, `!= None`, `None == x`, and `None != x`.
+Ruff `E711` (comparison-to-None) enforces this via the `"E"` selector in `pyproject.toml`. It catches `== None`, `!= None`, `None == x`, and `None != x`.
 
 ### Rule
 
-Ruff `F632` enforces the `is`/`is not`-vs-literal rule automatically. It fires
-on `is`/`is not` against any literal value (string, int, float, bytes, …) and
-is enabled project-wide via the `"F"` pyflakes selector in `pyproject.toml`.
-If you have a genuine false-positive (rare), suppress it narrowly:
+Ruff `F632` enforces the `is`/`is not`-vs-literal rule automatically. It fires on `is`/`is not` against any literal value (string, int, float, bytes, …) and is enabled project-wide via the `"F"` pyflakes selector in `pyproject.toml`. If you have a genuine false-positive (rare), suppress it narrowly:
 
 ```python
 result = cache.get(key)
@@ -209,8 +201,7 @@ if result is _SENTINEL:  # noqa: F632 — _SENTINEL is an object() singleton, no
 
 ## Bare `except:` Clauses
 
-A bare `except:` catches **`BaseException`** — the root of Python's entire
-exception hierarchy — including:
+A bare `except:` catches **`BaseException`** — the root of Python's entire exception hierarchy — including:
 
 - `KeyboardInterrupt` (Ctrl-C / SIGINT): prevents graceful shutdown
 - `SystemExit` (raised by `sys.exit()`): prevents clean process termination
@@ -246,12 +237,10 @@ except (ValueError, TypeError) as exc:
 
 ### Rules
 
-- Use **`except Exception`** when you need a true catch-all for ordinary
-  program errors at a boundary. Log the exception; never swallow silently.
+- Use **`except Exception`** when you need a true catch-all for ordinary program errors at a boundary. Log the exception; never swallow silently.
 - Use **specific exception types** (or a tuple) for expected failure modes.
 - Never use bare `except:` — it prevents graceful shutdown and hides bugs.
-- In async code, do not catch `asyncio.CancelledError`; if you must enter
-  a broad handler in async code, re-raise cancellation:
+- In async code, do not catch `asyncio.CancelledError`; if you must enter a broad handler in async code, re-raise cancellation:
 
   ```python
   import asyncio
@@ -264,9 +253,7 @@ except (ValueError, TypeError) as exc:
       logger.exception("Async operation failed: %s", exc)
   ```
 
-Ruff `E722` (bare-except) enforces this automatically via the `"E"` selector.
-If a suppression is genuinely needed, use a narrow inline `# noqa: E722` with a
-comment explaining why the bare handler is safe.
+Ruff `E722` (bare-except) enforces this automatically via the `"E"` selector. If a suppression is genuinely needed, use a narrow inline `# noqa: E722` with a comment explaining why the bare handler is safe.
 
 ## Automatic Detection
 

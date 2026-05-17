@@ -1,7 +1,6 @@
 # GitHub Token Scope Validation Design
 
-**Date:** 2026-05-16
-**Status:** Approved
+**Date:** 2026-05-16 **Status:** Approved
 
 ## Goal
 

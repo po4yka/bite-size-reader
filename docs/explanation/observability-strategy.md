@@ -2,9 +2,7 @@
 
 How Ratatoskr implements logging, tracing, and debugging to ensure production reliability.
 
-**Audience:** Developers, Operators
-**Type:** Explanation
-**Related:** [Design Philosophy](design-philosophy.md), [TROUBLESHOOTING](../reference/troubleshooting.md)
+**Audience:** Developers, Operators **Type:** Explanation **Related:** [Design Philosophy](design-philosophy.md), [TROUBLESHOOTING](../reference/troubleshooting.md)
 
 ---
 
@@ -775,9 +773,7 @@ fi
 
 ## Normalized Extraction Failure Snapshots
 
-Failed URL/article processing now writes a normalized snapshot to `requests.error_context_json`.
-This is the fastest way to identify stage, component, reason code, and retryability without log
-scraping.
+Failed URL/article processing now writes a normalized snapshot to `requests.error_context_json`. This is the fastest way to identify stage, component, reason code, and retryability without log scraping.
 
 ```sql
 SELECT

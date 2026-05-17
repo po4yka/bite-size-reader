@@ -1,7 +1,6 @@
 # Channel Digest Subsystem — Ops Reference
 
-Operational guide for the channel-digest scheduler: how it runs, what can go
-wrong, and how to diagnose problems.
+Operational guide for the channel-digest scheduler: how it runs, what can go wrong, and how to diagnose problems.
 
 ## Architecture
 
@@ -54,28 +53,17 @@ In Docker Compose, these are the `scheduler` and `worker` services.
 
 ## Distributed Lock
 
-Each scheduled run acquires a Redis key `ratatoskr:digest:scheduled:lock`
-(10-minute TTL) before executing.  This prevents multiple worker replicas from
-double-delivering when the task is picked up concurrently.
+Each scheduled run acquires a Redis key `ratatoskr:digest:scheduled:lock` (10-minute TTL) before executing.  This prevents multiple worker replicas from double-delivering when the task is picked up concurrently.
 
-**Redis unavailable** → lock is skipped and the digest proceeds anyway
-(graceful degrade).  Each replica will run independently — acceptable for
-low-replica deployments, but monitor `DigestDelivery` counts if you run many
-workers.
+**Redis unavailable** → lock is skipped and the digest proceeds anyway (graceful degrade).  Each replica will run independently — acceptable for low-replica deployments, but monitor `DigestDelivery` counts if you run many workers.
 
-**Lock stuck** (worker crashed mid-run) → the TTL (10 min) ensures the lock
-expires automatically.  No manual intervention is needed unless `DIGEST_TIMES`
-are more frequent than 10 minutes.
+**Lock stuck** (worker crashed mid-run) → the TTL (10 min) ensures the lock expires automatically.  No manual intervention is needed unless `DIGEST_TIMES` are more frequent than 10 minutes.
 
 ## Userbot Session
 
-The Telethon userbot session is stored at the path derived from
-`DIGEST_SESSION_NAME`.  The session file is **reused** across runs — `start()`
-attaches to the existing session rather than creating a new one.
+The Telethon userbot session is stored at the path derived from `DIGEST_SESSION_NAME`.  The session file is **reused** across runs — `start()` attaches to the existing session rather than creating a new one.
 
-**First-time setup**: the session must be initialised interactively via the
-`/init_session` bot command (OTP/2FA flow through the Telegram Mini App) before
-the scheduled job can run.
+**First-time setup**: the session must be initialised interactively via the `/init_session` bot command (OTP/2FA flow through the Telegram Mini App) before the scheduled job can run.
 
 ## Monitoring
 
@@ -91,8 +79,7 @@ Structured log events emitted by the digest task:
 | `digest_lock_held_skipping` | WARNING | Another instance holds the lock; this run skipped |
 | `digest_lock_redis_unavailable` | WARNING | Redis unreachable; lock bypassed, run proceeds |
 
-All events carry `cid` (correlation ID) of the form `digest_YYYYMMDD_HHMMSS`.
-Per-user events additionally carry `uid`.
+All events carry `cid` (correlation ID) of the form `digest_YYYYMMDD_HHMMSS`. Per-user events additionally carry `uid`.
 
 Query recent deliveries:
 
@@ -109,43 +96,33 @@ LIMIT 20;
 
 **Symptom**: `digest_lock_redis_unavailable` warning in logs.
 
-**Behaviour**: Digest runs without distributed locking.  If multiple workers
-are active, they may all deliver — resulting in duplicate messages for the
-same window.
+**Behaviour**: Digest runs without distributed locking.  If multiple workers are active, they may all deliver — resulting in duplicate messages for the same window.
 
-**Resolution**: Restore Redis connectivity.  The subsystem self-recovers on the
-next run once Redis is reachable.
+**Resolution**: Restore Redis connectivity.  The subsystem self-recovers on the next run once Redis is reachable.
 
 ---
 
 ### Telethon auth expired (`AuthKeyUnregisteredError`)
 
-**Symptom**: `scheduled_digest_failed` error with `AuthKeyUnregisteredError`
-in the message.
+**Symptom**: `scheduled_digest_failed` error with `AuthKeyUnregisteredError` in the message.
 
-**Behaviour**: `userbot.start()` raises; the exception is caught, logged with
-the correlation ID, and the run exits cleanly.  `userbot.stop()` is always
-called (no session leak).
+**Behaviour**: `userbot.start()` raises; the exception is caught, logged with the correlation ID, and the run exits cleanly.  `userbot.stop()` is always called (no session leak).
 
 **Resolution**:
 
-1. Check `DIGEST_SESSION_NAME` — ensure the session file exists at the expected
-   path inside the container (`/data/<session_name>.session`).
-2. Re-run the OTP/2FA flow via `/init_session` in the Telegram bot to
-   re-authorise the session.
+1. Check `DIGEST_SESSION_NAME` — ensure the session file exists at the expected path inside the container (`/data/<session_name>.session`).
+2. Re-run the OTP/2FA flow via `/init_session` in the Telegram bot to re-authorise the session.
 3. After re-auth, the next scheduled run will succeed automatically.
 
 ---
 
 ### No posts delivered (empty digest)
 
-**Symptom**: `scheduled_digest_user_complete` logs show `posts=0`; users
-receive "Нет новых постов" messages.
+**Symptom**: `scheduled_digest_user_complete` logs show `posts=0`; users receive "Нет новых постов" messages.
 
 **Possible causes**:
 
-- All posts already delivered in a previous run (`DigestDelivery.posts_json`
-  tracks delivered IDs for 30 days).
+- All posts already delivered in a previous run (`DigestDelivery.posts_json` tracks delivered IDs for 30 days).
 - Channel posts are shorter than `DIGEST_MIN_POST_LENGTH` characters.
 - All posts scored below `DIGEST_MIN_RELEVANCE` by the LLM.
 - `DIGEST_HOURS_LOOKBACK` window too narrow for the channel's posting cadence.
@@ -156,9 +133,6 @@ receive "Нет новых постов" messages.
 
 **Symptom**: Users receive the same digest twice.
 
-**Likely cause**: Two worker replicas picked up the same task concurrently
-while Redis was unavailable (lock bypassed).
+**Likely cause**: Two worker replicas picked up the same task concurrently while Redis was unavailable (lock bypassed).
 
-**Resolution**: Ensure Redis is healthy.  The `DigestDelivery.posts_json`
-column records delivered post IDs; subsequent runs filter them out, so the
-duplication is bounded to a single window.
+**Resolution**: Ensure Redis is healthy.  The `DigestDelivery.posts_json` column records delivered post IDs; subsequent runs filter them out, so the duplication is bounded to a single window.

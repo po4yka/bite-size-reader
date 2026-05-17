@@ -1,8 +1,6 @@
 # Backup Hardening Design
 
-**Date:** 2026-05-15
-**Status:** Approved
-**Scope:** Encrypt backup archives at rest; enforce strict restore safety limits.
+**Date:** 2026-05-15 **Status:** Approved **Scope:** Encrypt backup archives at rest; enforce strict restore safety limits.
 
 ---
 
@@ -10,22 +8,17 @@
 
 The current backup subsystem has three categories of exposure:
 
-1. **No upload size limit.** `restore_backup` calls `await file.read()` unconditionally. A
-   multi-gigabyte upload exhausts worker memory before any validation runs.
+1. **No upload size limit.** `restore_backup` calls `await file.read()` unconditionally. A multi-gigabyte upload exhausts worker memory before any validation runs.
 
-2. **No ZIP safety checks.** `async_restore_from_archive` opens ZIP entries without checking
-   entry count, total compressed size, decompressed size, compression ratio, or entry names.
-   A zip bomb or path-traversal archive is accepted and processed.
+2. **No ZIP safety checks.** `async_restore_from_archive` opens ZIP entries without checking entry count, total compressed size, decompressed size, compression ratio, or entry names. A zip bomb or path-traversal archive is accepted and processed.
 
-3. **No encryption at rest.** Backup ZIPs are written and served as plaintext. An operator
-   who copies or exposes `data/backups/` exposes all user data.
+3. **No encryption at rest.** Backup ZIPs are written and served as plaintext. An operator who copies or exposes `data/backups/` exposes all user data.
 
 ---
 
 ## Goals
 
-- Encrypt backup archives at rest using Fernet (AES-128-CBC + HMAC). No new dependencies;
-  `cryptography` is already installed.
+- Encrypt backup archives at rest using Fernet (AES-128-CBC + HMAC). No new dependencies; `cryptography` is already installed.
 - Gate restore uploads at the router level before loading content into memory.
 - Validate ZIP safety against the central directory metadata before extracting a single byte.
 - Auto-detect encrypted vs plaintext uploads in restore so existing backups remain restorable.
@@ -36,10 +29,8 @@ The current backup subsystem has three categories of exposure:
 ## Non-goals
 
 - Streaming encryption (archives are JSON-only and typically small).
-- ZIP password protection (pyzipper) — Fernet wrapping is simpler and consistent with the
-  existing GitHub token crypto pattern.
-- Key rotation infrastructure (operator can use MultiFernet manually if needed; same note as
-  `app/security/token_crypto.py`).
+- ZIP password protection (pyzipper) — Fernet wrapping is simpler and consistent with the existing GitHub token crypto pattern.
+- Key rotation infrastructure (operator can use MultiFernet manually if needed; same note as `app/security/token_crypto.py`).
 
 ---
 
@@ -103,12 +94,9 @@ class BackupConfig(BaseModel):
         return self.encryption_key is not None
 ```
 
-`is_encryption_enabled` resolves to `True` automatically when `BACKUP_ENCRYPTION_KEY` is set,
-so operators who add a key get encryption without a second env var. Setting
-`BACKUP_ENCRYPTION_ENABLED=false` explicitly disables it even when a key is present.
+`is_encryption_enabled` resolves to `True` automatically when `BACKUP_ENCRYPTION_KEY` is set, so operators who add a key get encryption without a second env var. Setting `BACKUP_ENCRYPTION_ENABLED=false` explicitly disables it even when a key is present.
 
-`BackupConfig` is wired into `AppConfig` in `app/config/settings.py` the same way as other
-sub-configs (e.g., `GitHubConfig`).
+`BackupConfig` is wired into `AppConfig` in `app/config/settings.py` the same way as other sub-configs (e.g., `GitHubConfig`).
 
 ---
 
@@ -129,8 +117,7 @@ class InvalidBackupCiphertextError(ValueError): ...
 class MissingBackupEncryptionKeyError(RuntimeError): ...
 ```
 
-No module-level cache; the caller passes the key from `BackupConfig`. This avoids the
-`reset_key_cache()` ceremony needed in tests for the GitHub token module.
+No module-level cache; the caller passes the key from `BackupConfig`. This avoids the `reset_key_cache()` ceremony needed in tests for the GitHub token module.
 
 ---
 
@@ -162,8 +149,7 @@ def validate_zip_safety(
     """
 ```
 
-Validation reads only the central directory, which `zipfile.ZipFile` parses on `__enter__`
-without inflating entry content.
+Validation reads only the central directory, which `zipfile.ZipFile` parses on `__enter__` without inflating entry content.
 
 ---
 
@@ -189,8 +175,7 @@ zip_path = backup_dir / f"ratatoskr-backup-{user_id}-{timestamp}{suffix}"
 zip_path.write_bytes(payload)
 ```
 
-`async_create_backup_archive` gains an optional `cfg: BackupConfig | None` parameter
-(defaults to `load_backup_config()`).
+`async_create_backup_archive` gains an optional `cfg: BackupConfig | None` parameter (defaults to `load_backup_config()`).
 
 ---
 
@@ -304,14 +289,10 @@ All unit tests; no DB or filesystem required.
 
 ## Acceptance Criteria
 
-- [ ] Restore rejects unsafe ZIPs (zip bomb, too many entries, oversized, path traversal) before
-  any extraction or DB write.
+- [ ] Restore rejects unsafe ZIPs (zip bomb, too many entries, oversized, path traversal) before any extraction or DB write.
 - [ ] Backups are encrypted by default when `BACKUP_ENCRYPTION_KEY` is set.
-- [ ] Unencrypted backup creation is only available when no key is set or
-  `BACKUP_ENCRYPTION_ENABLED=false`.
-- [ ] Restore auto-detects encrypted vs plaintext input; old unencrypted backups remain
-  restorable.
-- [ ] Restore endpoint rejects uploads exceeding `BACKUP_MAX_RESTORE_BYTES` before reading
-  content fully into memory.
+- [ ] Unencrypted backup creation is only available when no key is set or `BACKUP_ENCRYPTION_ENABLED=false`.
+- [ ] Restore auto-detects encrypted vs plaintext input; old unencrypted backups remain restorable.
+- [ ] Restore endpoint rejects uploads exceeding `BACKUP_MAX_RESTORE_BYTES` before reading content fully into memory.
 - [ ] All 11 new unit tests pass.
 - [ ] `docs/guides/backup-and-restore.md` documents key generation and encryption behavior.

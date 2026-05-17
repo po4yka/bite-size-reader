@@ -1,18 +1,14 @@
 # Back Up and Restore
 
-Protect a Ratatoskr instance by backing up the durable host paths and the
-PostgreSQL database used by the current Docker Compose deployment.
+Protect a Ratatoskr instance by backing up the durable host paths and the PostgreSQL database used by the current Docker Compose deployment.
 
-**Audience:** Operators
-**Difficulty:** Intermediate
-**Estimated Time:** 20 minutes
+**Audience:** Operators **Difficulty:** Intermediate **Estimated Time:** 20 minutes
 
 ---
 
 ## Scope
 
-The default Compose file is `ops/docker/docker-compose.yml`. Run these commands
-from the repository root.
+The default Compose file is `ops/docker/docker-compose.yml`. Run these commands from the repository root.
 
 Durable data is split across these locations:
 
@@ -27,19 +23,13 @@ Durable data is split across these locations:
 | Config and secrets | `.env`, `ratatoskr.yaml`, `config/ratatoskr.yaml`, `config/models.yaml` when present | config search order |
 | Redis | no durable backup expected in default Compose | `redis-server --save "" --appendonly no` |
 
-The API `/v1/backups` and Telegram `/backup` flows create per-user export ZIPs
-under `data/backups/<user_id>/`. They are useful for user data export, but they
-are not a full instance backup because they do not include Qdrant, media files,
-all operational tables, or config.
+The API `/v1/backups` and Telegram `/backup` flows create per-user export ZIPs under `data/backups/<user_id>/`. They are useful for user data export, but they are not a full instance backup because they do not include Qdrant, media files, all operational tables, or config.
 
 ---
 
 ## Backup Encryption
 
-The per-user export ZIPs created by the `/v1/backups` API and the Telegram `/backup`
-command can be encrypted at rest using Fernet (AES-128-CBC + HMAC-SHA256). The
-`cryptography` package that ships with Ratatoskr provides this without extra
-dependencies.
+The per-user export ZIPs created by the `/v1/backups` API and the Telegram `/backup` command can be encrypted at rest using Fernet (AES-128-CBC + HMAC-SHA256). The `cryptography` package that ships with Ratatoskr provides this without extra dependencies.
 
 ### Generating A Key
 
@@ -53,27 +43,21 @@ Copy the 44-character output into `.env`:
 BACKUP_ENCRYPTION_KEY=<your-44-char-key>
 ```
 
-Encryption is enabled automatically when `BACKUP_ENCRYPTION_KEY` is present.
-Encrypted files are written with a `.zip.enc` extension; unencrypted files keep `.zip`.
+Encryption is enabled automatically when `BACKUP_ENCRYPTION_KEY` is present. Encrypted files are written with a `.zip.enc` extension; unencrypted files keep `.zip`.
 
 ### Disabling Encryption Explicitly
 
-Set `BACKUP_ENCRYPTION_ENABLED=false` to skip encryption even when a key is
-configured — for example, during a migration window:
+Set `BACKUP_ENCRYPTION_ENABLED=false` to skip encryption even when a key is configured — for example, during a migration window:
 
 ```bash
 BACKUP_ENCRYPTION_ENABLED=false
 ```
 
-This does not affect instance-level backups (PostgreSQL, Qdrant, media) described
-in this guide.
+This does not affect instance-level backups (PostgreSQL, Qdrant, media) described in this guide.
 
 ### Restoring Encrypted Archives
 
-The restore endpoint auto-detects whether an uploaded archive is encrypted and
-decrypts it before extraction. Provide the same `BACKUP_ENCRYPTION_KEY` that was
-active when the backup was created. Old plaintext `.zip` archives remain restorable
-without a key.
+The restore endpoint auto-detects whether an uploaded archive is encrypted and decrypts it before extraction. Provide the same `BACKUP_ENCRYPTION_KEY` that was active when the backup was created. Old plaintext `.zip` archives remain restorable without a key.
 
 If the wrong key is active the restore returns without touching the database:
 
@@ -81,8 +65,7 @@ If the wrong key is active the restore returns without touching the database:
 { "errors": ["Could not decrypt backup (wrong key or corrupted archive)"] }
 ```
 
-If encryption was enabled when the backup was created but `BACKUP_ENCRYPTION_KEY`
-is missing on restore:
+If encryption was enabled when the backup was created but `BACKUP_ENCRYPTION_KEY` is missing on restore:
 
 ```json
 { "errors": ["Encrypted backup but BACKUP_ENCRYPTION_KEY is not configured"] }
@@ -90,8 +73,7 @@ is missing on restore:
 
 ### Safety Limits
 
-The restore endpoint validates ZIP metadata before extracting any bytes. These
-limits are configurable via environment variables:
+The restore endpoint validates ZIP metadata before extracting any bytes. These limits are configurable via environment variables:
 
 | Variable | Default | Description |
 |---|---|---|
@@ -119,17 +101,13 @@ Check the effective Compose services:
 docker compose -f ops/docker/docker-compose.yml ps
 ```
 
-For the most consistent backup, stop services that can write to Postgres or
-Qdrant:
+For the most consistent backup, stop services that can write to Postgres or Qdrant:
 
 ```bash
 docker compose -f ops/docker/docker-compose.yml stop ratatoskr mobile-api mcp mcp-write qdrant
 ```
 
-`pg_dump` is online-safe (it takes a transactionally consistent snapshot
-without blocking writers), so the Postgres container can keep running for
-the database section below; only stop everything together if you also need
-to capture Qdrant + media at the same logical point in time.
+`pg_dump` is online-safe (it takes a transactionally consistent snapshot without blocking writers), so the Postgres container can keep running for the database section below; only stop everything together if you also need to capture Qdrant + media at the same logical point in time.
 
 ---
 
@@ -137,8 +115,7 @@ to capture Qdrant + media at the same logical point in time.
 
 ### PostgreSQL
 
-Run `pg_dump` inside the `ratatoskr-postgres` container and stream the dump
-out to the host:
+Run `pg_dump` inside the `ratatoskr-postgres` container and stream the dump out to the host:
 
 ```bash
 docker exec -t ratatoskr-postgres \
@@ -164,8 +141,7 @@ docker exec -t ratatoskr-postgres \
 
 ### Qdrant
 
-The default Qdrant service persists its database through the host bind mount
-`qdrant_data:/qdrant/storage`. Back it up after stopping `qdrant`:
+The default Qdrant service persists its database through the host bind mount `qdrant_data:/qdrant/storage`. Back it up after stopping `qdrant`:
 
 ```bash
 tar -C . -czf "$BACKUP_DIR/qdrant_data.tar.gz" qdrant_data
@@ -178,16 +154,13 @@ curl -X POST http://localhost:6333/collections/summaries/snapshots
 # Download the snapshot file from /collections/summaries/snapshots/{snapshot_name}
 ```
 
-Qdrant data is rebuildable from Postgres for summaries that have enough stored
-text and embedding inputs:
+Qdrant data is rebuildable from Postgres for summaries that have enough stored text and embedding inputs:
 
 ```bash
 python -m app.cli.backfill_vector_store --force
 ```
 
-Backing up `qdrant_data/` is still faster and preserves the exact current vector
-store. Rebuild when the archive is missing, corrupted, or intentionally stale
-after an embedding model or namespace change.
+Backing up `qdrant_data/` is still faster and preserves the exact current vector store. Rebuild when the archive is missing, corrupted, or intentionally stale after an embedding model or namespace change.
 
 ### Redis
 
@@ -197,21 +170,13 @@ Default Redis is internal-only and configured without RDB or AOF persistence:
 command: ["redis-server", "--save", "", "--appendonly", "no"]
 ```
 
-Do not expect Redis data to survive container recreation, and do not include the
-`redis_data` volume in release-critical backups. Ratatoskr uses Redis for
-ephemeral caches, auth/sync/session TTLs, rate-limit state, batch progress, and
-similar recoverable data. After restore, users may need to sign in again, sync
-sessions may be gone, and caches will warm naturally.
+Do not expect Redis data to survive container recreation, and do not include the `redis_data` volume in release-critical backups. Ratatoskr uses Redis for ephemeral caches, auth/sync/session TTLs, rate-limit state, batch progress, and similar recoverable data. After restore, users may need to sign in again, sync sessions may be gone, and caches will warm naturally.
 
-If you run an external persistent Redis with custom settings, use that
-deployment's normal `BGSAVE`, AOF, or managed snapshot process. That is outside
-the default Ratatoskr Compose contract.
+If you run an external persistent Redis with custom settings, use that deployment's normal `BGSAVE`, AOF, or managed snapshot process. That is outside the default Ratatoskr Compose contract.
 
 ### Media Files
 
-Back up media directories that exist. The `video_downloads` table stores paths
-to downloaded YouTube videos, subtitles, and thumbnails, so restoring the
-files keeps cached video results usable.
+Back up media directories that exist. The `video_downloads` table stores paths to downloaded YouTube videos, subtitles, and thumbnails, so restoring the files keeps cached video results usable.
 
 ```bash
 for path in data/videos data/attachments data/video-sources data/audio; do
@@ -223,17 +188,13 @@ done
 
 Notes:
 
-- `data/videos/` can be large. It is optional if you accept re-downloading or
-  losing cached video files.
-- `data/attachments/` and `data/video-sources/` are temporary by default, but
-  include them for a byte-for-byte instance restore.
-- `data/audio/` is a cache for generated audio and can be regenerated if the
-  provider and source text are still available.
+- `data/videos/` can be large. It is optional if you accept re-downloading or losing cached video files.
+- `data/attachments/` and `data/video-sources/` are temporary by default, but include them for a byte-for-byte instance restore.
+- `data/audio/` is a cache for generated audio and can be regenerated if the provider and source text are still available.
 
 ### Config And Secrets
 
-Back up config files separately from the database. These files may contain API
-keys and should be encrypted at rest.
+Back up config files separately from the database. These files may contain API keys and should be encrypted at rest.
 
 ```bash
 CONFIG_FILES=()
@@ -250,8 +211,7 @@ tar -C backups -czf - "$BACKUP_TS" | \
   openssl enc -aes-256-cbc -pbkdf2 -salt -out "backups/$BACKUP_TS.tar.gz.enc"
 ```
 
-Store the passphrase outside the host. Do not commit backup archives or copied
-`.env` files.
+Store the passphrase outside the host. Do not commit backup archives or copied `.env` files.
 
 ### Verify The Backup
 
@@ -363,8 +323,7 @@ cp <source>/.env .env  # or restore from config.tar.gz below
 docker compose -f ops/docker/docker-compose.yml up -d ratatoskr-postgres qdrant
 ```
 
-Copy the backup directory or encrypted archive to `backups/`, then load the
-database and unpack the rest:
+Copy the backup directory or encrypted archive to `backups/`, then load the database and unpack the rest:
 
 ```bash
 export BACKUP_TS=YYYYMMDDTHHMMSSZ
@@ -397,9 +356,7 @@ docker compose -f ops/docker/docker-compose.yml up -d
 python -m app.cli.migrate_db --status
 ```
 
-If the new host uses different paths, update `.env` or `ratatoskr.yaml` for
-`DATABASE_URL`, `YOUTUBE_STORAGE_PATH`, `ATTACHMENT_STORAGE_PATH`,
-`ATTACHMENT_VIDEO_STORAGE_PATH`, and `ELEVENLABS_AUDIO_PATH` before starting.
+If the new host uses different paths, update `.env` or `ratatoskr.yaml` for `DATABASE_URL`, `YOUTUBE_STORAGE_PATH`, `ATTACHMENT_STORAGE_PATH`, `ATTACHMENT_VIDEO_STORAGE_PATH`, and `ELEVENLABS_AUDIO_PATH` before starting.
 
 ---
 
@@ -412,16 +369,10 @@ Run this on a staging host or disposable VM before a release:
 3. Run `docker exec -i ratatoskr-postgres psql -U ratatoskr_app -d ratatoskr -c "SELECT 1;"`.
 4. Run `docker compose -f ops/docker/docker-compose.yml config`.
 5. Start the stack with `docker compose -f ops/docker/docker-compose.yml up -d`.
-6. Confirm `ratatoskr`, `mobile-api`, `redis`, `ratatoskr-postgres`, and `qdrant`
-   are healthy or intentionally disabled by profile/config.
+6. Confirm `ratatoskr`, `mobile-api`, `redis`, `ratatoskr-postgres`, and `qdrant` are healthy or intentionally disabled by profile/config.
 7. Open the web/API and verify existing summaries are visible.
-8. Run a semantic search. If Qdrant was rebuilt instead of restored, run
-   `python -m app.cli.backfill_vector_store --force` first, or
-   `python -m app.cli.backfill_vector_store --use-cocoindex` when the
-   CocoIndex extra is installed.
-9. Open a restored YouTube summary with a `video_file_path` and confirm the
-   file path exists under `data/videos/`, or accept that the media cache was not
-   restored.
+8. Run a semantic search. If Qdrant was rebuilt instead of restored, run `python -m app.cli.backfill_vector_store --force` first, or `python -m app.cli.backfill_vector_store --use-cocoindex` when the CocoIndex extra is installed.
+9. Open a restored YouTube summary with a `video_file_path` and confirm the file path exists under `data/videos/`, or accept that the media cache was not restored.
 10. Send one known-good URL through the bot or CLI to confirm new writes work.
 
 ---
@@ -453,11 +404,7 @@ docker exec -i ratatoskr-postgres \
     LIMIT 20;"
 ```
 
-If a database is unreachable or corrupted, follow the standard PostgreSQL
-recovery sequence: confirm the volume is intact, run
-`docker logs ratatoskr-postgres` for the underlying error, and restore the
-newest verified `pg_dump` archive using the steps in
-[Restore On The Same Host](#restore-on-the-same-host).
+If a database is unreachable or corrupted, follow the standard PostgreSQL recovery sequence: confirm the volume is intact, run `docker logs ratatoskr-postgres` for the underlying error, and restore the newest verified `pg_dump` archive using the steps in [Restore On The Same Host](#restore-on-the-same-host).
 
 ---
 

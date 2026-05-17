@@ -2,9 +2,7 @@
 
 Reference for the web interface. Source code lives in [ratatoskr-web](https://github.com/po4yka/ratatoskr-web).
 
-**Audience:** Frontend developers, integrators, operators
-**Type:** Reference
-**Related:** [Mobile API Spec](mobile-api.md), [Deployment Guide](../guides/deploy-production.md)
+**Audience:** Frontend developers, integrators, operators **Type:** Reference **Related:** [Mobile API Spec](mobile-api.md), [Deployment Guide](../guides/deploy-production.md)
 
 > **Source repository:** The frontend source code lives in [ratatoskr-web](https://github.com/po4yka/ratatoskr-web). This document covers deployment integration, auth contracts, and API surface from the backend perspective.
 
@@ -22,82 +20,31 @@ Built with `npm run build` in the ratatoskr-web repo (output: `dist/`); `dist/` 
 
 ### Design system — Frost
 
-`src/design/` exports the Frost design system: editorial monospace
-minimalism with a two-color rule (ink + page) and a single critical accent
-(spark). See `DESIGN.md` at the repo root for the canonical spec.
+`src/design/` exports the Frost design system: editorial monospace minimalism with a two-color rule (ink + page) and a single critical accent (spark). See `DESIGN.md` at the repo root for the canonical spec.
 
-Frost primitives: `BracketButton`, `BracketSearch`, `BrutalistCard`,
-`BrutalistSkeleton` (+ Text/Placeholder/DataTable variants), `MonoInput`,
-`MonoTextArea`, `MonoSelect` (+ `MonoSelectItem`), `MonoProgressBar`,
-`SparkLoading`, `StatusBadge`, `Toast`, `Tag`, `Link`, `IconButton`,
-`Toggle`, `Checkbox`, `RadioButton`, `Accordion`, `NumberInput`,
-`UnorderedList`, `CodeSnippet`, `FileUploader`.
+Frost primitives: `BracketButton`, `BracketSearch`, `BrutalistCard`, `BrutalistSkeleton` (+ Text/Placeholder/DataTable variants), `MonoInput`, `MonoTextArea`, `MonoSelect` (+ `MonoSelectItem`), `MonoProgressBar`, `SparkLoading`, `StatusBadge`, `Toast`, `Tag`, `Link`, `IconButton`, `Toggle`, `Checkbox`, `RadioButton`, `Accordion`, `NumberInput`, `UnorderedList`, `CodeSnippet`, `FileUploader`.
 
-Navigation: `BracketTabs` (+ `BracketTabList`/`BracketTab`/
-`BracketTabPanels`/`BracketTabPanel`), `BracketPagination`,
-`TreeView`, `ContentSwitcher`.
+Navigation: `BracketTabs` (+ `BracketTabList`/`BracketTab`/ `BracketTabPanels`/`BracketTabPanel`), `BracketPagination`, `TreeView`, `ContentSwitcher`.
 
-Table: `BrutalistTable` (+ `BrutalistTableContainer`) for the
-high-level render-props API. Lower-level `Table`/`TableHead`/`TableBody`/
-`TableRow`/`TableCell`/`TableHeader` primitives compose with it.
+Table: `BrutalistTable` (+ `BrutalistTableContainer`) for the high-level render-props API. Lower-level `Table`/`TableHead`/`TableBody`/ `TableRow`/`TableCell`/`TableHeader` primitives compose with it.
 
-Modal: `BrutalistModal` (+ `BrutalistModalHeader`/
-`BrutalistModalBody`/`BrutalistModalFooter`).
+Modal: `BrutalistModal` (+ `BrutalistModalHeader`/ `BrutalistModalBody`/`BrutalistModalFooter`).
 
-Shell: `FrostHeader` family + `FrostSideNav` family, `Content` and
-`Theme` wrappers.
+Shell: `FrostHeader` family + `FrostSideNav` family, `Content` and `Theme` wrappers.
 
-Multiselect / pickers: `MultiSelect`, `FilterableMultiSelect`,
-`Dropdown`, `DatePicker`, `TimePicker`.
+Multiselect / pickers: `MultiSelect`, `FilterableMultiSelect`, `Dropdown`, `DatePicker`, `TimePicker`.
 
-Feature code imports exclusively from `../design`. Tokens (`tokens.css`),
-fonts (`fonts.css`, self-hosted JetBrains Mono + Source Serif 4 italic
-via `@fontsource`), and reset/skeleton styles (`base.css`) are imported
-once through `src/design/index.ts` and read via `var(--frost-*)`
-custom properties. The Frost token surface includes `--frost-ink`,
-`--frost-page`, `--frost-spark`, the eight-step alpha ladder
-(`--frost-alpha-quiet` … `--frost-alpha-active`), cell-grid spacing
-(`--frost-cell` 8px, `--frost-line` 16px, `--frost-gap-section` 48px,
-`--frost-gap-page` 64px, `--frost-pad-page` 32px, `--frost-strip-1` …
-`--frost-strip-8` 176-1408px), mono/serif typography slots, and motion
-keyframes (`frost-blinker`, `frost-pulse`, `frost-toast`).
+Feature code imports exclusively from `../design`. Tokens (`tokens.css`), fonts (`fonts.css`, self-hosted JetBrains Mono + Source Serif 4 italic via `@fontsource`), and reset/skeleton styles (`base.css`) are imported once through `src/design/index.ts` and read via `var(--frost-*)` custom properties. The Frost token surface includes `--frost-ink`, `--frost-page`, `--frost-spark`, the eight-step alpha ladder (`--frost-alpha-quiet` … `--frost-alpha-active`), cell-grid spacing (`--frost-cell` 8px, `--frost-line` 16px, `--frost-gap-section` 48px, `--frost-gap-page` 64px, `--frost-pad-page` 32px, `--frost-strip-1` … `--frost-strip-8` 176-1408px), mono/serif typography slots, and motion keyframes (`frost-blinker`, `frost-pulse`, `frost-toast`).
 
-The mobile-consumable token source is `tokens/tokens.json` (in the ratatoskr-web repo);
-update that JSON first, then keep `src/design/tokens.css` in
-sync. Theme selection writes `data-theme="light" | "dark"` on `<html>`
-so token CSS resolves on first paint without a flash. Add new components
-by extending the design directory; never reach for an external design
-system in feature code.
+The mobile-consumable token source is `tokens/tokens.json` (in the ratatoskr-web repo); update that JSON first, then keep `src/design/tokens.css` in sync. Theme selection writes `data-theme="light" | "dark"` on `<html>` so token CSS resolves on first paint without a flash. Add new components by extending the design directory; never reach for an external design system in feature code.
 
 ### Mobile responsiveness
 
-Frost spans web (1440px / 178-col grid) and mobile (393px / 48-col
-grid) with a tablet (768-1199px) range that uses web tokens. The
-React frontend adapts via container queries on the AppShell main
-content area: every responsive component uses
-`@container main (max-width: 768px)` rather than `@media`, isolating
-mobile reflow from the viewport (e.g., a drawer overlay reflows to
-match the available content width even though the viewport is
-larger).
+Frost spans web (1440px / 178-col grid) and mobile (393px / 48-col grid) with a tablet (768-1199px) range that uses web tokens. The React frontend adapts via container queries on the AppShell main content area: every responsive component uses `@container main (max-width: 768px)` rather than `@media`, isolating mobile reflow from the viewport (e.g., a drawer overlay reflows to match the available content width even though the viewport is larger).
 
-Below 768px the cell grid switches to 48 columns (boot script in
-`index.html` sets `--ch = window.innerWidth / 48` vs
-`/178` on desktop), the FrostHeader collapses to 54px, the
-FrostSideNav becomes a slide-in drawer with a `page@0.85` backdrop,
-and a fixed-bottom 56px MobileTabBar
-(`[ QUEUE · DIGESTS · TOPICS · SETTINGS ]`) takes over primary
-navigation. Modals go full-screen. All interactive primitives size
-their hit areas to ≥44×44px via container-query overrides. Per-route
-layouts transform desktop tables → stacked cards, multi-column grids
-→ single column, `BracketTabs` → horizontal-scroll segmented
-controls.
+Below 768px the cell grid switches to 48 columns (boot script in `index.html` sets `--ch = window.innerWidth / 48` vs `/178` on desktop), the FrostHeader collapses to 54px, the FrostSideNav becomes a slide-in drawer with a `page@0.85` backdrop, and a fixed-bottom 56px MobileTabBar (`[ QUEUE · DIGESTS · TOPICS · SETTINGS ]`) takes over primary navigation. Modals go full-screen. All interactive primitives size their hit areas to ≥44×44px via container-query overrides. Per-route layouts transform desktop tables → stacked cards, multi-column grids → single column, `BracketTabs` → horizontal-scroll segmented controls.
 
-Mobile-specific tokens (in `tokens.css`): `--frost-spark-mobile`
-(4px vs web's 2px), `--frost-tab-bar-height` (56px),
-`--frost-mobile-header` (54px), `--frost-pad-page-mobile` (16px),
-`--frost-gap-ext` (10px). Per-route mobile CSS lives in dedicated
-`*.mobile.css` files imported once via the `mobile.css` aggregator
-at `src/design/mobile.css`.
+Mobile-specific tokens (in `tokens.css`): `--frost-spark-mobile` (4px vs web's 2px), `--frost-tab-bar-height` (56px), `--frost-mobile-header` (54px), `--frost-pad-page-mobile` (16px), `--frost-gap-ext` (10px). Per-route mobile CSS lives in dedicated `*.mobile.css` files imported once via the `mobile.css` aggregator at `src/design/mobile.css`.
 
 ---
 
@@ -149,8 +96,7 @@ Build output contract:
 - `/web/admin`
 - `/web/login`
 
-Route-level feature flags live in `src/routes/features.ts`.
-The canonical route and side-nav manifest lives in `src/routes/manifest.tsx`.
+Route-level feature flags live in `src/routes/features.ts`. The canonical route and side-nav manifest lives in `src/routes/manifest.tsx`.
 
 ---
 
@@ -189,19 +135,9 @@ The SubmitPage opens a Server-Sent Events stream against `GET /v1/requests/{id}/
 
 Auth is hybrid and selected at runtime in `detectAuthMode`:
 
-1. `telegram-webapp` mode
-   - Trigger: `window.Telegram.WebApp.initData` exists
-   - Request header: `X-Telegram-Init-Data`
-   - Typical use: launched from Telegram Mini App context
+1. `telegram-webapp` mode - Trigger: `window.Telegram.WebApp.initData` exists - Request header: `X-Telegram-Init-Data` - Typical use: launched from Telegram Mini App context
 
-2. `jwt` mode
-   - Trigger: no WebApp initData
-   - Two login variants share this mode:
-     - Telegram Login Widget → `POST /v1/auth/telegram-login`
-     - Nickname/email + password → `POST /v1/auth/credentials-login`. Always rendered as the primary form in JWT mode; the route returns `503` if the deploy has not set `CREDENTIALS_LOGIN_PEPPER`, which surfaces as the canonical sign-in error in the UI.
-   - Client id: `web-v1`
-   - Session: bearer token storage + auto refresh via `POST /v1/auth/refresh`
-   - Pre-v1 client id renames may require signing in again because sessions are scoped by client id.
+2. `jwt` mode - Trigger: no WebApp initData - Two login variants share this mode: - Telegram Login Widget → `POST /v1/auth/telegram-login` - Nickname/email + password → `POST /v1/auth/credentials-login`. Always rendered as the primary form in JWT mode; the route returns `503` if the deploy has not set `CREDENTIALS_LOGIN_PEPPER`, which surfaces as the canonical sign-in error in the UI. - Client id: `web-v1` - Session: bearer token storage + auto refresh via `POST /v1/auth/refresh` - Pre-v1 client id renames may require signing in again because sessions are scoped by client id.
 
 ### Token storage (dual-bucket)
 
@@ -270,15 +206,11 @@ Admin page (`/web/admin`) includes:
 
 ## Generated API Types
 
-`src/api/generated.ts` is auto-generated by `openapi-typescript` from
-`docs/openapi/mobile_api.yaml`. Do not edit it manually — CI verifies freshness via
-`npm run generate:api`.
+`src/api/generated.ts` is auto-generated by `openapi-typescript` from `docs/openapi/mobile_api.yaml`. Do not edit it manually — CI verifies freshness via `npm run generate:api`.
 
 ### What is enforced today
 
-`npm run check:static` runs `tools/check-api-types.mjs`, which fails if any of these
-files declare a hand-written `interface` for a type that must be derived from the
-generated schema:
+`npm run check:static` runs `tools/check-api-types.mjs`, which fails if any of these files declare a hand-written `interface` for a type that must be derived from the generated schema:
 
 | File | Banned hand-written interfaces |
 |---|---|
@@ -295,12 +227,9 @@ export type SummaryCompact = components["schemas"]["SummaryListItem"];
 
 ### Modules still needing migration (first-pass complete, 15 remaining)
 
-The following modules define their own interfaces independently of `generated.ts`.
-Migrate them incrementally — highest traffic first:
+The following modules define their own interfaces independently of `generated.ts`. Migrate them incrementally — highest traffic first:
 
-`highlights.ts`, `collections.ts`, `search.ts`, `tags.ts`, `user.ts`,
-`digest.ts`, `customDigest.ts`, `rss.ts`, `signals.ts`, `rules.ts`,
-`webhooks.ts`, `backups.ts`, `importExport.ts`, `admin.ts`, `session.ts`
+`highlights.ts`, `collections.ts`, `search.ts`, `tags.ts`, `user.ts`, `digest.ts`, `customDigest.ts`, `rss.ts`, `signals.ts`, `rules.ts`, `webhooks.ts`, `backups.ts`, `importExport.ts`, `admin.ts`, `session.ts`
 
 ### How to migrate a module
 
@@ -319,17 +248,13 @@ Migrate them incrementally — highest traffic first:
    export type YourType = components["schemas"]["YourSchemaName"];
    ```
 
-3. If a field is present in the hand-written type but absent from the generated schema
-   (a **contract gap**), do NOT add a shim. Instead, open a backend task to add the
-   field to the OpenAPI spec, and document the gap with a comment in `types.ts`.
+3. If a field is present in the hand-written type but absent from the generated schema (a **contract gap**), do NOT add a shim. Instead, open a backend task to add the field to the OpenAPI spec, and document the gap with a comment in `types.ts`.
 
-4. Update the module to `import type { YourType } from "./types"` instead of
-   declaring its own interface.
+4. Update the module to `import type { YourType } from "./types"` instead of declaring its own interface.
 
 5. Run `npm run check:static` — it must pass at 0 errors.
 
-6. Add the banned interface name to the relevant rule in `tools/check-api-types.mjs`
-   so future regressions are caught automatically.
+6. Add the banned interface name to the relevant rule in `tools/check-api-types.mjs` so future regressions are caught automatically.
 
 ### Known contract gaps
 
@@ -344,15 +269,8 @@ Migrate them incrementally — highest traffic first:
 ## UI Architecture
 
 - Global shell: design `Header` + `SideNav` (`src/components/AppShell.tsx`)
-- Session UX:
-  - in-app session status label
-  - manual "Verify session" action
-  - inline session warnings + re-auth actions
-- Read experience polish (`/web/library/:id`):
-  - reading progress bar
-  - text size + density controls
-  - copy/share helpers
-  - favorite/read/collection actions
+- Session UX: - in-app session status label - manual "Verify session" action - inline session warnings + re-auth actions
+- Read experience polish (`/web/library/:id`): - reading progress bar - text size + density controls - copy/share helpers - favorite/read/collection actions
 
 ---
 

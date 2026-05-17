@@ -1,8 +1,6 @@
 # Clone to First Summary
 
-This is the Phase 2 onboarding script used for the public quickstart target.
-It is written so an external tester can run it on a clean Docker host and report
-the elapsed time without needing to infer hidden setup steps.
+This is the Phase 2 onboarding script used for the public quickstart target. It is written so an external tester can run it on a clean Docker host and report the elapsed time without needing to infer hidden setup steps.
 
 ## Prerequisites
 
@@ -26,9 +24,7 @@ docker compose -f ops/docker/docker-compose.yml ps
 docker compose -f ops/docker/docker-compose.yml logs --tail=80 ratatoskr
 ```
 
-Send any article URL to the Telegram bot from a user listed in
-`ALLOWED_USER_IDS`. The success condition is that the bot replies with a
-structured summary.
+Send any article URL to the Telegram bot from a user listed in `ALLOWED_USER_IDS`. The success condition is that the bot replies with a structured summary.
 
 ## Optional Self-Hosted Firecrawl Path
 
@@ -54,6 +50,4 @@ Capture with asciinema when validating the public release flow:
 asciinema rec docs/assets/clone-to-first-summary.cast
 ```
 
-Record the host type, network speed, Docker image cache state, elapsed time, and
-whether the self-hosted Firecrawl profile was enabled. Do not edit the timing
-metadata after recording.
+Record the host type, network speed, Docker image cache state, elapsed time, and whether the self-hosted Firecrawl profile was enabled. Do not edit the timing metadata after recording.

@@ -2,9 +2,7 @@
 
 Why Ratatoskr enforces a strict 35+ field JSON schema for all summaries.
 
-**Audience:** Developers, Architects
-**Type:** Explanation
-**Related:** [Design Philosophy](design-philosophy.md)
+**Audience:** Developers, Architects **Type:** Explanation **Related:** [Design Philosophy](design-philosophy.md)
 
 ---
 
@@ -453,8 +451,7 @@ summary.metadata = {
 
 **Pattern:** `snake_case`, descriptive, unambiguous.
 
-**Good:** `estimated_reading_time_min`, `hallucination_risk`
-**Bad:** `time`, `risk` (too vague), `ERTMin` (unclear abbreviation)
+**Good:** `estimated_reading_time_min`, `hallucination_risk` **Bad:** `time`, `risk` (too vague), `ERTMin` (unclear abbreviation)
 
 ---
 

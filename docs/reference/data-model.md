@@ -2,24 +2,17 @@
 
 Complete reference for Ratatoskr's PostgreSQL database schema.
 
-**Audience:** Developers, Database Administrators
-**Type:** Reference
-**Related:** [SPEC.md § Data Model](../SPEC.md#data-model), [How to Backup and Restore](../guides/backup-and-restore.md)
+**Audience:** Developers, Database Administrators **Type:** Reference **Related:** [SPEC.md § Data Model](../SPEC.md#data-model), [How to Backup and Restore](../guides/backup-and-restore.md)
 
 ---
 
 ## Overview
 
-Ratatoskr uses **PostgreSQL 16** as its relational persistence layer with SQLAlchemy
-2.0 models. This page documents the core tables that drive the URL pipeline,
-mobile API, signal scoring, and audit surface; the full registered set lives in
-`ALL_MODELS` in `app/db/models/__init__.py` and includes additional channel-digest,
-RSS, webhook, automation, and user-preference tables not detailed here.
+Ratatoskr uses **PostgreSQL 16** as its relational persistence layer with SQLAlchemy 2.0 models. This page documents the core tables that drive the URL pipeline, mobile API, signal scoring, and audit surface; the full registered set lives in `ALL_MODELS` in `app/db/models/__init__.py` and includes additional channel-digest, RSS, webhook, automation, and user-preference tables not detailed here.
 
 **Database DSN:** `DATABASE_URL` or `POSTGRES_PASSWORD`-derived Compose DSN
 
-**ORM:** SQLAlchemy 2.0 async ORM
-**Migrations:** Alembic revisions in `app/db/alembic/versions/`
+**ORM:** SQLAlchemy 2.0 async ORM **Migrations:** Alembic revisions in `app/db/alembic/versions/`
 
 ---
 
@@ -454,12 +447,9 @@ CREATE TABLE user_signals (
 
 **Migration and rollback notes:**
 
-- The SQLAlchemy Alembic baseline creates these five tables alongside the rest
-  of the PostgreSQL schema.
-- Legacy RSS/channel tables are preserved and remain the runtime source for
-  existing API and bot paths until worker/API integration is complete.
-- Downgrade behavior is controlled by Alembic revision history; take a normal
-  PostgreSQL backup before applying migrations on a live host.
+- The SQLAlchemy Alembic baseline creates these five tables alongside the rest of the PostgreSQL schema.
+- Legacy RSS/channel tables are preserved and remain the runtime source for existing API and bot paths until worker/API integration is complete.
+- Downgrade behavior is controlled by Alembic revision history; take a normal PostgreSQL backup before applying migrations on a live host.
 
 ---
 
@@ -826,9 +816,7 @@ CREATE INDEX ix_topic_search_body_tsv ON topic_search_index USING GIN (body_tsv)
 
 ### summary_embeddings
 
-**Purpose:** Postgres-side summary embedding metadata and drift tracking for
-semantic search. Qdrant stores the searchable vector point; the DB row records
-the model, content hash, index status, and last successful write.
+**Purpose:** Postgres-side summary embedding metadata and drift tracking for semantic search. Qdrant stores the searchable vector point; the DB row records the model, content hash, index status, and last successful write.
 
 **Schema:**
 
@@ -1386,10 +1374,7 @@ alembic upgrade head
 python -m app.cli.migrate_db
 ```
 
-Alembic revision files live in `app/db/alembic/versions/`. The PostgreSQL
-baseline is the authoritative DDL source for live databases. Legacy SQLite
-revision snapshots are retained under `app/db/alembic/versions/_legacy_sqlite/`
-only for migration archaeology and must not be applied to PostgreSQL.
+Alembic revision files live in `app/db/alembic/versions/`. The PostgreSQL baseline is the authoritative DDL source for live databases. Legacy SQLite revision snapshots are retained under `app/db/alembic/versions/_legacy_sqlite/` only for migration archaeology and must not be applied to PostgreSQL.
 
 Startup schema changes are not performed by application code; run Alembic before starting services.
 
@@ -1464,9 +1449,7 @@ Indexes: `(user_id, is_starred)`, `(user_id, primary_language)`, `(user_id, push
 
 ### repository_embeddings
 
-**Purpose:** Vector embeddings for `repositories` rows, used by `GET /v1/search/repositories`.
-Qdrant writes use deterministic repository point IDs shared by the fast path and
-CocoIndex (`app/infrastructure/vector/point_ids.py`).
+**Purpose:** Vector embeddings for `repositories` rows, used by `GET /v1/search/repositories`. Qdrant writes use deterministic repository point IDs shared by the fast path and CocoIndex (`app/infrastructure/vector/point_ids.py`).
 
 **Key columns:**
 

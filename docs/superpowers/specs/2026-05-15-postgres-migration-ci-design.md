@@ -1,17 +1,12 @@
 # PostgreSQL Migration CI Validation — Design Spec
 
-**Date:** 2026-05-15
-**Status:** Draft
+**Date:** 2026-05-15 **Status:** Draft
 
 ---
 
 ## Problem
 
-The `migration-smoke-test` CI job is non-functional. It sets a `DB_PATH` SQLite env var and calls
-`DatabaseSessionManager(path=...)` — an API that no longer exists in the PostgreSQL-era codebase.
-The bare `alembic` commands run with no `DATABASE_URL`, causing `alembic_runner` to throw
-`"postgresql+asyncpg:// URL required"` immediately. The job has been passing (or silently failing)
-without validating anything meaningful.
+The `migration-smoke-test` CI job is non-functional. It sets a `DB_PATH` SQLite env var and calls `DatabaseSessionManager(path=...)` — an API that no longer exists in the PostgreSQL-era codebase. The bare `alembic` commands run with no `DATABASE_URL`, causing `alembic_runner` to throw `"postgresql+asyncpg:// URL required"` immediately. The job has been passing (or silently failing) without validating anything meaningful.
 
 ---
 
@@ -73,37 +68,27 @@ env:
   DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/ratatoskr_ci
 ```
 
-This variable is read by both `app/db/alembic/env.py` (`_get_db_url`) and
-`app/db/alembic_runner.py` (`_resolve_dsn`), so neither the CLI nor bare `alembic` commands need
-additional flags.
+This variable is read by both `app/db/alembic/env.py` (`_get_db_url`) and `app/db/alembic_runner.py` (`_resolve_dsn`), so neither the CLI nor bare `alembic` commands need additional flags.
 
 **Steps** (replacing the two stale steps):
 
-1. **Upgrade to head** — `python -m app.cli.migrate_db`
-   Exercises the production migration path; fails on any SQL error.
+1. **Upgrade to head** — `python -m app.cli.migrate_db` Exercises the production migration path; fails on any SQL error.
 
-2. **Downgrade one step** — `alembic downgrade -1`
-   Validates the most-recent migration's `downgrade()` function. All 13 revisions have real
-   downgrade implementations (no `pass` bodies), so this is safe.
+2. **Downgrade one step** — `alembic downgrade -1` Validates the most-recent migration's `downgrade()` function. All 13 revisions have real downgrade implementations (no `pass` bodies), so this is safe.
 
-3. **Upgrade back to head** — `alembic upgrade head`
-   Confirms the round-trip restores a clean schema.
+3. **Upgrade back to head** — `alembic upgrade head` Confirms the round-trip restores a clean schema.
 
-4. **Assert at head** — `alembic current 2>&1 | grep -q "(head)"`
-   Hard assertion that the CLI ran to completion and Alembic's revision pointer is at `0013`.
+4. **Assert at head** — `alembic current 2>&1 | grep -q "(head)"` Hard assertion that the CLI ran to completion and Alembic's revision pointer is at `0013`.
 
 Steps 1–4 run sequentially under a single `Run` step with `set -euo pipefail`.
 
 **Unchanged steps**: checkout, download-artifact, setup-python, install-uv, install-deps.
 
-**Timeout**: raise from 10 m to 15 m (PG service startup + asyncpg install can be slow on cold
-runners).
+**Timeout**: raise from 10 m to 15 m (PG service startup + asyncpg install can be slow on cold runners).
 
 ### Unit test fix: `tests/cli/test_migrate_db_cli.py`
 
-Both tests mock `upgrade_to_head` / `print_status` — no real DB is touched. The only issue is that
-the test asserts the mocked function receives a SQLite file path (`/tmp/test.db`, `status.sqlite`),
-which implies the CLI accepts file paths. It should assert a PostgreSQL DSN instead.
+Both tests mock `upgrade_to_head` / `print_status` — no real DB is touched. The only issue is that the test asserts the mocked function receives a SQLite file path (`/tmp/test.db`, `status.sqlite`), which implies the CLI accepts file paths. It should assert a PostgreSQL DSN instead.
 
 **`test_main_runs_shared_migration_flow_once`**:
 - Change `sys.argv` arg to `"postgresql+asyncpg://user:pass@localhost:5432/test"`

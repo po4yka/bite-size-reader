@@ -2,9 +2,7 @@
 
 Add real-time web context to article summaries using web search.
 
-**Audience:** Users, Operators
-**Difficulty:** Beginner
-**Estimated Time:** 3 minutes
+**Audience:** Users, Operators **Difficulty:** Beginner **Estimated Time:** 3 minutes
 
 ---
 
@@ -34,12 +32,7 @@ Web search enrichment uses an LLM to:
 ## Prerequisites
 
 - Ratatoskr installed and running
-- Firecrawl cloud API key (`FIRECRAWL_API_KEY`) for the Search API path,
-  or DuckDuckGo (no key required). Note: `FIRECRAWL_API_KEY` is used
-  exclusively by this web-search enrichment path; it is not part of the
-  article-extraction scraper chain. See
-  [`docs/explanation/scraper-chain.md`](../explanation/scraper-chain.md)
-  for how article extraction works.
+- Firecrawl cloud API key (`FIRECRAWL_API_KEY`) for the Search API path, or DuckDuckGo (no key required). Note: `FIRECRAWL_API_KEY` is used exclusively by this web-search enrichment path; it is not part of the article-extraction scraper chain. See [`docs/explanation/scraper-chain.md`](../explanation/scraper-chain.md) for how article extraction works.
 
 ---
 

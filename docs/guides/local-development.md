@@ -2,9 +2,7 @@
 
 Set up a local development environment for Ratatoskr.
 
-**Time**: ~20 minutes
-**Difficulty**: Intermediate
-**Prerequisites**: Python 3.13+, git, Node.js 20+ (for web frontend work)
+**Time**: ~20 minutes **Difficulty**: Intermediate **Prerequisites**: Python 3.13+, git, Node.js 20+ (for web frontend work)
 
 ---
 
@@ -146,11 +144,7 @@ DB_PATH=./data/ratatoskr.db
 LOG_LEVEL=DEBUG
 ```
 
-Content extraction uses the built-in multi-provider chain (Scrapling →
-Crawl4AI → Firecrawl → Defuddle → Playwright → Crawlee → direct HTML →
-Scrapegraph-AI) with no API key required for the default in-process
-providers. See [`docs/explanation/scraper-chain.md`](../explanation/scraper-chain.md)
-for the full chain reference.
+Content extraction uses the built-in multi-provider chain (Scrapling → Crawl4AI → Firecrawl → Defuddle → Playwright → Crawlee → direct HTML → Scrapegraph-AI) with no API key required for the default in-process providers. See [`docs/explanation/scraper-chain.md`](../explanation/scraper-chain.md) for the full chain reference.
 
 **Get API keys**: See [Quickstart Tutorial § Get API Keys](quickstart.md#step-1-get-api-keys-3-minutes)
 

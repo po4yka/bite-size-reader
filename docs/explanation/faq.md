@@ -50,8 +50,7 @@ Ratatoskr is an AI-powered Telegram bot that transforms long web articles, YouTu
 The software is **free and open-source** (BSD 3-Clause license), but you'll need API keys:
 
 - **Content extraction**: Scrapling (default, free, in-process), self-hosted Firecrawl (free), or cloud Firecrawl when `FIRECRAWL_API_KEY` is configured. Defuddle is opt-in because the public service receives submitted URLs.
-- **OpenRouter**: Pay-per-use ($0.01-0.05 per summary depending on model)
-  - Alternative: Use free models (Google Gemini 2.0, some DeepSeek R1 providers offer free tier)
+- **OpenRouter**: Pay-per-use ($0.01-0.05 per summary depending on model) - Alternative: Use free models (Google Gemini 2.0, some DeepSeek R1 providers offer free tier)
 - **YouTube**: Free (uses yt-dlp, no API costs)
 
 **Estimated Monthly Cost**: $10-30 for moderate use (50-100 summaries/month).
@@ -323,13 +322,9 @@ All major formats:
 
 ### How does transcript extraction work?
 
-1. **Try youtube-transcript-api** (fast, no download)
-   - Fetches auto-generated or manual captions
-   - Works for 90%+ of videos
+1. **Try youtube-transcript-api** (fast, no download) - Fetches auto-generated or manual captions - Works for 90%+ of videos
 
-2. **Fallback to yt-dlp** (slower, downloads video)
-   - Downloads video + extracts audio
-   - Sends audio to Whisper API for transcription (if `WHISPER_API_KEY` set)
+2. **Fallback to yt-dlp** (slower, downloads video) - Downloads video + extracts audio - Sends audio to Whisper API for transcription (if `WHISPER_API_KEY` set)
 
 ### What if a video has no transcript?
 
@@ -622,11 +617,7 @@ See [Architecture Overview § Layering quick reference](architecture-overview.md
    OPENROUTER_FALLBACK_MODELS=qwen/qwen3-coder:free
    ```
 
-2. **Use free content extraction** (no cloud API costs):
-   - Scrapling is the default provider (free, in-process, no API key)
-   - Crawl4AI and Defuddle are self-hosted sidecars included in Docker Compose
-   - Self-hosted Firecrawl is another free option (`FIRECRAWL_SELF_HOSTED_ENABLED=true`)
-   - Cloud Firecrawl is no longer used in the article scraper chain
+2. **Use free content extraction** (no cloud API costs): - Scrapling is the default provider (free, in-process, no API key) - Crawl4AI and Defuddle are self-hosted sidecars included in Docker Compose - Self-hosted Firecrawl is another free option (`FIRECRAWL_SELF_HOSTED_ENABLED=true`) - Cloud Firecrawl is no longer used in the article scraper chain
 
    ```bash
    SCRAPER_ENABLED=true

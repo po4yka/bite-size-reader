@@ -1,11 +1,6 @@
 # Multi-Agent Architecture
 
-Agents wrap extraction, summarization, validation, and repository analysis with
-structured results, retries, and observability. Classic `BaseAgent` wrappers
-remain the stable interface for content flows; LangGraph now owns the
-summarize/validate retry graph where checkpointing and graph-level state are
-useful, and LangChain structured output is preferred for repository analysis
-when the selected LLM adapter supports it.
+Agents wrap extraction, summarization, validation, and repository analysis with structured results, retries, and observability. Classic `BaseAgent` wrappers remain the stable interface for content flows; LangGraph now owns the summarize/validate retry graph where checkpointing and graph-level state are useful, and LangChain structured output is preferred for repository analysis when the selected LLM adapter supports it.
 
 ## Roles
 

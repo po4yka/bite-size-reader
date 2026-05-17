@@ -1313,11 +1313,7 @@ BACKUP_ENCRYPTION_ENABLED=false
 **Manually decrypt a `.zip.enc` file** (for offline inspection):
 
 ```python
-from cryptography.fernet import Fernet
-key = b"<your BACKUP_ENCRYPTION_KEY>"
-data = open("ratatoskr-backup-1-20260515_120000.zip.enc", "rb").read()
-zip_bytes = Fernet(key).decrypt(data)
-open("backup.zip", "wb").write(zip_bytes)
+from cryptography.fernet import Fernet key = b"<your BACKUP_ENCRYPTION_KEY>" data = open("ratatoskr-backup-1-20260515_120000.zip.enc", "rb").read() zip_bytes = Fernet(key).decrypt(data) open("backup.zip", "wb").write(zip_bytes)
 ```
 
 **Restore safety limits** (all configurable via env vars):

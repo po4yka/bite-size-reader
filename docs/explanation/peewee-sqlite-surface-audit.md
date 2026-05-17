@@ -2,8 +2,7 @@
 
 Created: 2026-05-06 · Last refreshed: 2026-05-06
 
-This is the F1 inventory for the SQLite -> PostgreSQL and Peewee ->
-SQLAlchemy 2.0 migration. It classifies current Peewee and SQLite surfaces as:
+This is the F1 inventory for the SQLite -> PostgreSQL and Peewee -> SQLAlchemy 2.0 migration. It classifies current Peewee and SQLite surfaces as:
 
 - `replace`: port during the M, R, O, or T migration phases.
 - `delete`: remove because the code is deprecated or superseded.
@@ -11,31 +10,16 @@ SQLAlchemy 2.0 migration. It classifies current Peewee and SQLite surfaces as:
 
 ## Current state (2026-05-06)
 
-Most `replace`/`delete` rows in this document are now satisfied. The discovery
-commands below are the source of truth — re-run them to confirm the live
-state. The detailed tables in the rest of this document remain for
-historical context and to map original audit lines to the tasks that
-addressed them.
+Most `replace`/`delete` rows in this document are now satisfied. The discovery commands below are the source of truth — re-run them to confirm the live state. The detailed tables in the rest of this document remain for historical context and to map original audit lines to the tasks that addressed them.
 
 Live grep results as of 2026-05-06:
 
-- `rg -n "from peewee|import peewee|playhouse\." app/` → zero hits outside
-  `app/cli/_legacy_peewee_models/` and the (not-yet-built) data migrator
-  (T2). `app/cli/_legacy_peewee_models/` is intentional and is removed in
-  L1 (`migrate-postgres-remove-peewee`) after the 30-day stability window.
-- `rg -n "\.select\(\)\.where|\.get_or_none\(|\.update\(.*\)\.where\(.*\)\.execute" app/` →
-  zero hits outside legacy.
-- `rg -n "execute_sql|sqlite_master|PRAGMA " app/` → matches only
-  `app/adapters/digest/session_validator.py:44` (Telethon session DB —
-  documented `keep-as-is`) and `app/db/alembic/versions/_legacy_sqlite/`
-  (archived revisions per M4).
-- `rg -n "asyncio\.to_thread" app/infrastructure/` → 9 hits, all in
-  embedding/search/audio/push/qdrant/messaging — non-DB IO/CPU thread
-  bouncing for libraries without async APIs (sentence-transformers, FCM
-  send, qdrant-client). Out of scope for the DB migration.
+- `rg -n "from peewee|import peewee|playhouse\." app/` → zero hits outside `app/cli/_legacy_peewee_models/` and the (not-yet-built) data migrator (T2). `app/cli/_legacy_peewee_models/` is intentional and is removed in L1 (`migrate-postgres-remove-peewee`) after the 30-day stability window.
+- `rg -n "\.select\(\)\.where|\.get_or_none\(|\.update\(.*\)\.where\(.*\)\.execute" app/` → zero hits outside legacy.
+- `rg -n "execute_sql|sqlite_master|PRAGMA " app/` → matches only `app/adapters/digest/session_validator.py:44` (Telethon session DB — documented `keep-as-is`) and `app/db/alembic/versions/_legacy_sqlite/` (archived revisions per M4).
+- `rg -n "asyncio\.to_thread" app/infrastructure/` → 9 hits, all in embedding/search/audio/push/qdrant/messaging — non-DB IO/CPU thread bouncing for libraries without async APIs (sentence-transformers, FCM send, qdrant-client). Out of scope for the DB migration.
 
-Status snapshot of the migration tasks (per
-`docs/tasks/issues/migrate-postgres-*.md`):
+Status snapshot of the migration tasks (per `docs/tasks/issues/migrate-postgres-*.md`):
 
 | Phase | Task | Status |
 | --- | --- | --- |
@@ -53,13 +37,8 @@ Status snapshot of the migration tasks (per
 
 ### Notable carve-outs
 
-- Telethon's session DB (`*.session` SQLite files used by the digest userbot)
-  is `keep-as-is`. Telethon does not support Postgres sessions; the
-  validator at `app/adapters/digest/session_validator.py` continues to use
-  `sqlite3.connect`.
-- `app/db/alembic/versions/_legacy_sqlite/` is archived (not deleted) per M4
-  decision; revisions are excluded from `version_locations` and will be
-  removed in L1.
+- Telethon's session DB (`*.session` SQLite files used by the digest userbot) is `keep-as-is`. Telethon does not support Postgres sessions; the validator at `app/adapters/digest/session_validator.py` continues to use `sqlite3.connect`.
+- `app/db/alembic/versions/_legacy_sqlite/` is archived (not deleted) per M4 decision; revisions are excluded from `version_locations` and will be removed in L1.
 
 Discovery commands:
 

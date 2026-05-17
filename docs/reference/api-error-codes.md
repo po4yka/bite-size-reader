@@ -2,9 +2,7 @@
 
 Complete reference of error codes returned by Ratatoskr's external APIs and internal systems.
 
-**Audience:** Developers, Integrators
-**Type:** Reference
-**Related:** [TROUBLESHOOTING](troubleshooting.md), [Mobile API Spec](mobile-api.md)
+**Audience:** Developers, Integrators **Type:** Reference **Related:** [TROUBLESHOOTING](troubleshooting.md), [Mobile API Spec](mobile-api.md)
 
 ---
 

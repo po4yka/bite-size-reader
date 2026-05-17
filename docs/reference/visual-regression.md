@@ -2,9 +2,7 @@
 
 Reference for the Playwright-based local visual-regression solution.
 
-**Audience:** Frontend developers, CI maintainers
-**Type:** Reference
-**Related:** [Web Frontend Guide](frontend-web.md)
+**Audience:** Frontend developers, CI maintainers **Type:** Reference **Related:** [Web Frontend Guide](frontend-web.md)
 
 > **Source repository:** Visual regression specs and baselines live in [ratatoskr-web](https://github.com/po4yka/ratatoskr-web) under `src/tests/e2e/`. Run all commands from the ratatoskr-web repo root.
 
@@ -12,9 +10,7 @@ Reference for the Playwright-based local visual-regression solution.
 
 ## Overview
 
-Two complementary Playwright specs protect the Frost design system from
-unintended regressions. Both run locally and in CI — no third-party service
-required, all baselines committed to the repo.
+Two complementary Playwright specs protect the Frost design system from unintended regressions. Both run locally and in CI — no third-party service required, all baselines committed to the repo.
 
 | Layer | Spec | Scope | Devices |
 |---|---|---|---|
@@ -81,8 +77,7 @@ git add src/tests/e2e/
 git commit -m "test(web): update Playwright visual baselines for <change>"
 ```
 
-Do **not** run `--update-snapshots` in CI automatically — that defeats the
-purpose of the check.
+Do **not** run `--update-snapshots` in CI automatically — that defeats the purpose of the check.
 
 ---
 
@@ -106,30 +101,20 @@ src/tests/e2e/
 
 The `web-playwright-visual` job:
 
-1. Installs Chromium and WebKit with system deps via
-   `npx playwright install --with-deps chromium webkit`.
+1. Installs Chromium and WebKit with system deps via `npx playwright install --with-deps chromium webkit`.
 2. Builds the frontend (`npm run build`) for the Vite preview server.
 3. Builds Storybook (`npm run build-storybook`) producing `storybook-static/`.
-4. Runs `npx playwright test`, which:
-   - Projects `desktop`, `iPhone 12`, `Pixel 5`, `iPad Mini` run
-     `mobile-routes.spec.ts` against the Vite preview server (port 4173).
-   - Project `storybook` runs `storybook-visual.spec.ts` against
-     `http-server` serving `storybook-static/` on port 6006.
-5. Uploads the HTML report as artifact `playwright-report-<run-id>` (always,
-   14-day retention).
-6. On failure, uploads screenshot diffs as `playwright-screenshot-diffs-<run-id>`
-   (14-day retention).
+4. Runs `npx playwright test`, which: - Projects `desktop`, `iPhone 12`, `Pixel 5`, `iPad Mini` run `mobile-routes.spec.ts` against the Vite preview server (port 4173). - Project `storybook` runs `storybook-visual.spec.ts` against `http-server` serving `storybook-static/` on port 6006.
+5. Uploads the HTML report as artifact `playwright-report-<run-id>` (always, 14-day retention).
+6. On failure, uploads screenshot diffs as `playwright-screenshot-diffs-<run-id>` (14-day retention).
 
 ---
 
 ## Interpreting failures
 
-- Download the `playwright-screenshot-diffs-<run-id>` artifact from the GitHub
-  Actions run.
-- The `test-results/` directory contains `actual.png`, `expected.png`, and
-  `diff.png` for each failing assertion.
-- If the diff is intentional (a planned design change), run
-  `--update-snapshots` locally and commit the new baselines.
+- Download the `playwright-screenshot-diffs-<run-id>` artifact from the GitHub Actions run.
+- The `test-results/` directory contains `actual.png`, `expected.png`, and `diff.png` for each failing assertion.
+- If the diff is intentional (a planned design change), run `--update-snapshots` locally and commit the new baselines.
 - If the diff is unintentional, investigate and revert the offending change.
 
 ---

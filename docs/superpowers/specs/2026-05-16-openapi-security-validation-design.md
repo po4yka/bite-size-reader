@@ -5,10 +5,7 @@
 
 ## Problem
 
-The existing OpenAPI tests verify route coverage and schema shape, but nothing cross-checks
-whether a route protected in code (`Depends(get_current_user)`) actually declares
-`security: [{HTTPBearer: []}]` in `docs/openapi/mobile_api.yaml`. A new protected route
-can silently appear as public in the spec and downstream client generators.
+The existing OpenAPI tests verify route coverage and schema shape, but nothing cross-checks whether a route protected in code (`Depends(get_current_user)`) actually declares `security: [{HTTPBearer: []}]` in `docs/openapi/mobile_api.yaml`. A new protected route can silently appear as public in the spec and downstream client generators.
 
 ## Goals
 
@@ -20,26 +17,20 @@ can silently appear as public in the spec and downstream client generators.
 
 ## Approach: FastAPI dependant-tree introspection
 
-Walk each `APIRoute`'s `.dependant` dependency tree recursively. If `get_current_user`
-appears anywhere in the tree, the route is classified as "code-protected." Compare against
-the YAML spec's `security:` field on each operation.
+Walk each `APIRoute`'s `.dependant` dependency tree recursively. If `get_current_user` appears anywhere in the tree, the route is classified as "code-protected." Compare against the YAML spec's `security:` field on each operation.
 
-`require_owner` is called inside handler bodies, not as a `Depends`, so it cannot be
-detected from the dependant tree. Proxy-detect owner-only routes via path prefix
-(`/v1/admin/`, `/v1/system/`) and assert they document a 403 response.
+`require_owner` is called inside handler bodies, not as a `Depends`, so it cannot be detected from the dependant tree. Proxy-detect owner-only routes via path prefix (`/v1/admin/`, `/v1/system/`) and assert they document a 403 response.
 
 ## New file: `tests/api/test_openapi_security.py`
 
 ### Fixtures
 
-- `app_instance` — imports FastAPI app with minimal env vars (JWT/SECRET_KEY, no DB).
-  Reuses the same monkeypatching pattern as `test_runtime_openapi_drift.py`.
+- `app_instance` — imports FastAPI app with minimal env vars (JWT/SECRET_KEY, no DB). Reuses the same monkeypatching pattern as `test_runtime_openapi_drift.py`.
 - `yaml_spec` — loads `docs/openapi/mobile_api.yaml`.
 
 ### Helper: `_depends_on(dependant, target_fn) -> bool`
 
-Recursive cycle-safe walk of FastAPI `Dependant` trees. Checks `dependant.call is target_fn`
-at each node; recurses into `dependant.dependencies`.
+Recursive cycle-safe walk of FastAPI `Dependant` trees. Checks `dependant.call is target_fn` at each node; recurses into `dependant.dependencies`.
 
 ### Class `TestSecurityConsistency`
 
@@ -47,18 +38,15 @@ at each node; recurses into `dependant.dependencies`.
 
 1. Walk `app.routes`; for each `APIRoute`, call `_depends_on(route.dependant, get_current_user)`.
 2. Collect all (METHOD, path) pairs classified as code-protected.
-3. For each, look up the YAML operation and assert `security` is present and contains
-   `{HTTPBearer: []}`.
-4. Failure message: lists every offending route with instruction to add
-   `security:\n  - HTTPBearer: []` to the YAML operation.
+3. For each, look up the YAML operation and assert `security` is present and contains `{HTTPBearer: []}`.
+4. Failure message: lists every offending route with instruction to add `security:\n  - HTTPBearer: []` to the YAML operation.
 
 **`test_public_routes_are_allowlisted`**
 
 1. Parse YAML paths; collect operations without a `security:` field.
 2. Compare against `PUBLIC_ROUTES` frozenset.
 3. Fail if any unrecognized route appears (route in YAML-public but not in allowlist).
-4. Failure message: lists routes with instruction to either add security to YAML or add to
-   `PUBLIC_ROUTES` in the test file.
+4. Failure message: lists routes with instruction to either add security to YAML or add to `PUBLIC_ROUTES` in the test file.
 
 **`test_allowlisted_routes_are_not_secured`** (inverse check)
 
@@ -67,8 +55,7 @@ at each node; recurses into `dependant.dependencies`.
 
 **`test_owner_only_routes_document_403`**
 
-1. For all YAML paths starting with `/v1/admin/` or `/v1/system/`, assert each operation
-   documents a `"403"` response.
+1. For all YAML paths starting with `/v1/admin/` or `/v1/system/`, assert each operation documents a `"403"` response.
 2. Failure message: lists routes missing 403 doc with instruction to add the response entry.
 
 ### `PUBLIC_ROUTES` allowlist (initial)

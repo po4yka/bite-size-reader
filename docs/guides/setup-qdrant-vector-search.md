@@ -1,28 +1,21 @@
 # Set Up Qdrant Vector Search
 
-Enable semantic search with Qdrant and configurable embedding providers (local
-sentence-transformers or Google Gemini API). Qdrant stores summary vectors and,
-when GitHub ingestion is enabled, repository vectors in the same collection with
-an `entity_type` discriminator.
+Enable semantic search with Qdrant and configurable embedding providers (local sentence-transformers or Google Gemini API). Qdrant stores summary vectors and, when GitHub ingestion is enabled, repository vectors in the same collection with an `entity_type` discriminator.
 
-**Audience:** Operators
-**Difficulty:** Intermediate
-**Estimated Time:** 15 minutes
+**Audience:** Operators **Difficulty:** Intermediate **Estimated Time:** 15 minutes
 
 ---
 
 ## What Qdrant Provides
 
-Qdrant enables **semantic search** over summaries and analyzed GitHub
-repositories:
+Qdrant enables **semantic search** over summaries and analyzed GitHub repositories:
 
 - **Natural language queries**: "machine learning tutorials" finds relevant articles even if they use different terms
 - **Vector embeddings**: Converts text to vectors using sentence-transformers (384-dim, local) or Gemini Embedding 2 API (768-dim, remote)
 - **Similarity search**: Finds semantically similar summaries (not just keyword matches)
 - **Hybrid search**: Combines semantic search with full-text search and reranking
 
-**Use case**: Search past summaries and indexed repositories by meaning, not
-just keywords.
+**Use case**: Search past summaries and indexed repositories by meaning, not just keywords.
 
 Qdrant is lighter than ChromaDB, ships a first-class arm64 Docker image, and has no `onnxruntime` dependency — making it suitable for Raspberry Pi and Apple Silicon hosts.
 
@@ -322,8 +315,7 @@ GEMINI_EMBEDDING_DIMENSIONS=768                      # 128-3072; 768/1536/3072 r
 EMBEDDING_MAX_TOKEN_LENGTH=2048                      # Gemini supports up to 8192
 ```
 
-Gemini uses task-type-aware embeddings automatically: `RETRIEVAL_DOCUMENT` when indexing summaries, `RETRIEVAL_QUERY` when searching. The `google-genai` package is lazily imported and only required when `EMBEDDING_PROVIDER=gemini`.
-Qdrant collections are automatically namespaced by model + output dimensionality so newer Gemini Embedding 2 indexes do not collide with older embedding spaces.
+Gemini uses task-type-aware embeddings automatically: `RETRIEVAL_DOCUMENT` when indexing summaries, `RETRIEVAL_QUERY` when searching. The `google-genai` package is lazily imported and only required when `EMBEDDING_PROVIDER=gemini`. Qdrant collections are automatically namespaced by model + output dimensionality so newer Gemini Embedding 2 indexes do not collide with older embedding spaces.
 
 **Switching providers** requires re-embedding all data (dimensions differ):
 

@@ -14,39 +14,24 @@ updated: 2026-05-17
 
 ## Objective
 
-`app/api/routers/health.py` returns raw dicts at the top level —
-no `success`/`data`/`meta` wrapper — while the mobile-api
-reference doc lists these endpoints under `/v1` without an
-envelope carve-out. Lower client impact than other envelope drift
-because health is usually polled by infrastructure, but the
-API-surface freeze contract is silently violated. If KMP ever
-pulls `/v1/health/detailed` for a diagnostics screen, schema
-validation will fail.
+`app/api/routers/health.py` returns raw dicts at the top level — no `success`/`data`/`meta` wrapper — while the mobile-api reference doc lists these endpoints under `/v1` without an envelope carve-out. Lower client impact than other envelope drift because health is usually polled by infrastructure, but the API-surface freeze contract is silently violated. If KMP ever pulls `/v1/health/detailed` for a diagnostics screen, schema validation will fail.
 
 ## Context
 
-- Raw-dict returns:
-  - `app/api/routers/health.py:127, 134, 176, 186, 209, 230, 235,
-    243, 257`.
-- Reference doc: `docs/reference/mobile-api.md:172-181` lists the
-  endpoints without an envelope carve-out.
+- Raw-dict returns: - `app/api/routers/health.py:127, 134, 176, 186, 209, 230, 235, 243, 257`.
+- Reference doc: `docs/reference/mobile-api.md:172-181` lists the endpoints without an envelope carve-out.
 
 ## Scope
 
 Pick ONE direction:
 
-A. Carve out health in `docs/reference/mobile-api.md:87` as raw-dict
-   by design and add a note to the OpenAPI spec.
+A. Carve out health in `docs/reference/mobile-api.md:87` as raw-dict by design and add a note to the OpenAPI spec.
 
-B. Wrap every health endpoint in `success_response(...)` to match
-   every other router. If chosen, ensure infrastructure callers
-   (Kubernetes liveness probes, uptime monitors) still parse the
-   nested `data.status`.
+B. Wrap every health endpoint in `success_response(...)` to match every other router. If chosen, ensure infrastructure callers (Kubernetes liveness probes, uptime monitors) still parse the nested `data.status`.
 
 ## Acceptance criteria
 
-- [ ] One direction chosen and documented in a short decision note
-  under `docs/decisions/`.
+- [ ] One direction chosen and documented in a short decision note under `docs/decisions/`.
 - [ ] All health endpoints either wrapped or explicitly carved out.
 - [ ] Snapshot test asserts the chosen contract.
 

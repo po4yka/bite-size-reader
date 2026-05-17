@@ -14,12 +14,9 @@ This guide explains how to prepare environments, configure secrets, and run the 
 
 ## Telegram Setup
 
-1. Create a Telegram app to obtain `API_ID` and `API_HASH`:
-   - https://my.telegram.org/apps
-2. Create a bot via BotFather to obtain `BOT_TOKEN`:
-   - https://t.me/BotFather → `/newbot`
-3. Restrict access to your Telegram user ID(s):
-   - Find your numeric user ID with any Telegram “user id” bot, then set `ALLOWED_USER_IDS` to a comma‑separated list, e.g. `ALLOWED_USER_IDS=123456789`.
+1. Create a Telegram app to obtain `API_ID` and `API_HASH`: - https://my.telegram.org/apps
+2. Create a bot via BotFather to obtain `BOT_TOKEN`: - https://t.me/BotFather → `/newbot`
+3. Restrict access to your Telegram user ID(s): - Find your numeric user ID with any Telegram “user id” bot, then set `ALLOWED_USER_IDS` to a comma‑separated list, e.g. `ALLOWED_USER_IDS=123456789`.
 4. The bot registers command hints (`/help`, `/summarize`) automatically on startup for private chats.
 
 ## OpenRouter Setup
@@ -51,9 +48,7 @@ Copy `.env.example` to `.env` and fill only the first-run required values:
 - Telegram: `API_ID`, `API_HASH`, `BOT_TOKEN`, `ALLOWED_USER_IDS`
 - OpenRouter: `OPENROUTER_API_KEY`
 
-Optional runtime, scraper, YouTube, Twitter/X, MCP, and model tuning belongs in
-`ratatoskr.yaml`; see `docs/reference/config-file.md`. `JWT_SECRET_KEY` is
-required only when web/API/browser-extension JWT auth is enabled.
+Optional runtime, scraper, YouTube, Twitter/X, MCP, and model tuning belongs in `ratatoskr.yaml`; see `docs/reference/config-file.md`. `JWT_SECRET_KEY` is required only when web/API/browser-extension JWT auth is enabled.
 
 ## Local Development
 
@@ -62,9 +57,7 @@ required only when web/API/browser-extension JWT auth is enabled.
 3) Tests: `make test` (or `make lint`, `make format`, `make type` as needed).
 4) Run Telegram bot: `python bot.py`
 5) Run API host (serves `/v1/*`, `/static/*`, and `/web/*`): `uvicorn app.api.main:app --reload --host 0.0.0.0 --port 8000`
-6) Optional web frontend local loop (run from the **ratatoskr-web** repo):
-   - `npm ci && npm run dev` (Vite dev server)
-   - `npm run check:static` (lint + typecheck)
+6) Optional web frontend local loop (run from the **ratatoskr-web** repo): - `npm ci && npm run dev` (Vite dev server) - `npm run check:static` (lint + typecheck)
 
 ## Web Interface Serving Contract
 
@@ -85,11 +78,7 @@ How to use (no commands needed)
 
 - You can simply send a URL (or several URLs in one message) or forward a channel post — the bot will summarize it.
 - You can also use `/aggregate` to synthesize one mixed-source bundle from one or more links and, when applicable, the current forwarded/attached Telegram content.
-- Commands are optional helpers:
-  - `/summarize <URL>` or `/summarize` then send URL
-  - `/summarize_all <URLs>` to process many URLs immediately
-  - `/aggregate <URLs>` to request one bundle-level aggregation
-  - `/summarize_forward` then forward a channel post
+- Commands are optional helpers: - `/summarize <URL>` or `/summarize` then send URL - `/summarize_all <URLs>` to process many URLs immediately - `/aggregate <URLs>` to request one bundle-level aggregation - `/summarize_forward` then forward a channel post
 
 ## Docker Deployment
 
@@ -307,14 +296,10 @@ Use these go/no-go thresholds:
 
 Stage-specific promotion checks:
 
-- Stage 1 to Stage 2:
-  keep invite-only CLI clients on an explicit allowlist, verify client IDs map cleanly to `cli-*`, and confirm successful create/get/list flows for at least three distinct external users.
-- Stage 2 to Stage 3:
-  verify local MCP aggregation writes use scoped identities only, and confirm `ratatoskr_requests_total{source="mcp"}` shows zero auth or access-denied surprises for trusted testers.
-- Stage 3 to Stage 4:
-  verify hosted SSE traffic arrives through JWT or trusted forwarded-token auth only, confirm request-scoped reads and writes in logs, and require no security incidents during the beta window.
-- Stage 4 to Stage 5:
-  confirm support docs, troubleshooting coverage, rate-limit capacity, and operator dashboards are all in active use before widening access.
+- Stage 1 to Stage 2: keep invite-only CLI clients on an explicit allowlist, verify client IDs map cleanly to `cli-*`, and confirm successful create/get/list flows for at least three distinct external users.
+- Stage 2 to Stage 3: verify local MCP aggregation writes use scoped identities only, and confirm `ratatoskr_requests_total{source="mcp"}` shows zero auth or access-denied surprises for trusted testers.
+- Stage 3 to Stage 4: verify hosted SSE traffic arrives through JWT or trusted forwarded-token auth only, confirm request-scoped reads and writes in logs, and require no security incidents during the beta window.
+- Stage 4 to Stage 5: confirm support docs, troubleshooting coverage, rate-limit capacity, and operator dashboards are all in active use before widening access.
 
 Rollback triggers and actions:
 
@@ -332,11 +317,7 @@ Rollback triggers and actions:
 
 ### Scheduler singleton
 
-The `scheduler` service has `deploy.replicas: 1` (Compose default). Never run two scheduler
-instances against the same Redis broker — they each enqueue every task once per tick, resulting
-in duplicate job execution. In Docker Swarm, set `deploy.mode: replicated` with `replicas: 1`
-explicitly. On the Pi (systemd + Docker Compose), the compose stack already guarantees a single
-instance.
+The `scheduler` service has `deploy.replicas: 1` (Compose default). Never run two scheduler instances against the same Redis broker — they each enqueue every task once per tick, resulting in duplicate job execution. In Docker Swarm, set `deploy.mode: replicated` with `replicas: 1` explicitly. On the Pi (systemd + Docker Compose), the compose stack already guarantees a single instance.
 
 ### Health Checks
 
@@ -379,11 +360,7 @@ Pin to a specific tag: `git checkout tags/<tag>`
 make lock-uv
 ```
 
-> **First upgrade onto Ratatoskr from `bite-size-reader`?** Read
-> [Migrate from bite-size-reader](migrate-from-bite-size-reader.md)
-> first — it covers the renamed Docker image, MCP URIs / headers,
-> Prometheus metric names, web storage keys, and the retired Karakeep
-> integration.
+> **First upgrade onto Ratatoskr from `bite-size-reader`?** Read [Migrate from bite-size-reader](migrate-from-bite-size-reader.md) first — it covers the renamed Docker image, MCP URIs / headers, Prometheus metric names, web storage keys, and the retired Karakeep integration.
 
 ### 4. Rebuild & redeploy
 
@@ -399,8 +376,7 @@ docker run -d --env-file .env -v $(pwd)/data:/data \
   -p 8000:8000 --name ratatoskr --restart unless-stopped ratatoskr:latest
 ```
 
-> The `migrate` service runs automatically before `ratatoskr`, `worker`, `scheduler`, and
-> `mobile-api` start. There is no need to run migrations manually.
+> The `migrate` service runs automatically before `ratatoskr`, `worker`, `scheduler`, and `mobile-api` start. There is no need to run migrations manually.
 
 ### 5. Verify
 

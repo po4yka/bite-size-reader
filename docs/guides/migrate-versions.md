@@ -2,15 +2,9 @@
 
 Upgrade Ratatoskr to a new version safely.
 
-**Audience:** Operators
-**Difficulty:** Intermediate
-**Estimated Time:** 10-15 minutes
+**Audience:** Operators **Difficulty:** Intermediate **Estimated Time:** 10-15 minutes
 
-> **Upgrading across the `bite-size-reader` → `ratatoskr` rename?** That
-> upgrade has a dedicated page that covers the renamed contracts
-> (Docker image, MCP URIs, Prometheus metrics, web storage keys, etc.):
-> see [Migrate from bite-size-reader](migrate-from-bite-size-reader.md).
-> Use this generic version-upgrade page for everything else.
+> **Upgrading across the `bite-size-reader` → `ratatoskr` rename?** That upgrade has a dedicated page that covers the renamed contracts (Docker image, MCP URIs, Prometheus metrics, web storage keys, etc.): see [Migrate from bite-size-reader](migrate-from-bite-size-reader.md). Use this generic version-upgrade page for everything else.
 
 ---
 
@@ -59,9 +53,7 @@ docker pull ghcr.io/po4yka/ratatoskr:stable
 docker pull ghcr.io/po4yka/ratatoskr:v1.2.0
 ```
 
-Release tags publish semver images plus `stable` for non-prerelease tags.
-`:latest` is not published by the release workflow; use `:stable` for routine
-upgrades and semver tags for pinned rollbacks.
+Release tags publish semver images plus `stable` for non-prerelease tags. `:latest` is not published by the release workflow; use `:stable` for routine upgrades and semver tags for pinned rollbacks.
 
 #### 2. Stop Current Container
 

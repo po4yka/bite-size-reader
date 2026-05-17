@@ -2,9 +2,7 @@
 
 Tune Ratatoskr for speed, cost, and resource efficiency.
 
-**Audience:** Operators
-**Difficulty:** Intermediate
-**Estimated Time:** 20 minutes
+**Audience:** Operators **Difficulty:** Intermediate **Estimated Time:** 20 minutes
 
 ---
 
@@ -118,11 +116,7 @@ CHUNK_MAX_CHARS=150000  # Default: 200000
 
 ### Tune the scraper chain
 
-The chain tries providers in order (Scrapling → Crawl4AI → Firecrawl →
-Defuddle → Playwright → Crawlee → direct HTML → Scrapegraph-AI). To
-reduce latency, prefer in-process providers and shorten timeouts. See
-[`docs/explanation/scraper-chain.md`](../explanation/scraper-chain.md)
-for the full chain reference and configuration recipes.
+The chain tries providers in order (Scrapling → Crawl4AI → Firecrawl → Defuddle → Playwright → Crawlee → direct HTML → Scrapegraph-AI). To reduce latency, prefer in-process providers and shorten timeouts. See [`docs/explanation/scraper-chain.md`](../explanation/scraper-chain.md) for the full chain reference and configuration recipes.
 
 ```bash
 # Shorten Firecrawl sidecar JavaScript wait time (when sidecar is enabled)

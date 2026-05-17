@@ -1,10 +1,6 @@
 # Ratatoskr ↔ ratatoskr-client mobile contract map
 
-The cross-repo contract map called for by
-[[map-ratatoskr-mobile-api-contract-to-kmp-readiness]]. Inventories
-the 146 `/v1/*` endpoints currently in
-`docs/openapi/mobile_api.yaml`, grouped by feature area, with
-source-of-truth pointers on **both** sides of the wire.
+The cross-repo contract map called for by [[map-ratatoskr-mobile-api-contract-to-kmp-readiness]]. Inventories the 146 `/v1/*` endpoints currently in `docs/openapi/mobile_api.yaml`, grouped by feature area, with source-of-truth pointers on **both** sides of the wire.
 
 | field | value |
 | --- | --- |
@@ -144,26 +140,13 @@ source-of-truth pointers on **both** sides of the wire.
 
 ## Security / privacy notes per task spec
 
-- Bearer tokens are issued by `app/api/routers/auth/tokens.py`;
-  HS256-signed.
-- Refresh-token storage: backend hashes (`RefreshToken.token_hash`),
-  cookie-mode for web origin only, bearer-mode response field for
-  native clients.
-- Secret-keys at rest: hashed (PHC); decoy PHC kept in a module
-  holder so timing-safe-compare is independent of registered users.
-- GitHub OAuth / PAT tokens: Fernet-encrypted at rest via
-  `app/security/token_crypto.py`.
-- Telegram WebApp init-data: validated server-side every request; no
-  caching of the verified payload across requests.
-- Client-side: tokens live in platform secure storage
-  (`SecureStorage` expect-actual triad); Ktor `BearerTokens` chain
-  in `ApiClient.kt:206-239` handles transparent refresh.
+- Bearer tokens are issued by `app/api/routers/auth/tokens.py`; HS256-signed.
+- Refresh-token storage: backend hashes (`RefreshToken.token_hash`), cookie-mode for web origin only, bearer-mode response field for native clients.
+- Secret-keys at rest: hashed (PHC); decoy PHC kept in a module holder so timing-safe-compare is independent of registered users.
+- GitHub OAuth / PAT tokens: Fernet-encrypted at rest via `app/security/token_crypto.py`.
+- Telegram WebApp init-data: validated server-side every request; no caching of the verified payload across requests.
+- Client-side: tokens live in platform secure storage (`SecureStorage` expect-actual triad); Ktor `BearerTokens` chain in `ApiClient.kt:206-239` handles transparent refresh.
 
 ## Definition of done
 
-This file plus the two security/decision frames
-(`docs/decisions/2026-05-17-auth-security-second-wave.md`,
-`docs/security/2026-05-17-mobile-auth-storage-review.md`) constitute
-the cross-repo contract baseline for the next mobile release gate.
-The 8 follow-ups above are the action list; ownership (Backend, KMP,
-Security, CTO) is called out per row.
+This file plus the two security/decision frames (`docs/decisions/2026-05-17-auth-security-second-wave.md`, `docs/security/2026-05-17-mobile-auth-storage-review.md`) constitute the cross-repo contract baseline for the next mobile release gate. The 8 follow-ups above are the action list; ownership (Backend, KMP, Security, CTO) is called out per row.

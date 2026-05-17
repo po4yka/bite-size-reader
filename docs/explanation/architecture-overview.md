@@ -1,19 +1,8 @@
 # Architecture Overview
 
-A bird's-eye view of how Ratatoskr is wired together: the major
-subsystems, how a Telegram update becomes a stored summary, and where
-to find the canonical doc for every piece. Reach for this page when
-you're either evaluating the system or trying to find the right code
-to read first.
+A bird's-eye view of how Ratatoskr is wired together: the major subsystems, how a Telegram update becomes a stored summary, and where to find the canonical doc for every piece. Reach for this page when you're either evaluating the system or trying to find the right code to read first.
 
-**Audience:** Operators evaluating Ratatoskr, contributors orienting
-themselves, integrators planning how to attach.
-**Type:** Explanation.
-**Related:** [`docs/SPEC.md`](../SPEC.md) (canonical contract),
-[`#layering-quick-reference`](#layering-quick-reference)
-(layer rationale), [`docs/explanation/multi-agent-architecture.md`](multi-agent-architecture.md)
-(LLM agent internals), [`docs/explanation/observability-strategy.md`](observability-strategy.md)
-(metrics, traces, logs).
+**Audience:** Operators evaluating Ratatoskr, contributors orienting themselves, integrators planning how to attach. **Type:** Explanation. **Related:** [`docs/SPEC.md`](../SPEC.md) (canonical contract), [`#layering-quick-reference`](#layering-quick-reference) (layer rationale), [`docs/explanation/multi-agent-architecture.md`](multi-agent-architecture.md) (LLM agent internals), [`docs/explanation/observability-strategy.md`](observability-strategy.md) (metrics, traces, logs).
 
 ---
 
@@ -131,33 +120,15 @@ flowchart LR
   end
 ```
 
-The bot ingests updates via a lightweight `TelegramClient`, normalizes
-them through `MessageHandler`, and hands them to `MessageRouter` /
-`CallbackHandler`. `CallbackHandler` delegates action execution through
-`CallbackActionRegistry` + `CallbackActionService`; `URLHandler` delegates
-batch / await-state concerns through `URLBatchPolicyService` +
-`URLAwaitingStateStore` before invoking `URLProcessor`.
-`TelegramLifecycleManager` owns startup / shutdown of background tasks
-and warmups. The channel-digest subsystem uses a separate
-`UserbotClient` (authenticated as a real Telegram user) to read channel
-histories, analyzes posts via LLM, and delivers formatted digests on a
-schedule or via `/digest`.
+The bot ingests updates via a lightweight `TelegramClient`, normalizes them through `MessageHandler`, and hands them to `MessageRouter` / `CallbackHandler`. `CallbackHandler` delegates action execution through `CallbackActionRegistry` + `CallbackActionService`; `URLHandler` delegates batch / await-state concerns through `URLBatchPolicyService` + `URLAwaitingStateStore` before invoking `URLProcessor`. `TelegramLifecycleManager` owns startup / shutdown of background tasks and warmups. The channel-digest subsystem uses a separate `UserbotClient` (authenticated as a real Telegram user) to read channel histories, analyzes posts via LLM, and delivers formatted digests on a schedule or via `/digest`.
 
-For the mobile API, routers are transport-focused and delegate
-infrastructure orchestration to dedicated services (`DigestFacade`,
-`SystemMaintenanceService`) rather than performing DB / Redis / file
-operations inline. `ResponseFormatter` centralizes Telegram replies and
-audit logging while all artifacts land in PostgreSQL.
+For the mobile API, routers are transport-focused and delegate infrastructure orchestration to dedicated services (`DigestFacade`, `SystemMaintenanceService`) rather than performing DB / Redis / file operations inline. `ResponseFormatter` centralizes Telegram replies and audit logging while all artifacts land in PostgreSQL.
 
 ---
 
 ## Layered view
 
-The codebase follows a hexagonal (ports-and-adapters) layout. Each
-layer has a narrow job; cross-layer references go through ports, not
-direct imports. See
-[#layering-quick-reference](#layering-quick-reference)
-for the rationale.
+The codebase follows a hexagonal (ports-and-adapters) layout. Each layer has a narrow job; cross-layer references go through ports, not direct imports. See [#layering-quick-reference](#layering-quick-reference) for the rationale.
 
 | Layer | Path | Role |
 | --- | --- | --- |
@@ -191,10 +162,7 @@ Telegram update
                              └─ ResponseFormatter → TelegramClient → Telegram reply
 ```
 
-Every step writes to PostgreSQL (full request, all crawl attempts, every
-LLM call, the final summary) and stamps the correlation ID into
-structured logs so a single ID lets you trace from the Telegram message
-to the OpenRouter response and back.
+Every step writes to PostgreSQL (full request, all crawl attempts, every LLM call, the final summary) and stamps the correlation ID into structured logs so a single ID lets you trace from the Telegram message to the OpenRouter response and back.
 
 ---
 
@@ -227,13 +195,9 @@ Each subsystem has a canonical doc; this page is the entry point.
 
 - New here and want to run the bot? → [Quickstart Tutorial](../guides/quickstart.md).
 - Deploying to a server? → [guides/deploy-production.md](../guides/deploy-production.md).
-- Modifying the codebase? → [`CLAUDE.md`](../../CLAUDE.md) for the
-  AI-friendly engineer's tour, then [`docs/SPEC.md`](../SPEC.md) for
-  the canonical contract.
+- Modifying the codebase? → [`CLAUDE.md`](../../CLAUDE.md) for the AI-friendly engineer's tour, then [`docs/SPEC.md`](../SPEC.md) for the canonical contract.
 - Curious about layer choices? → [Layering quick reference](#layering-quick-reference).
-- Tracking down a specific request? → start with the correlation ID in
-  the user-visible error message, then read
-  [`docs/explanation/observability-strategy.md`](observability-strategy.md).
+- Tracking down a specific request? → start with the correlation ID in the user-visible error message, then read [`docs/explanation/observability-strategy.md`](observability-strategy.md).
 
 ---
 

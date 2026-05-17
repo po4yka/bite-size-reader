@@ -1,28 +1,20 @@
 # Raw Data Retention & Purge — Design Spec
 
-**Date:** 2026-05-15
-**Status:** Approved
+**Date:** 2026-05-15 **Status:** Approved
 
 ## Problem
 
-Ratatoskr persists large raw artifacts indefinitely: full Telegram message payloads,
-scraped HTML/markdown, complete LLM request/response bodies, and video transcripts.
-These fields have no user-visible value after a summary is produced and represent
-both a storage cost and a privacy risk. Summaries, cost metrics, and search metadata
-must be preserved.
+Ratatoskr persists large raw artifacts indefinitely: full Telegram message payloads, scraped HTML/markdown, complete LLM request/response bodies, and video transcripts. These fields have no user-visible value after a summary is produced and represent both a storage cost and a privacy risk. Summaries, cost metrics, and search metadata must be preserved.
 
 ## Goal
 
-Implement configurable, per-subsystem TTL-based nulling of raw artifact fields.
-Purge runs on a schedule, is idempotent, and never removes user-visible summary data.
+Implement configurable, per-subsystem TTL-based nulling of raw artifact fields. Purge runs on a schedule, is idempotent, and never removes user-visible summary data.
 
 ---
 
 ## Approach: Field-level nulling via scheduled Taskiq task
 
-Raw content columns are SET to NULL once they age past their configured TTL.
-The containing row is never deleted — metadata, cost data, and status fields survive.
-All targeted columns are already `nullable=True`; no Alembic migration is required.
+Raw content columns are SET to NULL once they age past their configured TTL. The containing row is never deleted — metadata, cost data, and status fields survive. All targeted columns are already `nullable=True`; no Alembic migration is required.
 
 ---
 
@@ -48,8 +40,7 @@ class RetentionConfig(BaseSettings):
 
 `RetentionConfig` is added to `AppConfig` under the `retention` field.
 
-**Semantics:** TTL of `0` means "never purge this subsystem." Each subsystem is
-independently skippable.
+**Semantics:** TTL of `0` means "never purge this subsystem." Each subsystem is independently skippable.
 
 ---
 
@@ -121,8 +112,7 @@ WHERE id IN (
 )
 ```
 
-The `IS NOT NULL` guard makes every run idempotent: already-purged rows produce
-zero rowcount and cost nothing on re-runs.
+The `IS NOT NULL` guard makes every run idempotent: already-purged rows produce zero rowcount and cost nothing on re-runs.
 
 `result.rowcount` (SQLAlchemy) provides the per-subsystem count in `PurgeStats`.
 

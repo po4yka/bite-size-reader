@@ -1371,20 +1371,11 @@ ping -c 3 openrouter.ai
 
 If you're still stuck after trying these steps:
 
-1. **Gather diagnostics**:
-   - Correlation ID
-   - Relevant log excerpts
-   - Database query results (requests, llm_calls, crawl_results)
-   - Environment configuration (redact API keys!)
+1. **Gather diagnostics**: - Correlation ID - Relevant log excerpts - Database query results (requests, llm_calls, crawl_results) - Environment configuration (redact API keys!)
 
 2. **Check existing issues**: [GitHub Issues](https://github.com/po4yka/ratatoskr/issues)
 
-3. **Open new issue** with:
-   - Clear title (e.g., "Firecrawl timeouts on all URLs")
-   - Steps to reproduce
-   - Expected vs actual behavior
-   - Diagnostics from step 1
-   - Version info (`git rev-parse HEAD`)
+3. **Open new issue** with: - Clear title (e.g., "Firecrawl timeouts on all URLs") - Steps to reproduce - Expected vs actual behavior - Diagnostics from step 1 - Version info (`git rev-parse HEAD`)
 
 4. **Include correlation ID** in issue title/description for faster debugging
 

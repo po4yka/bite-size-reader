@@ -1,41 +1,14 @@
 # Scraper Chain
 
-How Ratatoskr extracts clean article content from arbitrary URLs: the
-provider taxonomy, fallback logic, deployment topology, quality gates,
-and configuration recipes.
+How Ratatoskr extracts clean article content from arbitrary URLs: the provider taxonomy, fallback logic, deployment topology, quality gates, and configuration recipes.
 
-**Audience:** Contributors and operators who need to understand, tune,
-or extend the content-extraction pipeline.
-**Type:** Explanation.
-**Related:** [`docs/explanation/architecture-overview.md`](architecture-overview.md)
-(parent), [`docs/reference/environment-variables.md`](../reference/environment-variables.md)
-(full env-var reference), [`docs/explanation/faq.md`](../explanation/faq.md) (operational tips).
-**Source:**
-[`app/adapters/content/scraper/chain.py`](../../app/adapters/content/scraper/chain.py),
-[`factory.py`](../../app/adapters/content/scraper/factory.py),
-[`protocol.py`](../../app/adapters/content/scraper/protocol.py),
-[`scrapling_provider.py`](../../app/adapters/content/scraper/scrapling_provider.py),
-[`crawl4ai_provider.py`](../../app/adapters/content/scraper/crawl4ai_provider.py),
-[`defuddle_provider.py`](../../app/adapters/content/scraper/defuddle_provider.py),
-[`firecrawl_provider.py`](../../app/adapters/content/scraper/firecrawl_provider.py),
-[`playwright_provider.py`](../../app/adapters/content/scraper/playwright_provider.py),
-[`crawlee_provider.py`](../../app/adapters/content/scraper/crawlee_provider.py),
-[`direct_html_provider.py`](../../app/adapters/content/scraper/direct_html_provider.py),
-[`scrapegraph_provider.py`](../../app/adapters/content/scraper/scrapegraph_provider.py).
+**Audience:** Contributors and operators who need to understand, tune, or extend the content-extraction pipeline. **Type:** Explanation. **Related:** [`docs/explanation/architecture-overview.md`](architecture-overview.md) (parent), [`docs/reference/environment-variables.md`](../reference/environment-variables.md) (full env-var reference), [`docs/explanation/faq.md`](../explanation/faq.md) (operational tips). **Source:** [`app/adapters/content/scraper/chain.py`](../../app/adapters/content/scraper/chain.py), [`factory.py`](../../app/adapters/content/scraper/factory.py), [`protocol.py`](../../app/adapters/content/scraper/protocol.py), [`scrapling_provider.py`](../../app/adapters/content/scraper/scrapling_provider.py), [`crawl4ai_provider.py`](../../app/adapters/content/scraper/crawl4ai_provider.py), [`defuddle_provider.py`](../../app/adapters/content/scraper/defuddle_provider.py), [`firecrawl_provider.py`](../../app/adapters/content/scraper/firecrawl_provider.py), [`playwright_provider.py`](../../app/adapters/content/scraper/playwright_provider.py), [`crawlee_provider.py`](../../app/adapters/content/scraper/crawlee_provider.py), [`direct_html_provider.py`](../../app/adapters/content/scraper/direct_html_provider.py), [`scrapegraph_provider.py`](../../app/adapters/content/scraper/scrapegraph_provider.py).
 
 ---
 
 ## Overview
 
-`ContentScraperChain` is the content-extraction layer that sits between
-`URLProcessor` and the LLM summarization step. It holds an ordered list
-of provider instances and tries each in turn until one returns
-substantive, high-quality content. Every provider implements
-`ContentScraperProtocol` and returns a `FirecrawlResult`, so downstream
-code never needs to know which provider actually served the request; the
-`endpoint` field on the returned result is set to the winning provider's
-name (or `"chain"` on total failure). Results are persisted to the
-`crawl_results` table regardless of outcome.
+`ContentScraperChain` is the content-extraction layer that sits between `URLProcessor` and the LLM summarization step. It holds an ordered list of provider instances and tries each in turn until one returns substantive, high-quality content. Every provider implements `ContentScraperProtocol` and returns a `FirecrawlResult`, so downstream code never needs to know which provider actually served the request; the `endpoint` field on the returned result is set to the winning provider's name (or `"chain"` on total failure). Results are persisted to the `crawl_results` table regardless of outcome.
 
 ---
 
@@ -52,10 +25,7 @@ name (or `"chain"` on total failure). Results are persisted to the
 | `direct_html` | in-process | 7 | None — raw httpx fetch + trafilatura |
 | `scrapegraph_ai` | in-process (LLM-driven) | 8 | `scrapegraphai` package + valid `OPENROUTER_API_KEY` |
 
-Provider position 3 (`firecrawl`) is active only when
-`FIRECRAWL_SELF_HOSTED_ENABLED=true`; cloud Firecrawl is not used for
-article scraping. Position 8 (`scrapegraph_ai`) is active only when
-`scrapegraphai` is installed and `OPENROUTER_API_KEY` is set.
+Provider position 3 (`firecrawl`) is active only when `FIRECRAWL_SELF_HOSTED_ENABLED=true`; cloud Firecrawl is not used for article scraping. Position 8 (`scrapegraph_ai`) is active only when `scrapegraphai` is installed and `OPENROUTER_API_KEY` is set.
 
 ---
 
@@ -132,9 +102,7 @@ flowchart TD
     class Exhausted terminal
 ```
 
-Each rung applies the quality gates described in the next section before
-deciding whether to return or continue to the next provider. "Content OK"
-means the result passed all gates; any gate failure advances the chain.
+Each rung applies the quality gates described in the next section before deciding whether to return or continue to the next provider. "Content OK" means the result passed all gates; any gate failure advances the chain.
 
 ---
 
@@ -184,10 +152,7 @@ flowchart LR
     ScrapegraphAI2 -- "OPENROUTER_API_KEY\n(last resort only)" --> OpenRouter
 ```
 
-All sidecar connections are optional: a provider that cannot reach its
-sidecar returns an error result and the chain continues. The
-`scrapegraph_ai` provider is the only one that contacts an external
-endpoint (OpenRouter), and only as a last resort.
+All sidecar connections are optional: a provider that cannot reach its sidecar returns an error result and the chain continues. The `scrapegraph_ai` provider is the only one that contacts an external endpoint (OpenRouter), and only as a last resort.
 
 ### Operator surfaces (Crawl4AI sidecar)
 
@@ -198,36 +163,18 @@ endpoint (OpenRouter), and only as a last resort.
 
 ## Quality gates per rung
 
-`ContentScraperChain.scrape_markdown` applies these gates to every
-provider result before deciding to accept or fall through:
+`ContentScraperChain.scrape_markdown` applies these gates to every provider result before deciding to accept or fall through:
 
-- **`_is_error_page`** — regex match against HTTP error patterns (403,
-  404, 401, "access denied", Russian equivalents) on bodies shorter than
-  1 500 characters. Short bodies matching a pattern are rejected.
-- **`min_content_length`** — rejects content shorter than the configured
-  threshold (default 400 chars; controlled by `SCRAPER_MIN_CONTENT_LENGTH`).
-  Applied only when `min_content_length > 0`.
-- **`detect_low_value_content`** — quality filter that scores character
-  count, word count, and content signal density. Applied when
-  `min_content_length > 0`.
-- **JS-heavy reorder** — when the request URL matches a host in
-  `SCRAPER_JS_HEAVY_HOSTS`, browser providers (`playwright`, `crawlee`)
-  are moved to the front of the effective provider list before any rung
-  is tried.
+- **`_is_error_page`** — regex match against HTTP error patterns (403, 404, 401, "access denied", Russian equivalents) on bodies shorter than 1 500 characters. Short bodies matching a pattern are rejected.
+- **`min_content_length`** — rejects content shorter than the configured threshold (default 400 chars; controlled by `SCRAPER_MIN_CONTENT_LENGTH`). Applied only when `min_content_length > 0`.
+- **`detect_low_value_content`** — quality filter that scores character count, word count, and content signal density. Applied when `min_content_length > 0`.
+- **JS-heavy reorder** — when the request URL matches a host in `SCRAPER_JS_HEAVY_HOSTS`, browser providers (`playwright`, `crawlee`) are moved to the front of the effective provider list before any rung is tried.
 
 ---
 
 ## Anti-fingerprinting
 
-The browser-based providers (`playwright`, `crawlee`) and `scrapling`'s
-`DynamicFetcher` path all integrate browser fingerprint randomization
-following the same design as `apify/fingerprint-suite`. `PlaywrightProvider`
-generates a randomized user-agent and viewport on each request.
-`CrawleeProvider` uses a `DefaultFingerprintGenerator` that rotates
-headers, viewport dimensions, and platform strings. `ScraplingProvider`'s
-`DynamicFetcher` (Playwright-based) inherits Scrapling's built-in TLS and
-browser fingerprint impersonation. The goal is to avoid consistent
-browser signatures that would be blocked by bot-detection middleware.
+The browser-based providers (`playwright`, `crawlee`) and `scrapling`'s `DynamicFetcher` path all integrate browser fingerprint randomization following the same design as `apify/fingerprint-suite`. `PlaywrightProvider` generates a randomized user-agent and viewport on each request. `CrawleeProvider` uses a `DefaultFingerprintGenerator` that rotates headers, viewport dimensions, and platform strings. `ScraplingProvider`'s `DynamicFetcher` (Playwright-based) inherits Scrapling's built-in TLS and browser fingerprint impersonation. The goal is to avoid consistent browser signatures that would be blocked by bot-detection middleware.
 
 ---
 
@@ -249,15 +196,11 @@ Override the default order. Providers not listed are not instantiated.
 SCRAPER_PROVIDER_ORDER=firecrawl,scrapling,crawl4ai,defuddle,playwright,crawlee,direct_html
 ```
 
-Note: `firecrawl` in the order only activates when
-`FIRECRAWL_SELF_HOSTED_ENABLED=true`; without it the factory skips that
-slot and the effective order shifts up.
+Note: `firecrawl` in the order only activates when `FIRECRAWL_SELF_HOSTED_ENABLED=true`; without it the factory skips that slot and the effective order shifts up.
 
 ### Disable the LLM rung
 
-`scrapegraph_ai` is already excluded from the chain when
-`OPENROUTER_API_KEY` is unset. To disable it explicitly when the key
-is present:
+`scrapegraph_ai` is already excluded from the chain when `OPENROUTER_API_KEY` is unset. To disable it explicitly when the key is present:
 
 ```env
 SCRAPER_SCRAPEGRAPH_ENABLED=false

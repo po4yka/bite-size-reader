@@ -2,9 +2,7 @@
 
 Understanding the principles and trade-offs behind Ratatoskr's architecture.
 
-**Audience:** Developers, Architects
-**Type:** Explanation
-**Related:** [Hexagonal Architecture](architecture-overview.md#layering-quick-reference), [Architecture Overview](architecture-overview.md)
+**Audience:** Developers, Architects **Type:** Explanation **Related:** [Hexagonal Architecture](architecture-overview.md#layering-quick-reference), [Architecture Overview](architecture-overview.md)
 
 ---
 
@@ -237,8 +235,7 @@ See: [FAQ § Security](faq.md#security)
 
 ### Why SQLite Over PostgreSQL?
 
-**Chosen:** SQLite (single-file database)
-**Rejected:** PostgreSQL, MySQL, MongoDB
+**Chosen:** SQLite (single-file database) **Rejected:** PostgreSQL, MySQL, MongoDB
 
 **Rationale:**
 
@@ -255,8 +252,7 @@ See: [FAQ § Security](faq.md#security)
 
 ### Why Firecrawl Over Trafilatura?
 
-**Chosen:** Firecrawl (SaaS content extraction)
-**Rejected:** Trafilatura, Newspaper3k, custom Playwright solution
+**Chosen:** Firecrawl (SaaS content extraction) **Rejected:** Trafilatura, Newspaper3k, custom Playwright solution
 
 **Rationale:**
 
@@ -275,8 +271,7 @@ See: [Scraper chain explainer](scraper-chain.md)
 
 ### Why OpenRouter Over Direct LLM APIs?
 
-**Chosen:** OpenRouter (LLM aggregator)
-**Rejected:** Direct OpenAI API, Anthropic API, Gemini API
+**Chosen:** OpenRouter (LLM aggregator) **Rejected:** Direct OpenAI API, Anthropic API, Gemini API
 
 **Rationale:**
 
@@ -291,8 +286,7 @@ See: [Scraper chain explainer](scraper-chain.md)
 
 ### Why Telethon Over python-telegram-bot?
 
-**Chosen:** Telethon (MTProto async client)
-**Rejected:** python-telegram-bot, aiogram
+**Chosen:** Telethon (MTProto async client) **Rejected:** python-telegram-bot, aiogram
 
 **Rationale:**
 

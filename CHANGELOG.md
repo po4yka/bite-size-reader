@@ -2,42 +2,22 @@
 
 All notable changes to Ratatoskr will be documented in this file.
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
 ### Breaking — Project renamed to Ratatoskr
 
-The project has been renamed from `bite-size-reader` to `ratatoskr`.
-The rename touches Docker image / container names, the default DB
-filename, the MCP protocol surface (`bsr://` URIs and `X-BSR-*`
-headers), the CLI package and config directory, the Carbon web
-storage keys and refresh cookie, all `bsr_*` Prometheus metric
-names, and the Loki / Promtail labels. The Karakeep integration
-is retired in the same release.
+The project has been renamed from `bite-size-reader` to `ratatoskr`. The rename touches Docker image / container names, the default DB filename, the MCP protocol surface (`bsr://` URIs and `X-BSR-*` headers), the CLI package and config directory, the Carbon web storage keys and refresh cookie, all `bsr_*` Prometheus metric names, and the Loki / Promtail labels. The Karakeep integration is retired in the same release.
 
-**For the full breaking-change inventory and the operator checklist,
-see [docs/guides/migrate-from-bite-size-reader.md](docs/guides/migrate-from-bite-size-reader.md).**
-The migration page is the canonical source — historical-record
-discipline keeps this entry short so the breaking-change list does
-not drift from the operational guide.
+**For the full breaking-change inventory and the operator checklist, see [docs/guides/migrate-from-bite-size-reader.md](docs/guides/migrate-from-bite-size-reader.md).** The migration page is the canonical source — historical-record discipline keeps this entry short so the breaking-change list does not drift from the operational guide.
 
 ### Breaking — Telegram runtime migrated to Telethon
 
-Ratatoskr now uses Telethon for both the BotFather-token bot adapter and the
-channel-digest userbot session. `pyrotgfork`/Pyrogram and `pytgcrypto` are no
-longer runtime dependencies. Existing digest userbot sessions must be recreated
-with `/init_session` or `python -m app.cli.init_userbot_session`; the migration
-flow keeps the previous `.session` file untouched until a new Telethon session
-authenticates successfully, then stores the old file as
-`<DIGEST_SESSION_NAME>.legacy.bak.session`.
+Ratatoskr now uses Telethon for both the BotFather-token bot adapter and the channel-digest userbot session. `pyrotgfork`/Pyrogram and `pytgcrypto` are no longer runtime dependencies. Existing digest userbot sessions must be recreated with `/init_session` or `python -m app.cli.init_userbot_session`; the migration flow keeps the previous `.session` file untouched until a new Telethon session authenticates successfully, then stores the old file as `<DIGEST_SESSION_NAME>.legacy.bak.session`.
 
 ### Added
-- Vector-index sync subsystem keeping Qdrant converged with the Postgres `summaries` table:
-  - Opt-in CocoIndex live updater (`FlowLiveUpdater`) running inside FastAPI; gated by `RATATOSKR_COCOINDEX_ENABLED` (default off). See [`docs/cocoindex.md`](docs/cocoindex.md).
-  - Steady-state Taskiq reconciler `ratatoskr.vector.reconcile` (default cron `*/30 * * * *`) that re-embeds summaries whose `summary_embeddings.last_indexed_at` lags `summaries.updated_at`. Runs in the worker process; configurable via `VECTOR_RECONCILE_ENABLED` / `VECTOR_RECONCILE_CRON` / `VECTOR_RECONCILE_BATCH_SIZE`.
-  - `summary_embeddings` now stamps `content_hash` (SHA256 of the prepared text), `last_indexed_at`, and `index_status` on every write, so re-runs short-circuit when the input text is unchanged.
+- Vector-index sync subsystem keeping Qdrant converged with the Postgres `summaries` table: - Opt-in CocoIndex live updater (`FlowLiveUpdater`) running inside FastAPI; gated by `RATATOSKR_COCOINDEX_ENABLED` (default off). See [`docs/cocoindex.md`](docs/cocoindex.md). - Steady-state Taskiq reconciler `ratatoskr.vector.reconcile` (default cron `*/30 * * * *`) that re-embeds summaries whose `summary_embeddings.last_indexed_at` lags `summaries.updated_at`. Runs in the worker process; configurable via `VECTOR_RECONCILE_ENABLED` / `VECTOR_RECONCILE_CRON` / `VECTOR_RECONCILE_BATCH_SIZE`. - `summary_embeddings` now stamps `content_hash` (SHA256 of the prepared text), `last_indexed_at`, and `index_status` on every write, so re-runs short-circuit when the input text is unchanged.
 - Channel digest subsystem with userbot, scheduler, and commands (`/digest`, `/channels`, `/subscribe`, `/unsubscribe`)
 - Bot-mediated userbot session initialization via `/init_session` with Telegram Mini App OTP/2FA flow
 - gRPC service implementation with comprehensive Python client library and integration tests

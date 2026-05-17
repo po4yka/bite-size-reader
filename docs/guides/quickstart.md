@@ -2,9 +2,7 @@
 
 Get your first article summary with Ratatoskr in 5 minutes using Docker.
 
-**Time**: ~5 minutes
-**Difficulty**: Beginner
-**Prerequisites**: Docker installed
+**Time**: ~5 minutes **Difficulty**: Beginner **Prerequisites**: Docker installed
 
 ---
 
@@ -81,9 +79,7 @@ EOF
 - `your_telegram_user_id_here` → User ID from Step 1.3
 - `your_openrouter_key_here` → OpenRouter key from Step 1.4
 
-Firecrawl Cloud, YouTube storage, Twitter/X extraction, MCP, logging, and model
-tuning are optional. Put those in `ratatoskr.yaml` when you need them; see
-[Optional YAML Configuration](../reference/config-file.md).
+Firecrawl Cloud, YouTube storage, Twitter/X extraction, MCP, logging, and model tuning are optional. Put those in `ratatoskr.yaml` when you need them; see [Optional YAML Configuration](../reference/config-file.md).
 
 ---
 
@@ -233,10 +229,7 @@ docker restart ratatoskr
 
 ### Summaries fail with extraction errors
 
-**Cause**: All scraper providers failed for the given URL. Ratatoskr uses
-a multi-provider fallback chain (Scrapling → Crawl4AI → Firecrawl →
-Defuddle → Playwright → Crawlee → direct HTML → Scrapegraph-AI); see
-[`docs/explanation/scraper-chain.md`](../explanation/scraper-chain.md).
+**Cause**: All scraper providers failed for the given URL. Ratatoskr uses a multi-provider fallback chain (Scrapling → Crawl4AI → Firecrawl → Defuddle → Playwright → Crawlee → direct HTML → Scrapegraph-AI); see [`docs/explanation/scraper-chain.md`](../explanation/scraper-chain.md).
 
 **Solution**:
 

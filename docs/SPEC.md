@@ -20,10 +20,7 @@ Complete PostgreSQL schema reference: all core tables (users, requests, crawl_re
 
 → [Data Model Reference](reference/data-model.md)
 
-Telethon session files are the only intentional SQLite carve-out. They are
-client session stores owned by Telethon, validated by
-`app/adapters/digest/session_validator.py`, and are not part of Ratatoskr's
-relational store or PostgreSQL migration.
+Telethon session files are the only intentional SQLite carve-out. They are client session stores owned by Telethon, validated by `app/adapters/digest/session_validator.py`, and are not part of Ratatoskr's relational store or PostgreSQL migration.
 
 ---
 
@@ -126,9 +123,7 @@ Prometheus metrics, structured logs, correlation-ID tracing, and the Loki/Promta
 
 ## GitHub Repository Schema
 
-Three tables added by the GitHub repository ingestion subsystem
-(`app/db/models/repository.py`). They have no foreign key to `summaries`;
-repos use the `RepoAnalysis` contract, not the 35-field `Summary` contract.
+Three tables added by the GitHub repository ingestion subsystem (`app/db/models/repository.py`). They have no foreign key to `summaries`; repos use the `RepoAnalysis` contract, not the 35-field `Summary` contract.
 
 ### `repositories`
 
@@ -169,14 +164,9 @@ repos use the `RepoAnalysis` contract, not the 35-field `Summary` contract.
 | `created_at` | timestamptz | no | Row insertion time |
 | `updated_at` | timestamptz | no | Last modification time |
 
-Unique constraint: `(user_id, github_id)`.
-Indexes: `(user_id, is_starred)`, `(user_id, primary_language)`, `(user_id, pushed_at DESC)`, `(github_id)`.
+Unique constraint: `(user_id, github_id)`. Indexes: `(user_id, is_starred)`, `(user_id, primary_language)`, `(user_id, pushed_at DESC)`, `(github_id)`.
 
-When CocoIndex is enabled, analyzed repository rows (`analysis_json IS NOT NULL`)
-are also exported to Qdrant using the deterministic point UUID
-`uuid5(NAMESPACE_OID, f"{environment}:{user_scope}:repository:{repository_id}")`.
-Migration `0008_cocoindex_repository_trigger_grant.py` grants the deployment
-role trigger access required for live repository change tracking.
+When CocoIndex is enabled, analyzed repository rows (`analysis_json IS NOT NULL`) are also exported to Qdrant using the deterministic point UUID `uuid5(NAMESPACE_OID, f"{environment}:{user_scope}:repository:{repository_id}")`. Migration `0008_cocoindex_repository_trigger_grant.py` grants the deployment role trigger access required for live repository change tracking.
 
 ### `repository_embeddings`
 

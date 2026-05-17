@@ -2,9 +2,7 @@
 
 Enable YouTube video and transcript support in Ratatoskr.
 
-**Audience:** Users, Operators
-**Difficulty:** Beginner
-**Estimated Time:** 5 minutes
+**Audience:** Users, Operators **Difficulty:** Beginner **Estimated Time:** 5 minutes
 
 ---
 
@@ -32,8 +30,7 @@ sudo apt-get update
 sudo apt-get install -y ffmpeg
 ```
 
-**Docker:**
-ffmpeg is already included in the Docker image.
+**Docker:** ffmpeg is already included in the Docker image.
 
 **Verify installation:**
 

@@ -207,9 +207,7 @@ The web client uses the credentials flow whenever `CREDENTIALS_LOGIN_PEPPER` is 
 
 1. The owner runs `ratatoskr credentials set --user-id <id> --nickname <name> [--email <addr>]` once after deploy to seed the row in `user_credentials`. There is no public signup; this is the only writer.
 2. `POST /v1/auth/credentials-login` accepts `{ identifier, password, remember_me, client_id }` where `identifier` is either the nickname or email (case-folded; `@` presence disambiguates). Returns the same `{ tokens, sessionId }` envelope as the other login flows.
-3. Remember Me semantics:
-   - `remember_me=true`  → 30-day refresh TTL; web client persists tokens in `localStorage`.
-   - `remember_me=false` → 12-hour refresh TTL (configurable via `CREDENTIALS_LOGIN_NO_REMEMBER_HOURS`); web client persists tokens in `sessionStorage` (vanish on browser close); refresh cookie is issued without `Max-Age` so it is also a session cookie.
+3. Remember Me semantics: - `remember_me=true`  → 30-day refresh TTL; web client persists tokens in `localStorage`. - `remember_me=false` → 12-hour refresh TTL (configurable via `CREDENTIALS_LOGIN_NO_REMEMBER_HOURS`); web client persists tokens in `sessionStorage` (vanish on browser close); refresh cookie is issued without `Max-Age` so it is also a session cookie.
 4. Anti-enumeration: every failure path (unknown identifier, wrong password, non-allowlisted user, exhausted lockout) returns the same uniform `401 Invalid credentials`; a decoy argon2 verify runs on the no-row-found path to keep wall-clock timing matched. A `Retry-After` header is set only when the row is locked.
 5. Lockout follows the secret-login pattern (default 5 failures / 15 minutes) but uses a *separate* counter on `user_credentials.failed_attempts`; locking credentials login does not lock secret-key login and vice versa.
 6. `POST /v1/auth/credentials/change-password` requires the current password and is bearer-auth gated. Active sessions are not revoked on rotation (parity with secret-key rotation).
