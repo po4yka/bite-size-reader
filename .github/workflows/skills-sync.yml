@@ -1,0 +1,41 @@
+name: Skills sync
+
+on:
+  push:
+    branches: [ main, master ]
+    paths:
+      - ".claude/skills/**"
+      - ".codex/skills/**"
+      - "tools/scripts/check_skills_sync.py"
+      - ".github/workflows/skills-sync.yml"
+  pull_request:
+    branches: [ main, master ]
+    paths:
+      - ".claude/skills/**"
+      - ".codex/skills/**"
+      - "tools/scripts/check_skills_sync.py"
+      - ".github/workflows/skills-sync.yml"
+
+concurrency:
+  group: skills-sync-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Check .claude/skills and .codex/skills are in sync
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      - name: Run skills sync check
+        run: python tools/scripts/check_skills_sync.py

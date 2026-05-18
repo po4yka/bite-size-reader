@@ -10,6 +10,7 @@ TRACKED_ROOT_ALLOWLIST = {
     ".agent",
     ".bandit",
     ".claude",
+    ".codex",
     ".continue",
     ".cursor",
     ".dockerignore",
