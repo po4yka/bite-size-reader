@@ -1,511 +1,238 @@
 # CLAUDE.md -- AI Assistant Guide for Ratatoskr
 
-This document helps AI assistants (like Claude) understand and work effectively with the Ratatoskr codebase.
+Operating notes for Claude (and other AI assistants) working in this repo. Leads with non-obvious rules and gotchas; defers reference material to `docs/` and `.claude/skills/`.
 
 ## Project Overview
 
-**Ratatoskr** is an async Telegram bot that:
+**Ratatoskr** is an async, single-tenant Telegram bot that:
 
-- Accepts web article URLs and summarizes them using a multi-provider scraper chain (content extraction) + OpenRouter (LLM summarization)
-- Accepts YouTube video URLs, downloads them in 1080p, extracts transcripts, and generates summaries
-- Accepts forwarded channel posts and summarizes them directly
-- Returns structured JSON summaries with a strict contract
-- Stores all artifacts (Telegram messages, crawl results, video downloads, LLM calls, summaries) in PostgreSQL via SQLAlchemy 2.0 + asyncpg
-- Runs as a single Docker container with owner-only access control
+- Summarizes web articles, YouTube videos, Twitter/X posts, GitHub repos, and academic papers via a multi-provider scraper chain + OpenRouter LLMs.
+- Returns structured JSON summaries against a strict contract.
+- Persists every artifact -- Telegram messages, scraper responses, LLM calls (success and failure), summaries, embeddings -- in PostgreSQL via SQLAlchemy 2.0 + asyncpg.
+- Ships as a single Docker container with an owner-only access whitelist.
 
-**Tech Stack:**
+**Core stack:** Python 3.13, Telethon, SQLAlchemy 2.0 + asyncpg, OpenRouter, Qdrant (with sentence-transformers or Gemini Embedding 2), FastAPI + JWT (Mobile API), LangGraph (summarize/repair retry graph), React + TypeScript + Vite (web frontend). Full dependency list lives in `pyproject.toml`.
 
-- Python 3.13+
-- Telethon (async Telegram MTProto)
-- Scrapling (primary in-process content scraper)
-- Firecrawl API (self-hosted secondary scraper; cloud API optional for web search)
-- yt-dlp (YouTube video downloading)
-- youtube-transcript-api (YouTube transcript extraction)
-- ffmpeg (video/audio merging for yt-dlp)
-- OpenRouter API (OpenAI-compatible LLM completions)
-- PostgreSQL 16 (persistence via SQLAlchemy 2.0 + asyncpg, async sessions; Alembic migrations)
-- httpx (async HTTP client)
-- pydantic / pydantic-settings (validation, configuration)
-- trafilatura, spacy (lightweight sentence tokenizer via spacy.blank())
-- json-repair (JSON recovery from LLM output)
-- scikit-learn, sentence-transformers, qdrant-client (search, local embeddings, vector store)
-- google-genai (optional: Gemini Embedding 2 API provider)
-- loguru, orjson (structured logging, fast JSON serialization)
-- FastAPI / uvicorn (Mobile REST API)
-- PyJWT (JWT authentication)
-- redis (optional caching and distributed locking)
-- apscheduler (background task scheduling)
-- weasyprint (PDF export)
-- mcp (Model Context Protocol server)
-- ElevenLabs API (optional: text-to-speech audio generation)
+## Architecture & Docs Index
 
-## Architecture Overview
+`docs/SPEC.md` is the navigation hub. Reach for these first instead of guessing:
 
-The component diagram, request lifecycle, layered view, and the canonical subsystem index live in [`docs/explanation/architecture-overview.md`](docs/explanation/architecture-overview.md). Read that page first when orienting yourself; this file focuses on AI-assistant operating notes (where things live, what to touch, what not to touch) rather than re-stating the architecture.
+| Need | Doc |
+|---|---|
+| Bird's-eye view, request lifecycle | `docs/explanation/architecture-overview.md` |
+| Multi-agent / LangGraph retry loop | `docs/explanation/multi-agent-architecture.md` |
+| Scraper-chain fallback design | `docs/explanation/scraper-chain.md` |
+| Why the summary contract is shaped that way | `docs/explanation/summary-contract-design.md` |
+| GitHub repo ingestion subsystem | `docs/explanation/github-repository-ingestion.md` |
+| Vector index + CocoIndex sync | `docs/cocoindex.md` |
+| Authoritative env-var reference (820 lines) | `docs/reference/environment-variables.md` |
+| Authoritative DB schema | `docs/reference/data-model.md` |
+| Summary JSON contract spec | `docs/reference/summary-contract.md` |
+| Channel digest ops | `docs/reference/digest-subsystem-ops.md` |
+| Common failure recipes | `docs/reference/troubleshooting.md` |
+| Claude Code safety hooks | `docs/reference/claude-code-hooks.md` |
 
 ## Directory Structure
 
 ```
 app/
 +-- adapters/           # External service integrations
-|   +-- academic/       # Scholarly-paper handler (arXiv, SSRN, NBER, OSF, ResearchGate, RePEc)
-|   +-- attachment/     # Attachment handling and processing
+|   +-- academic/       # arXiv, SSRN, NBER, OSF, ResearchGate, RePEc handler
+|   +-- attachment/     # Attachment processing
 |   +-- content/        # URL processing pipeline
 |   |   +-- scraper/    # Multi-provider scraper chain (protocol, chain, factory, providers)
-|   |   +-- streaming/  # In-process StreamHub pub/sub + SummarySectionStreamAssembler (feeds SSE + Telegram drafts)
-|   +-- digest/         # Channel digest orchestration
-|   +-- elevenlabs/     # ElevenLabs TTS integration
-|   +-- external/       # Firecrawl parser, response formatter
+|   |   +-- streaming/  # In-process StreamHub pub/sub (feeds SSE + Telegram drafts)
+|   +-- digest/         # Channel digest userbot, channel reader, analyzer
+|   +-- elevenlabs/     # ElevenLabs TTS
+|   +-- external/       # Firecrawl parser, response formatter facade
 |   +-- llm/            # Provider-agnostic LLM abstraction
 |   +-- openrouter/     # OpenRouter client and helpers
-|   +-- telegram/       # Telegram bot logic, command_handlers/
-|   +-- twitter/        # Twitter/X content extraction
-|   +-- youtube/        # YouTube video download and transcript extraction
-+-- agents/             # Multi-agent system (extraction, summarization, validation, web search)
-+-- api/                # Mobile API (FastAPI, JWT auth, sync)
-|   +-- models/         # Pydantic request/response models
-|   +-- routers/        # Route handlers (auth, summaries, sync, collections, health, system, tts, search, requests, streams, digest, user)
-|   +-- services/       # API business logic
-+-- application/        # Application layer (DDD)
-|   +-- dto/            # Data transfer objects
-|   +-- use_cases/      # Use case orchestrators
-+-- config/             # Configuration modules
-+-- core/               # Shared utilities (URL, JSON, logging, lang)
-+-- db/                 # Database schema and models
-+-- di/                 # Dependency injection
-+-- domain/             # Domain models and services (DDD patterns)
-+-- infrastructure/     # Persistence, event bus, vector store
-|   +-- cache/          # Cache layer (Redis)
-|   +-- messaging/      # Messaging infrastructure
-+-- mcp/                # MCP server for AI agent access
-+-- models/             # Pydantic/dataclass models
-|   +-- llm/            # LLM config models
-|   +-- telegram/       # Telegram entity models
-+-- observability/      # Metrics, tracing, telemetry
-+-- prompts/            # LLM system prompts (en/ru)
-+-- security/           # Security utilities
-+-- types/              # Type definitions
-+-- utils/              # Helper utilities (progress, formatting, validation)
-integrations/
-+-- openclaw-skill/     # OpenClaw MCP skill bundle
-ops/
-+-- config/             # Versioned example config assets
-+-- docker/             # Dockerfiles and compose definitions
-+-- monitoring/         # Prometheus/Grafana/Loki/Promtail assets
-tools/
-+-- scripts/            # Development and maintenance scripts
+|   +-- telegram/       # Bot logic, command_handlers/, access controller
+|   +-- twitter/        # Twitter/X two-tier extractor (Firecrawl + Playwright)
+|   +-- youtube/        # yt-dlp + transcript extraction
++-- agents/             # Classic agents + LangGraph summarize/validate/repair graph
++-- api/                # Mobile API (FastAPI, JWT, sync, collections, streams, digest, ...)
++-- application/        # DDD application layer (DTOs, use cases)
++-- config/             # Settings, scraper config, runtime tuning
++-- core/               # URL utils, JSON utils, summary contract/schema, lang detection
++-- db/                 # Models + Database session manager + Alembic migrations
++-- di/                 # Runtime composition
++-- domain/             # Domain models and services
++-- infrastructure/     # Persistence, cache, messaging, vector store, embedding, cocoindex
++-- mcp/                # Model Context Protocol server
++-- observability/      # Metrics, tracing
++-- prompts/            # LLM system prompts (en/ru, summary / combined_summary / instructor)
++-- security/           # Token crypto (Fernet), redaction
++-- tasks/              # Taskiq tasks (github_sync, reconcile_vector_index, digest, ...)
 ```
 
-## Database Models
+Skill, doc, and ops trees: `.claude/skills/` (project skills), `docs/` (explanation + reference), `ops/` (Docker / monitoring / config), `tools/scripts/` (dev utilities).
 
-SQLAlchemy 2.0 typed declarative models registered in `ALL_MODELS` (`app/db/models/__init__.py`), grouped by file under `app/db/models/`:
+## Operating Rules
 
-- `core.py` — `User`, `Chat`, `Request`, `TelegramMessage`, `CrawlResult`, `LLMCall`, `Summary`, `UserInteraction`, `AuditLog`, `SummaryEmbedding`, `VideoDownload`, `AudioGeneration`, `AttachmentProcessing`, `UserDevice`, `RefreshToken`, `ClientSecret`
-- `aggregation.py` — `AggregationSession`, `AggregationSessionItem`
-- `batch.py` — `BatchSession`, `BatchSessionItem`
-- `collections.py` — `Collection`, `CollectionItem`, `CollectionCollaborator`, `CollectionInvite`
-- `digest.py` — `Channel`, `ChannelCategory`, `ChannelSubscription`, `ChannelPost`, `ChannelPostAnalysis`, `DigestDelivery`, `UserDigestPreference`
+Project-specific conventions that aren't visible from code alone. Treat these as load-bearing.
 
-Each `LLMCall` row also carries `attempt_index` (1-based, monotonic per `request_id`) and `attempt_trigger` (Postgres enum: `initial`, `user_retry`, `auto_backfill`, `repair_loop`, `stream_fallback_retry`) so retries and self-correction loops are queryable without timestamp inference.
+1. **Correlation IDs are sacred.** Every request gets a `correlation_id`; every user-visible error must include `Error ID: <correlation_id>`; every log line and DB row touching that request carries it. Don't strip it, don't regenerate it mid-flow.
+2. **URLs must be normalized before deduplication.** `app/core/url_utils.py` is the single normalizer. `dedupe_hash` (sha256 of the normalized URL) is the idempotence key.
+3. **Persist everything.** Scraper responses → `crawl_results`, LLM calls (success AND failure) → `llm_calls`, Telegram messages → `telegram_messages`, summaries → `summaries`. Observability is non-negotiable -- if a step can fail, the failure goes in the DB.
+4. **Redact `Authorization` headers before persistence and before logging.** Helpers already do this; don't bypass them.
+5. **`Database` (`app/db/session.py`) is the sole DB entry point.** Don't open ad-hoc `AsyncSession`s in adapters.
+6. **Async only.** Telethon + httpx + asyncpg + SQLAlchemy `AsyncSession`. No blocking calls in the request path; use `asyncio.to_thread` only for genuinely sync libs.
+7. **Update both `en` and `ru` prompts together.** Files under `app/prompts/` come in mirrored pairs (`summary_system_en.txt` / `summary_system_ru.txt`, etc.); changing one without the other silently breaks the other-language path.
+8. **YouTube, Twitter/X, and academic papers each have dedicated extractors** (`app/adapters/youtube/`, `twitter/`, `academic/`) that bypass the standard scraper chain. Check `requests.source_kind` before assuming the chain ran.
 
-- `rss.py` — `RSSFeed`, `RSSFeedSubscription`, `RSSFeedItem`, `RSSItemDelivery`
-- `rules.py` — `WebhookSubscription`, `WebhookDelivery`, `AutomationRule`, `RuleExecutionLog`, `ImportJob`, `UserBackup`
-- `signal.py` — `Source`, `Subscription`, `FeedItem`, `Topic`, `UserSignal`
-- `topic_search.py` — `TopicSearchIndex` (Postgres TSVECTOR + GIN; replaces the former FTS5 virtual table)
-- `user_content.py` — `SummaryFeedback`, `CustomDigest`, `SummaryHighlight`, `UserGoal`, `Tag`, `SummaryTag`
-
-## Summary JSON Contract
-
-Defined in `app/core/summary_contract.py` (validation) and `app/core/summary_schema.py` (Pydantic model), documented in docs/SPEC.md. Core fields: `summary_250`, `summary_1000`, `tldr`, `key_ideas`, `topic_tags`, `entities`, `estimated_reading_time_min`, `key_stats`, `answered_questions`, `readability`, `seo_keywords`. The full contract includes 35+ fields with nested structures (`source_type`, `temporal_freshness`, `metadata`, `extractive_quotes`, `topic_taxonomy`, `hallucination_risk`, `confidence`, `insights`, `semantic_chunks`, etc.).
-
-## Development Workflow
-
-### Code Standards
-
-- **Formatting:** ruff format + isort (profile=black)
-- **Linting:** Ruff (see `pyproject.toml` for rules)
-- **Type Checking:** mypy (permissive config, `python_version = "3.13"`)
-- **Pre-commit Hooks:** ruff (fix + format) -> isort -> mypy + standard hooks
-- **Testing:** pytest + pytest-asyncio, hypothesis, pytest-benchmark
-
-#### Two enforced bugbear rules to never suppress project-wide
+### Bugbear rules to never suppress project-wide
 
 | Rule | What it catches | Safe fix |
-|------|-----------------|----------|
-| **B006** `mutable-argument-default` | `def f(x=[])` — shared mutable default leaks state across calls | Use `None` sentinel + in-body init |
-| **B023** `function-uses-loop-variable` | `lambda: key` inside loop — all closures see the final loop value | `lambda key=key: key`, factory function, or `functools.partial` |
+|---|---|---|
+| **B006** `mutable-argument-default` | `def f(x=[])` -- shared mutable default leaks state across calls | `None` sentinel + in-body init |
+| **B023** `function-uses-loop-variable` | `lambda: key` inside a loop -- all closures see the final value | `lambda key=key: key`, factory fn, or `functools.partial` |
 
-When a suppression is genuinely needed (e.g. a test that demonstrates the bug), use a **narrow inline `# noqa: B023`** with a justification comment — never a file-level ignore.
+Narrow inline `# noqa: B023` with a justification comment is OK in tests; file-level ignore is not.
 
-### Common Commands
+### Docker image-name footgun (Pi deploy)
+
+Two image names are in play:
+
+- `make docker-deploy` (legacy) builds `ratatoskr:latest` via `docker build`.
+- `docker compose build` produces `ratatoskr-ratatoskr` (compose prefixes the project name).
+
+`docker compose up` uses the second. Building with `docker build -t ratatoskr:latest` and then `docker compose up` does NOT pick up your code changes. **Always deploy via `make pi-deploy` or `docker compose -f ops/docker/docker-compose.yml build ratatoskr`** -- never `docker build` directly. The base compose file deliberately does NOT bind-mount `app/`; re-adding that mount would silently mask `make pi-deploy`.
+
+For local hot-reload (Mac only, never on the Pi): add `ops/docker/docker-compose.dev.yml` as an overlay.
+
+## Project Skills
+
+Task-oriented skills under `.claude/skills/`. Each carries its own workflow, trigger keywords, and dynamic context (live DB queries). Reach for these instead of re-deriving the steps.
+
+| Skill | Use when |
+|---|---|
+| `adding-telegram-command` | adding a new `/foo` slash command (handler + registry wiring) |
+| `alembic-migrations` | adding or modifying SQLAlchemy models / Postgres schema |
+| `inspecting-database` | querying Postgres for requests, summaries, LLM calls, crawl results |
+| `debugging-apis` | Firecrawl / OpenRouter request-response inspection, retry / cost / rate-limit triage |
+| `validating-summaries` | summary JSON contract checks, character-limit failures |
+| `langgraph-summarize-loop` | retry / repair-loop / `attempt_trigger` debugging |
+| `vector-index-sync` | Qdrant + `summary_embeddings` + CocoIndex reconciliation |
+| `scraper-chain-debugging` | content-scraper fallback chain failures |
+| `digest-subsystem-ops` | channel digest userbot, `/init_session` flow, scheduling |
+| `pi-deploy` | building and shipping the image to the Raspberry Pi |
+| `web-frontend-dev` | React + TypeScript + Vite work under `web/` |
+| `testing-workflows` | CLI runner, message simulation, pytest patterns |
+| `repo-task-board` | task creation / status transitions in `docs/tasks/` |
+
+## Common Commands
 
 ```bash
 # Setup
-make venv                  # Create virtual environment
-source .venv/bin/activate  # Activate venv
+make venv && source .venv/bin/activate
 pip install -r requirements.txt -r requirements-dev.txt
 
-# Development
-make format                # Format code (ruff format + isort)
-make lint                  # Lint code (ruff)
-make type                  # Type-check code (mypy)
+# Quality gates
+make format          # ruff format + isort
+make lint            # ruff
+make type            # mypy
 
 # Dependencies
-make lock-uv               # Lock dependencies with uv (recommended)
+make lock-uv         # lock with uv (recommended)
 
-# Docker
-# IMPORTANT: `make docker-deploy` builds `ratatoskr:latest` via `docker build`,
-# but `docker compose up` uses image `ratatoskr-ratatoskr` (compose prefixes the project name).
-# To deploy code changes, always use `docker compose build`:
-docker compose -f ops/docker/docker-compose.yml build ratatoskr            # Build with compose (picks up code changes)
-docker compose -f ops/docker/docker-compose.yml build --no-cache ratatoskr # Full rebuild (after Dockerfile/dependency changes)
-docker compose -f ops/docker/docker-compose.yml down && docker compose -f ops/docker/docker-compose.yml up -d  # Restart with new image
+# Docker (compose is the source of truth; never use raw `docker build`)
+docker compose -f ops/docker/docker-compose.yml build ratatoskr
+docker compose -f ops/docker/docker-compose.yml down && \
+docker compose -f ops/docker/docker-compose.yml up -d
 
-# Legacy standalone build (NOT used by docker compose):
-docker build -f ops/docker/Dockerfile -t ratatoskr:latest .
-docker run --env-file .env -v $(pwd)/data:/data --name ratatoskr ratatoskr:latest
+# Pi deployment (cross-compile linux/arm64 on Mac, stream to Pi, restart)
+make pi-deploy                        # build + ship + restart `ratatoskr`
+make pi-deploy SERVICE=mobile-api     # mobile-api image instead
+make pi-deploy-no-cache               # full rebuild
+make pi-build-only                    # ship without restarting
+bash tools/scripts/build-and-deploy-pi.sh --help   # full flag coverage
 
-# Pi deployment -- build locally on Mac (arm64), stream image to Pi over SSH,
-# restart via the Pi compose overlay. The Pi never runs `docker build`,
-# avoiding the heavy CPU/memory load. Requires `ssh raspi` to work and
-# `~/ratatoskr` to exist on the Pi (override with RASPI_REMOTE_PATH).
-# The shipped IMAGE is the single source of truth for app code -- the base
-# compose file no longer bind-mounts ../../app, so `make pi-deploy` actually
-# takes effect. Do NOT re-add an app bind mount to docker-compose.yml.
-make pi-deploy                                # build + ship + restart `ratatoskr`
-make pi-deploy SERVICE=mobile-api             # ship the mobile-api image instead
-make pi-deploy-no-cache                       # full rebuild before shipping
-make pi-build-only                            # ship without restarting on the Pi
-# Or call the script directly for full flag/env coverage:
-bash tools/scripts/build-and-deploy-pi.sh --help
-
-# Local hot-reload (opt-in): bind-mount app/ + bot.py over the image so edits
-# apply on `restart` without a rebuild. Never use this overlay on the Pi.
-docker compose -f ops/docker/docker-compose.yml -f ops/docker/docker-compose.dev.yml up -d ratatoskr
-
-# CLI Summary Runner
+# CLI Summary Runner (test pipeline without Telegram)
 python -m app.cli.summary --url https://example.com/article
 python -m app.cli.summary --accept-multiple --json-path out.json --log-level DEBUG
+
+# DB inspection
+docker exec -it ratatoskr-postgres psql -U ratatoskr_app -d ratatoskr
+python -m app.cli.migrate_db          # apply Alembic migrations
 ```
 
-### Testing
-
-- **Unit Tests:** Focus on pure functions (URL normalization, JSON validation, message mapping)
-- **Integration Tests:** Mock Firecrawl/OpenRouter responses
-- **E2E Tests:** Gated by `E2E=1` environment variable
-- Test files in `tests/` directory (follow `test_*.py` naming)
-- **Test DB Helpers:** `tests/db_helpers.py` provides standalone CRUD functions (`create_request`, `insert_summary`, `upsert_summary`, etc.) for test setup -- use these instead of calling ORM models directly for common operations
-
-### CI/CD
-
-GitHub Actions (`.github/workflows/ci.yml`) enforces:
-
-- Lockfile freshness (rebuilds from `pyproject.toml`)
-- Lint (ruff), format check (ruff format, isort), type check (mypy)
-- Unit tests with coverage (pytest, 80% threshold)
-- Frontend jobs: `web-build`, `web-test`, `web-static-check`
-- Docker image build
-- OpenAPI spec validation, code complexity (radon)
-- Codecov coverage reporting
-- Integration tests
-- Security: Bandit (SAST), pip-audit + Safety (dependency vulns), Gitleaks (secrets)
-- Optional GHCR publishing when `PUBLISH_DOCKER=true`
-- PR summary automation
-
-## Important Considerations
-
-### When Making Changes
-
-1. **URL Flow Changes:** - Respect URL normalization (`app/core/url_utils.py`) -- all URLs must be normalized before deduplication - Preserve `dedupe_hash` (sha256) for idempotence - Always persist scraper responses in `crawl_results` table (`FirecrawlResult` is the universal output model) - Content extraction uses `ContentScraperChain` (ordered fallback: Scrapling -> Crawl4AI -> Firecrawl (self-hosted) -> Defuddle (self-hosted) -> Playwright -> Crawlee -> Direct HTML -> Scrapegraph-AI). See `app/adapters/content/scraper/` for protocol, chain, factory, and providers - Check `app/adapters/content/url_processor.py` for orchestration logic - **URL Flow models** (`app/adapters/content/url_flow_models.py`): - `URLFlowRequest` -- request envelope: wraps the Telegram message, raw URL text, correlation ID, and Telegram-specific callbacks (progress tracker, phase-change callback) - `URLFlowContext` -- prepared state bag: populated after extraction, holds dedupe_hash, req_id, extracted content, chosen language, prompt, chunking config. Passed from context builder into the LLM summarization step - `URLProcessingFlowResult` -- batch-mode result: success/failure status and title for batch progress tracking - When adding fields to `URLFlowContext`, also update `URLFlowContextBuilder` (`url_flow_context_builder.py`) and any callers that destructure the context
-
-2. **Summary Contract Changes:** - Update `app/core/summary_contract.py` validation functions - Update LLM prompts in `app/prompts/` (both `en/` and `ru/` versions) - Update docs/SPEC.md to document new fields - Ensure backward compatibility with existing DB summaries
-
-3. **Database Schema Changes:** - Add a SQLAlchemy 2.0 model under `app/db/models/<area>.py` and re-export from `app/db/models/__init__.py` - Generate the Alembic revision: `alembic revision --autogenerate -m "<short summary>"`; hand-review the diff before committing - Apply via `python -m app.cli.migrate_db` (runs `alembic upgrade head` against `DATABASE_URL`) - Document in docs/SPEC.md data model section
-
-4. **Telegram Message Handling:** - All messages flow through `message_router.py` - Access control is enforced in `access_controller.py` (check `ALLOWED_USER_IDS`) - Full message snapshots are stored in `telegram_messages` table - Use `ResponseFormatter` for all replies (centralizes logging and error handling)
-
-5. **External API Changes:** - Firecrawl: Check docs at https://docs.firecrawl.dev/api-reference/endpoint/scrape - OpenRouter: Check docs at https://openrouter.ai/docs/api-reference/chat-completion - Both services have retry logic with exponential backoff - Always redact `Authorization` headers before logging
-
-6. **Error Handling:** - All user-visible errors must include `Error ID: <correlation_id>` - Correlation IDs tie Telegram messages -> DB requests -> logs - Use structured logging (`app/core/logging_utils.py`) - Persist all LLM failures in `llm_calls` table (even errors)
-
-7. **Concurrency:** - Semaphore-based rate limiting for Firecrawl/OpenRouter (`MAX_CONCURRENT_CALLS`) - Async/await throughout (Telethon, httpx, PostgreSQL via SQLAlchemy 2.0 `AsyncSession` + asyncpg). Postgres MVCC handles write concurrency natively — no application-level locking - Optional `uvloop` for async performance
-
-### Security Considerations
-
-- **Secrets:** All secrets via env vars (never in DB or logs)
-- **Access Control:** Single-user whitelist (`ALLOWED_USER_IDS`)
-- **Input Validation:** Validate all URLs, escape JSON strings
-- **Authorization Redaction:** Strip `Authorization` headers before persisting
-- **No PII:** Only store Telegram user IDs (no phone numbers, real names)
-
-### Language Support
-
-- Language detection via `app/core/lang.py`
-- Prompts in `app/prompts/` (for example `summary_system_en.txt`, `summary_system_ru.txt`)
-- Configurable preference: `PREFERRED_LANG=auto| en |ru`
-- Detection result stored in `requests.lang_detected`
-
-### YouTube Video Support
-
-YouTube URL detection, transcript extraction, and video download are handled by `app/adapters/youtube/`. Supports all major URL formats (watch, shorts, live, embed, mobile, music). See README.md for details.
-
-### Twitter/X Content Extraction
-
-Twitter/X URLs (tweets, threads, X Articles) are handled by `app/adapters/twitter/`. Uses a two-tier extraction strategy:
-
-1. **Firecrawl** (default, free) -- works for some public tweets
-2. **Playwright** (opt-in via `TWITTER_PLAYWRIGHT_ENABLED`) -- intercepts GraphQL API for tweets/threads, DOM-scrapes X Articles. Requires cookies.txt and Chromium.
-
-Key files: `url_patterns.py` (URL parsing), `graphql_parser.py` (TweetData extraction), `text_formatter.py` (LLM-ready text), `playwright_client.py` (browser automation), `twitter_extractor.py` (orchestrator). Config: `app/config/twitter.py`.
-
-### Web Search Enrichment (Optional)
-
-When `WEB_SEARCH_ENABLED=true`, the bot enriches summaries with current web context via a two-pass LLM architecture. See README.md for details.
-
-### Debugging Tips
-
-1. **Correlation IDs:** Every request gets a unique `correlation_id` -- use it to trace through logs and DB
-2. **Debug Payloads:** Set `DEBUG_PAYLOADS=1` to log Firecrawl/OpenRouter request/response previews (Authorization redacted)
-3. **CLI Runner:** Use `python -m app.cli.summary` to test URL processing without Telegram
-4. **Database Inspection:** PostgreSQL via `DATABASE_URL` -- `docker exec -it ratatoskr-postgres psql -U ratatoskr_app -d ratatoskr` for ad-hoc queries; any standard PG client (DBeaver, pgcli, TablePlus) works
-5. **Logs:** Structured JSON logs to stdout; use `LOG_LEVEL=DEBUG` for verbose traces
-6. **Scraper Chain:** Each provider logs success/failure with provider name. Check logs for `scraper` context to see which provider served the request and which ones failed in the fallback chain. Config in `app/config/scraper.py` (`ScraperConfig`)
-
-### Multi-Agent Architecture
-
-Four specialized agents (ContentExtraction, Summarization, Validation, WebSearch) coordinate via an AgentOrchestrator (multi-step pipeline) or SingleAgentOrchestrator (single-agent execution). The SummarizationAgent implements a self-correction feedback loop (retry with error feedback up to 3x). See `docs/explanation/multi-agent-architecture.md` for complete documentation.
-
-### Additional Subsystems
-
-- **Collections** -- User-created collections with items, collaborators, and invite links (`app/db/models/collections.py`: Collection, CollectionItem, CollectionCollaborator, CollectionInvite)
-- **Device Sync** -- Multi-device sync with full/delta modes and conflict resolution (`app/api/routers/sync.py`, UserDevice model)
-- **Event Bus** -- Internal event publishing/subscribing (`app/infrastructure/messaging/`)
-- **Qdrant Vector Store** -- Semantic search via Qdrant embeddings (`app/infrastructure/vector/qdrant_store.py`, `app/cli/backfill_vector_store.py`). Embedding provider switchable via `EmbeddingConfig` (local sentence-transformers or Gemini API); see `app/infrastructure/embedding/embedding_factory.py`
-- **Vector-Index Sync** -- Summary vectors use three cooperating writers: the synchronous fast path (`SummaryEmbeddingGenerator`), an opt-in CocoIndex `FlowLiveUpdater` inside FastAPI (gated by `RATATOSKR_COCOINDEX_ENABLED`), and the steady-state Taskiq reconciler `ratatoskr.vector.reconcile` (`app/tasks/reconcile_vector_index.py`) that scans rows where `last_indexed_at < summaries.updated_at` every 30 minutes. Repository vectors use the GitHub analysis fast path plus the repository CocoIndex flow for analyzed rows. Shared deterministic point IDs live in `app/infrastructure/vector/point_ids.py`; ops reference: `docs/cocoindex.md`.
-- **PDF Export** -- Summary export to PDF via weasyprint
-- **Background Scheduling** -- APScheduler-based background task processing with Redis distributed locks
-- **Channel Digest** -- Scheduled digests of subscribed Telegram channels via userbot. Commands: `/init_session`, `/digest`, `/channels`, `/subscribe`, `/unsubscribe`. Uses a separate Telethon userbot session to read channel posts. Bot-mediated session init via Telegram Mini App OTP/2FA flow. Ops reference: `docs/reference/digest-subsystem-ops.md`.
-- **GitHub Repository Ingestion** -- Indexes GitHub repositories as a first-class content source alongside articles and videos. Two paths: manual URL paste (any `github.com/<owner>/<repo>` URL) and a Taskiq daily cron job that syncs the authenticated user's starred repos. Repo analysis prefers `LLMClient.chat_structured(RepoAnalysis)` with the legacy raw JSON fallback retained for adapters that cannot do structured output. Fernet-encrypted PAT or OAuth Device Flow tokens live in `user_github_integrations`. Semantic search uses the shared Qdrant collection with an `entity_type="repository"` discriminator, written by the repository embedding fast path and reconciled by CocoIndex. Key files: `app/agents/repo_analysis_agent.py`, `app/application/use_cases/analyze_repository.py`, `app/adapters/github/`, `app/tasks/github_sync.py`, `app/api/routers/repositories.py`, `app/api/routers/auth/github.py`. Architecture doc: `docs/explanation/github-repository-ingestion.md`.
-- **Academic Paper Handling** -- Recognizes scholarly-paper URLs (arXiv, SSRN, NBER, OSF preprints, ResearchGate, RePEc) and routes them through a dedicated platform extractor that fetches the landing HTML via the scraper chain (patchright stealth bypasses Cloudflare gates on SSRN/ResearchGate), harvests title + abstract, downloads the canonical PDF (deterministic URL rewrite for arXiv/SSRN/NBER/OSF; anchor discovery for the rest), and extracts body text via pymupdf. Composes the LLM input as `# Title / ## Abstract / ## Body`; falls back to abstract-only with an explicit `[PDF unavailable: <reason>]` note when the PDF leg fails (paywall, 404, network), never to a hard extraction error. Dedupes across URL shapes (/abs/X vs /pdf/X.pdf, v1 vs v2, papers.cfm vs Delivery.cfm) via the new `requests.paper_canonical_id` column carrying a host-namespaced id (`arxiv:2301.00001`, `ssrn:6531478`). Key files: `app/adapters/academic/{url_patterns,resolvers,platform_extractor}.py`, `SourceKind.ACADEMIC_PAPER`, Alembic 0012.
-
-### Safety Hooks
-
-Claude Code hooks provide automatic safety checks. See `docs/reference/claude-code-hooks.md`.
-
-## Common Tasks
-
-### Adding a New Bot Command
-
-1. Create a handler in `app/adapters/telegram/command_handlers/`
-2. Register via `CommandRegistry.register_command()` in `app/adapters/telegram/commands.py`
-3. The message router delegates automatically to registered commands
-4. Add tests in `tests/`
-
-### Adding a New Summary Field
-
-1. Update `app/core/summary_contract.py` with new validation logic
-2. Update `app/prompts/summary_system_en.txt` and `app/prompts/summary_system_ru.txt` with new field instructions
-3. Update docs/SPEC.md Summary JSON contract section
-4. Test with CLI runner: `python -m app.cli.summary --url <test-url>`
-
-### Adding a New External Service
-
-1. Create new adapter in `app/adapters/<service>/`
-2. Create client class (e.g., `<service>_client.py`)
-3. Add error handling and retry logic (see `app/adapters/openrouter/error_handler.py` for reference)
-4. Add request/response models in `app/models/`
-5. Persist API calls in new DB table (follow `llm_calls` pattern)
-6. Update config (`app/config/`) with new env vars
-
-### Debugging a Failing Summarization
-
-1. Find `correlation_id` from error message
-2. Query PostgreSQL: `docker exec -it ratatoskr-postgres psql -U ratatoskr_app -d ratatoskr -c "SELECT * FROM requests WHERE correlation_id = '<correlation_id>'"`
-3. Check `crawl_results` for the scraper-chain response
-4. Check `llm_calls` for OpenRouter requests/responses
-5. Inspect `summaries` table for final JSON payload
-6. Review logs for structured events with matching `correlation_id`
-
-## External Service References
-
-- **Firecrawl:** https://docs.firecrawl.dev/api-reference/endpoint/scrape | Integration: `app/adapters/content/content_extractor.py`
-- **OpenRouter:** https://openrouter.ai/docs/api-reference/chat-completion | Integration: `app/adapters/openrouter/openrouter_client.py`
-- **Telethon:** https://docs.telethon.dev/ | Integration: `app/adapters/telegram/telegram_bot.py`
-
-## File References
-
-When making changes, these are the most critical files to understand:
-
-- **`app/adapters/telegram/message_router.py`** -- Central routing logic
-- **`app/adapters/content/url_processor.py`** -- URL processing orchestration
-- **`app/core/summary_contract.py`** -- Summary validation (strict contract)
-- **`app/core/summary_schema.py`** -- Summary Pydantic model (full schema)
-- **`app/core/url_utils.py`** -- URL normalization and deduplication
-- **`app/db/models/`** -- Database schema (SQLAlchemy 2.0 typed declarative models, grouped by area)
-- **`app/db/session.py`** -- `DatabaseSessionManager` (sole DB entry point)
-- **`app/config/settings.py`** -- Configuration loading
-- **`app/config/scraper.py`** -- Scraper chain configuration (`ScraperConfig`)
-- **`app/adapters/content/scraper/`** -- `ContentScraperProtocol`, `ContentScraperChain`, `ContentScraperFactory`, providers
-- **`app/api/main.py`** -- Mobile API entry point
-- **`app/mcp/server.py`** -- MCP server for AI agents
-- **`bot.py`** -- Entrypoint (wires everything together)
-- **`docs/SPEC.md`** -- Full technical specification (canonical reference)
-- **`app/adapters/github/`** -- GitHub API client, URL pattern matcher, platform extractor, and exception types for repository ingestion
-- **`app/adapters/academic/`** -- Scholarly-paper handler: `url_patterns.py` (host detection + canonical id parser for arXiv / SSRN / NBER / OSF / ResearchGate / RePEc), `resolvers.py` (per-host PDF URL rewriters), `platform_extractor.py` (landing-HTML + PDF orchestrator with graceful paywall fallback)
-- **`app/db/models/repository.py`** -- `Repository`, `RepositoryEmbedding`, `UserGitHubIntegration` ORM models and their Postgres enum types
-- **`app/tasks/github_sync.py`** -- Taskiq task `ratatoskr.github.sync_stars`; daily per-user starred-repo sync with budget cap and reauth handling
-- **`app/security/token_crypto.py`** -- Fernet encrypt/decrypt for at-rest GitHub tokens; key loaded lazily from `GITHUB_TOKEN_ENCRYPTION_KEY`
-
-## Best Practices
-
-1. **Always read docs/SPEC.md first** -- it's the authoritative source of truth
-2. **Preserve correlation IDs** -- they're essential for debugging
-3. **Validate summary JSON** -- use `app/core/summary_contract.py` functions
-4. **Test with CLI runner** -- faster iteration than full bot testing
-5. **Follow pre-commit hooks** -- run `make format` before committing
-6. **Update both en/ and ru/ prompts** -- when changing LLM behavior
-7. **Document DB schema changes** -- update docs/SPEC.md data model section
-8. **Persist everything** -- Firecrawl responses, LLM calls, Telegram messages (observability is key)
-9. **Use structured logging** -- include correlation IDs and context in all logs
-10. **Respect async patterns** -- use `await` properly, don't block the event loop
-11. **State scope explicitly when you give an instruction** -- "apply this to every section, not just the first." Don't rely on the model generalizing silently
-12. **Tell the model what to do, not what to avoid** -- prefer "use the existing helper in `tests/db_helpers.py`" over "don't create new test fixtures"
-13. **Keep tool/skill guidance in the tool's own description** -- not in CLAUDE.md prose. CLAUDE.md is for project context; per-tool semantics belong with the tool
-14. **Make independent tool calls in parallel** -- only sequence when one result determines the next call's parameters
-15. **Investigate before claiming** -- never assert behavior of code you haven't read; cite `file:line` for each non-obvious claim
-
-## Quick Reference: Environment Variables
-
-```bash
-# Required
-API_ID=...                          # Telegram API ID
-API_HASH=...                        # Telegram API hash
-BOT_TOKEN=...                       # Telegram bot token
-ALLOWED_USER_IDS=123456789          # Comma-separated owner IDs
-OPENROUTER_API_KEY=...              # OpenRouter API key
-OPENROUTER_MODEL=deepseek/deepseek-v4-flash  # Default model
-OPENROUTER_FALLBACK_MODELS=qwen/qwen3.6-flash,qwen/qwen3.6-plus-04-02,moonshotai/kimi-k2-0905,minimax/minimax-m2  # fastest-first; flash runs first to beat outer per-URL timeout
-LLM_CALL_TIMEOUT_SEC=420            # outer LLM cascade budget (was 300); default 420s = 4 models x 90s + buffer
-LLM_PER_MODEL_TIMEOUT_MIN_SEC=90    # per-model floor (was 120); lower floor keeps cascade snappy
-LLM_PER_MODEL_TIMEOUT_OVERRIDES=deepseek/deepseek-v3.2=180,deepseek/deepseek-v4-pro=150  # model=seconds,... overrides; give headroom to models that consistently hit the floor rather than burning cascade wall-clock on inevitable timeouts. Parsed by app/config/runtime.py:llm_per_model_timeout_overrides
-RUNTIME_DEDUPE_RETRY_GRACE_SEC=60   # skip re-queuing URLs that failed within this window (seconds)
-
-# Scraper chain (all optional -- defaults enable full fallback chain)
-# Default order: scrapling -> crawl4ai -> firecrawl -> defuddle -> playwright -> crawlee -> direct_html -> scrapegraph_ai
-FIRECRAWL_API_KEY=                  # Optional; used only by TopicSearchService web search (NOT the scraper chain)
-FIRECRAWL_SELF_HOSTED_ENABLED=false
-FIRECRAWL_SELF_HOSTED_URL=http://firecrawl-api:3002  # Self-hosted Firecrawl (Docker Compose service)
-SCRAPER_ENABLED=true
-SCRAPER_PROFILE=balanced
-SCRAPER_BROWSER_ENABLED=true
-SCRAPER_SCRAPLING_ENABLED=true      # Enable Scrapling provider (primary, in-process)
-SCRAPER_CRAWL4AI_ENABLED=true       # Enable Crawl4AI provider (self-hosted Docker sidecar)
-SCRAPER_CRAWL4AI_URL=http://crawl4ai:11235
-SCRAPER_CRAWL4AI_TOKEN=             # Bearer token for secured Crawl4AI instances (optional)
-SCRAPER_CRAWL4AI_TIMEOUT_SEC=60
-SCRAPER_DEFUDDLE_ENABLED=true       # Enable Defuddle API provider (self-hosted, default on)
-SCRAPER_DEFUDDLE_TIMEOUT_SEC=20
-SCRAPER_DEFUDDLE_API_BASE_URL=http://defuddle-api:3003  # Self-hosted Defuddle (Docker Compose service)
-SCRAPER_FIRECRAWL_TIMEOUT_SEC=90
-SCRAPER_PLAYWRIGHT_ENABLED=true
-SCRAPER_CRAWLEE_ENABLED=true
-SCRAPER_DIRECT_HTML_ENABLED=true
-SCRAPER_SCRAPEGRAPH_ENABLED=true    # Enable ScrapeGraph-AI last-resort provider (requires scrapegraphai pkg)
-SCRAPER_SCRAPEGRAPH_TIMEOUT_SEC=90
-
-# Channel Digest (optional)
-DIGEST_ENABLED=false                # Enable channel digest subsystem
-API_BASE_URL=http://localhost:8000  # Mobile API base URL (for session init)
-
-# GitHub Integration (optional)
-GITHUB_TOKEN_ENCRYPTION_KEY=        # Required when storing any token; generate with tools/scripts/generate_github_encryption_key.py
-GITHUB_OAUTH_APP_CLIENT_ID=         # OAuth Device Flow only; PAT path works without this
-GITHUB_OAUTH_APP_CLIENT_SECRET=     # OAuth Device Flow only
-GITHUB_SYNC_ENABLED=true            # Master switch for daily starred-repo sync
-GITHUB_SYNC_CRON="0 2 * * *"        # UTC cron for sync job (default 02:00 UTC)
-GITHUB_LLM_DAILY_BUDGET=100         # Max LLM analysis calls per sync run; excess deferred
-GITHUB_LLM_CONCURRENCY=2            # Max concurrent LLM calls within one sync run
-GITHUB_REQUEST_TIMEOUT_SEC=30.0     # HTTP timeout for GitHub API calls
-GITHUB_README_MAX_BYTES=51200       # Max README size to fetch (50 KB default)
-
-# Embedding provider (optional -- defaults to local sentence-transformers)
-EMBEDDING_PROVIDER=local              # "local" (sentence-transformers) or "gemini"
-GEMINI_API_KEY=                        # Required when provider=gemini
-GEMINI_EMBEDDING_MODEL=gemini-embedding-2-preview  # Model ID
-GEMINI_EMBEDDING_DIMENSIONS=768       # Output dimensions (1-3072)
-EMBEDDING_MAX_TOKEN_LENGTH=512        # Max tokens for text preparation
-
-# Vector-Index Sync (optional)
-RATATOSKR_COCOINDEX_ENABLED=0         # Enable CocoIndex live updater inside FastAPI
-RATATOSKR_COCOINDEX_POLL_INTERVAL_SEC=30
-RATATOSKR_COCOINDEX_BATCH_SIZE=32
-RATATOSKR_COCOINDEX_POOL_MAX=4
-VECTOR_RECONCILE_ENABLED=true         # Steady-state Taskiq reconciler (on by default)
-VECTOR_RECONCILE_CRON="*/30 * * * *"  # UTC cron for ratatoskr.vector.reconcile
-VECTOR_RECONCILE_BATCH_SIZE=100       # Max stale summaries re-embedded per run
-
-# ElevenLabs TTS (optional)
-ELEVENLABS_ENABLED=false              # Enable text-to-speech
-ELEVENLABS_API_KEY=                   # ElevenLabs API key
-
-# Import / Backup restore (optional)
-IMPORT_MAX_UPLOAD_BYTES=10485760        # Max import upload size in bytes (default 10 MB)
-IMPORT_MAX_ITEMS=10000                  # Max parsed bookmarks per import (default 10 000)
-BACKUP_RESTORE_MAX_UPLOAD_BYTES=104857600  # Max backup restore upload size in bytes (default 100 MB)
-```
-
-Full reference: `docs/reference/environment-variables.md`
-
----
-
-**Last Updated:** 2026-05-08
-
-For questions about the codebase, always refer to:
-
-1. This file (CLAUDE.md) for AI assistant guidance
-2. docs/SPEC.md for technical specification
-3. README.md for user-facing documentation
-4. Code comments and docstrings for implementation details
-
----
+## Code Standards & CI
+
+- **Formatting:** ruff format + isort (profile=black). Pre-commit runs ruff → isort → mypy.
+- **Linting:** ruff (see `pyproject.toml`); B006 and B023 enforced (see Operating Rules).
+- **Types:** mypy, `python_version = "3.13"`.
+- **Testing:** pytest + pytest-asyncio, hypothesis, pytest-benchmark. Use `tests/db_helpers_async.py` (`create_request`, `insert_summary`, ...) instead of writing fresh fixtures or calling ORM models directly. E2E tests gated by `E2E=1`.
+- **CI** (`.github/workflows/ci.yml`): lockfile freshness, lint+format+type, unit tests with 80% coverage, OpenAPI validation, radon complexity, security (Bandit, pip-audit, Safety, Gitleaks), frontend (`web-build`, `web-test`, `web-static-check`), Docker image build. Optional GHCR publish on `PUBLISH_DOCKER=true`.
+
+## Key File References
+
+| File | Role |
+|---|---|
+| `bot.py` | Entrypoint -- wires everything |
+| `app/adapters/telegram/message_router.py` | Central routing |
+| `app/adapters/content/url_processor.py` | URL processing orchestration |
+| `app/adapters/content/scraper/` | Scraper protocol, chain, factory, providers |
+| `app/core/summary_contract.py` | Strict summary validation |
+| `app/core/summary_schema.py` | Pydantic model for the contract |
+| `app/core/url_utils.py` | URL normalization + `dedupe_hash` |
+| `app/db/session.py` | `Database` -- sole DB entry point |
+| `app/db/models/` | SQLAlchemy 2.0 typed models, grouped by area |
+| `app/config/settings.py` | Configuration loading |
+| `app/agents/langgraph/graph.py` | Summarize/validate/repair retry graph |
+| `app/api/main.py` | Mobile API entrypoint |
+| `app/mcp/server.py` | MCP server for AI agents |
+| `docs/SPEC.md` | Documentation navigation hub |
+
+## Database Models
+
+SQLAlchemy 2.0 typed declarative models registered in `ALL_MODELS` (`app/db/models/__init__.py`), grouped by area:
+
+| Module | Models |
+|---|---|
+| `core.py` | `User`, `Chat`, `Request`, `TelegramMessage`, `CrawlResult`, `LLMCall`, `Summary`, `UserInteraction`, `AuditLog`, `SummaryEmbedding`, `VideoDownload`, `AudioGeneration`, `AttachmentProcessing`, `UserDevice`, `RefreshToken`, `ClientSecret` |
+| `aggregation.py` | `AggregationSession`, `AggregationSessionItem` |
+| `batch.py` | `BatchSession`, `BatchSessionItem` |
+| `collections.py` | `Collection`, `CollectionItem`, `CollectionCollaborator`, `CollectionInvite` |
+| `digest.py` | `Channel`, `ChannelCategory`, `ChannelSubscription`, `ChannelPost`, `ChannelPostAnalysis`, `DigestDelivery`, `UserDigestPreference` |
+| `repository.py` | `Repository`, `RepositoryEmbedding`, `UserGitHubIntegration` |
+| `rss.py` | `RSSFeed`, `RSSFeedSubscription`, `RSSFeedItem`, `RSSItemDelivery` |
+| `rules.py` | `WebhookSubscription`, `WebhookDelivery`, `AutomationRule`, `RuleExecutionLog`, `ImportJob`, `UserBackup` |
+| `signal.py` | `Source`, `Subscription`, `FeedItem`, `Topic`, `UserSignal` |
+| `topic_search.py` | `TopicSearchIndex` (Postgres TSVECTOR + GIN) |
+| `user_content.py` | `SummaryFeedback`, `CustomDigest`, `SummaryHighlight`, `UserGoal`, `Tag`, `SummaryTag` |
+
+`LLMCall` rows carry `attempt_index` (1-based, monotonic per `request_id`) and `attempt_trigger` (Postgres enum: `initial`, `user_retry`, `auto_backfill`, `repair_loop`, `stream_fallback_retry`) so retries and the LangGraph repair loop are queryable without timestamp inference.
+
+Schema and migration workflow: `alembic-migrations` skill + `docs/reference/data-model.md`.
+
+## Environment Variables
+
+Full reference (820 lines): `docs/reference/environment-variables.md`. Load-bearing ones:
+
+| Var | Purpose |
+|---|---|
+| `ALLOWED_USER_IDS` | Comma-separated Telegram user IDs allowed to use the bot |
+| `OPENROUTER_API_KEY`, `OPENROUTER_MODEL`, `OPENROUTER_FALLBACK_MODELS` | LLM provider and cascade |
+| `LLM_CALL_TIMEOUT_SEC`, `LLM_PER_MODEL_TIMEOUT_MIN_SEC`, `LLM_PER_MODEL_TIMEOUT_OVERRIDES` | LLM cascade budget shaping |
+| `DATABASE_URL` | Postgres DSN |
+| `DIGEST_ENABLED`, `API_BASE_URL` | Channel digest subsystem on/off + Mini App callback URL |
+| `GITHUB_TOKEN_ENCRYPTION_KEY` | Fernet key for at-rest GitHub PAT / OAuth tokens |
+| `EMBEDDING_PROVIDER` | `local` (sentence-transformers) or `gemini` -- switching invalidates all existing vectors |
+| `RATATOSKR_COCOINDEX_ENABLED`, `VECTOR_RECONCILE_ENABLED` | Vector-index sync writers |
 
 ## Task Board
 
-This repository uses Obsidian Tasks-compatible Markdown task lines as the canonical task system. Use the `repo-task-board` skill for all task-related operations.
+Tasks live as Obsidian Tasks-compatible Markdown lines inside per-task notes. Source of truth: `docs/tasks/issues/<slug>.md`. The `repo-task-board` skill carries the full workflow (templates, transitions, lifecycle); only the canonical layout is repeated here:
 
-Canonical files:
+- `docs/tasks/issues/<slug>.md` -- one note per task (YAML frontmatter + canonical `- [ ]` line + spec). **Delete the file on close** -- git history is the audit trail.
+- `docs/tasks/active.md`, `backlog.md`, `blocked.md`, `dashboard.md` -- Obsidian Tasks query views, NOT task storage. Do not add task lines to these files.
+- `docs/tasks/board.md` -- Kanban visualization.
 
-- `docs/tasks/issues/<slug>.md` — **source of truth** — one note per task (YAML frontmatter + canonical `- [ ]` line + spec)
-- `docs/tasks/active.md` — Obsidian Tasks query view (`#status/doing`, `#status/review`)
-- `docs/tasks/backlog.md` — Obsidian Tasks query view (`#status/backlog`)
-- `docs/tasks/blocked.md` — Obsidian Tasks query view (`#status/blocked`)
-- `docs/tasks/dashboard.md` — Obsidian Tasks query hub + Bases view links
-- `docs/tasks/board.md` — Kanban board (visual layer; source of truth is `issues/`)
+When implementing a task, also update any CLAUDE.md or skill content that the change makes stale, and commit both together.
 
-Canonical task syntax (lives inside `docs/tasks/issues/<slug>.md`):
-
-```md
-- [ ] #task <imperative title> #repo/ratatoskr #area/<area> #status/<status> <priority>
-```
-
-Per-task note YAML frontmatter:
-
-```yaml
 ---
-title: Imperative task title
-status: doing          # backlog | todo | doing | review | blocked | done | dropped
-area: auth             # auth | api | kmp | sync | ci | frontend | observability | testing | content | scraper | llm | db | docs | ops
-priority: high         # critical | high | medium | low
-owner: Role name
-blocks: []
-blocked_by: []
-created: YYYY-MM-DD
-updated: YYYY-MM-DD
----
-```
 
-Lifecycle: create via Templater template → transitions update `status:` + `#status/*` tag → delete file on close (git history is the audit trail). Do NOT add task lines to `active.md`, `backlog.md`, or `blocked.md` — those are query-only views.
+**Last Updated:** 2026-05-18
 
-**AI assistants must delete the issue file after implementing a task.** If the task added new docs or subsystems, also update the relevant CLAUDE.md entries and commit both changes together.
-
-Invoke the `repo-task-board` skill when the user mentions: roadmap, TODO, backlog, Kanban, task board, sprint, blocked work, or agent-ready work.
+Reading order for orientation: this file → `docs/SPEC.md` → relevant `docs/explanation/*.md` or `docs/reference/*.md` → matching `.claude/skills/<name>/SKILL.md`.

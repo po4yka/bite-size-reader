@@ -110,4 +110,4 @@ Match them locally before pushing -- it's the cheapest way to avoid red CI.
 - The mobile API and the web frontend share auth (`app/api/routers/auth/`); changes to JWT flow affect both surfaces.
 - For SSE/streaming endpoints, check `app/api/routers/streams.py` and `app/adapters/content/streaming/` (in-process StreamHub).
 - If you add a new API endpoint, run `make` targets or check that the OpenAPI spec validation in CI still passes.
-- Reference: per CLAUDE.md, `FRONTEND.md` was the canonical frontend doc -- verify it still exists before pointing readers there.
+- For canonical frontend docs, look under `docs/` (e.g., `docs/explanation/`) -- CLAUDE.md previously referenced a top-level `FRONTEND.md` that no longer exists in the tree.

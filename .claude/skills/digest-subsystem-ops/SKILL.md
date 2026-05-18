@@ -57,12 +57,17 @@ All defined in `app/db/models/digest.py`.
 
 ### Has the userbot session been initialized?
 
+The Telethon session lives on disk, not in Postgres -- the bot reads/writes a `.session` file in the data directory configured for the userbot.
+
 ```bash
-docker exec -i ratatoskr-postgres psql -U ratatoskr_app -d ratatoskr -c \
-  "SELECT count(*) FROM telethon_sessions;"
-# Or check the on-disk session file (path varies by config)
+# Check the on-disk session file (path may vary by config; default lives in data/)
 ls -la data/*.session 2>&1
+
+# If running in the container, inspect inside it:
+docker exec -i ratatoskr ls -la /data/*.session 2>&1
 ```
+
+If no file exists, `/init_session` has not been completed successfully.
 
 ### Recent post ingestion
 
@@ -108,10 +113,15 @@ The digest scheduler runs inside the bot process via APScheduler with Redis dist
 
 ## Key Files
 
-- **Userbot client**: under `app/adapters/telegram/` (separate from the bot client)
+- **Userbot client**: `app/adapters/digest/userbot_client.py` (separate process from the bot's Telethon client)
+- **Channel reader**: `app/adapters/digest/channel_reader.py`
+- **Digest service**: `app/adapters/digest/digest_service.py`
+- **Analyzer (LLM)**: `app/adapters/digest/analyzer.py`
+- **Session validator**: `app/adapters/digest/session_validator.py`
+- **Session init state**: `app/adapters/telegram/session_init_state.py` (in-memory state machine for the bot-mediated init flow)
 - **Models**: `app/db/models/digest.py`
-- **Commands**: `app/adapters/telegram/command_handlers/{init_session,digest,subscribe,unsubscribe,channels}_command.py`
-- **Mobile API session init**: `app/api/routers/auth/` or similar
+- **Commands**: `app/adapters/telegram/command_handlers/init_session_handler.py`, `digest_handler.py` (and related handlers in the same directory)
+- **Mobile API session init**: `app/api/routers/auth/` (grep for `session` to find the exact route)
 - **Mini App UI**: `web/src/` (if frontend hosts the Mini App)
 - **Ops doc**: `docs/reference/digest-subsystem-ops.md`
 

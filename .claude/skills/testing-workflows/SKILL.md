@@ -75,10 +75,7 @@ test_message = TelegramMessage(
 
 ### Test Message Router
 
-```python
-from app.adapters.telegram.message_router import MessageRouter
-# Check URL extraction and routing logic in message_router.py
-```
+For routing logic tests, instantiate `MessageRouter` with mocked dependencies and call it directly. See `app/adapters/telegram/message_router.py` for the constructor signature and existing router tests under `tests/adapters/telegram/` for setup patterns.
 
 ## End-to-End URL Flow
 
