@@ -372,6 +372,7 @@ markers = [
     "stress: marks stress/load tests",
     "benchmark: marks performance benchmark tests",
     "contracts: marks API and schema contract consistency tests",
+    "no_network: marks tests that must never perform live network I/O",
 ]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
