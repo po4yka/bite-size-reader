@@ -22,8 +22,8 @@ from app.application.dto.aggregation import (
 from app.domain.models.source import AggregationItemStatus, SourceKind
 from app.infrastructure.vector.point_ids import (
     repository_point_id,
-    summary_point_id,
     str_to_uuid,
+    summary_point_id,
 )
 
 
