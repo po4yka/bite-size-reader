@@ -688,7 +688,7 @@ wheels = [
 
 [[package]]
 name = "crawlee"
-version = "1.6.3"
+version = "1.7.0"
 source = { registry = "https://pkgs.safetycli.com/repository/po4yka/project/ratatoskr/pypi/simple/" }
 dependencies = [
     { name = "async-timeout" },
@@ -705,9 +705,9 @@ dependencies = [
     { name = "typing-extensions" },
     { name = "yarl" },
 ]
-sdist = { url = "https://pkgs.safetycli.com/package/po4yka/pypi/packages/35/1d/3f3652c8cf889053b795934a4d6268e805793a30be11001603c5a7f4b46e/crawlee-1.6.3.tar.gz", hash = "sha256:9cbb243071186daa2f9e9572a8bfb966c81537bc86ef6e3bc8572602d659b159", size = 25869502, upload-time = "2026-04-27T16:33:56.51Z" }
+sdist = { url = "https://pkgs.safetycli.com/package/po4yka/pypi/packages/c4/13/10d822c282f7967f97111b4751b454a02a963373247dae925bd01872a0ee/crawlee-1.7.0.tar.gz", hash = "sha256:38035e31f196ae632e65275188ec382ded908a132a99613cb77e82888770bb24", size = 286528, upload-time = "2026-05-12T08:37:13.841Z" }
 wheels = [
-    { url = "https://pkgs.safetycli.com/package/po4yka/pypi/packages/86/83/e9adf980396829edc8a2979892bdec1bbd203443c513a791255ab59aab53/crawlee-1.6.3-py3-none-any.whl", hash = "sha256:551a4c54de70aeb4eaf079bb44f63aaa45d94e6e143c1fd72924a92b46ded505", size = 343055, upload-time = "2026-04-27T16:33:54.019Z" },
+    { url = "https://pkgs.safetycli.com/package/po4yka/pypi/packages/d4/bd/9d69cb8156065f62bcb14ca68b118cbcbbfd3bb293c18fc2ee842b46e784/crawlee-1.7.0-py3-none-any.whl", hash = "sha256:fc969425f1ec977d02ddf68747aec9dad88daac506f677a942389b2b278ab1e9", size = 369875, upload-time = "2026-05-12T08:37:07.629Z" },
 ]
 
 [package.optional-dependencies]
@@ -1632,14 +1632,14 @@ wheels = [
 
 [[package]]
 name = "hypothesis"
-version = "6.152.6"
+version = "6.152.8"
 source = { registry = "https://pkgs.safetycli.com/repository/po4yka/project/ratatoskr/pypi/simple/" }
 dependencies = [
     { name = "sortedcontainers" },
 ]
-sdist = { url = "https://pkgs.safetycli.com/package/po4yka/pypi/packages/f0/09/f5219c8fd75ff1f270a6f691df651c206e9316b9d0ce2cbd8b6f82844e1e/hypothesis-6.152.6.tar.gz", hash = "sha256:4a3f21e9a7349a17616626e9010f04360b02e6bf8ff15fdc7c53e76d5517c1e8", size = 467945, upload-time = "2026-05-11T13:12:59.888Z" }
+sdist = { url = "https://pkgs.safetycli.com/package/po4yka/pypi/packages/ac/81/9260841df522f923a1c9b5879f2192e237db22e68d3594939866a97f1120/hypothesis-6.152.8.tar.gz", hash = "sha256:9c0dd56c6ce5649ef3289555ae9fec40663401cf7134a99f926acf1b91fb6d9f", size = 468156, upload-time = "2026-05-18T23:19:27.866Z" }
 wheels = [
-    { url = "https://pkgs.safetycli.com/package/po4yka/pypi/packages/5f/1c/ed568eca3a963dc3e447b01961ae653e0d6f107c2cfd77b3f2b1a5cfc520/hypothesis-6.152.6-py3-none-any.whl", hash = "sha256:b20ffc532e5f2901229348d10ed7cb37fd9723ebf4799df663d2dce1cdce4e32", size = 533724, upload-time = "2026-05-11T13:12:56.182Z" },
+    { url = "https://pkgs.safetycli.com/package/po4yka/pypi/packages/54/59/0faf3a4ad69ac1d14988658f02b03a1384e32131abd17af8b8a6069db21c/hypothesis-6.152.8-py3-none-any.whl", hash = "sha256:61b1e6e14f0623e8afe27a4a1b1fce5a4611beefef015b987a5c7d0359babbda", size = 533809, upload-time = "2026-05-18T23:19:24.735Z" },
 ]
 
 [[package]]
@@ -1829,11 +1829,11 @@ wheels = [
 
 [[package]]
 name = "json-repair"
-version = "0.59.7"
+version = "0.59.10"
 source = { registry = "https://pkgs.safetycli.com/repository/po4yka/project/ratatoskr/pypi/simple/" }
-sdist = { url = "https://pkgs.safetycli.com/package/po4yka/pypi/packages/2f/70/b1b95ad29e20df1b0f4ced18c0d389e9ff372202dc40d8e02931710c4f2c/json_repair-0.59.7.tar.gz", hash = "sha256:f23c7890b7d1760185ff316421bc776d31a29290a8d45997cfaf6c3add895aaa", size = 48886, upload-time = "2026-05-11T09:19:27.464Z" }
+sdist = { url = "https://pkgs.safetycli.com/package/po4yka/pypi/packages/d3/7c/e95bb03068572146eba37e8175c760f470ea0a6097310e16bbf2bc6e6457/json_repair-0.59.10.tar.gz", hash = "sha256:2e4b85537c752d8a513ea28fdad891e5ede32c83de745366b97f648b8c34ede7", size = 49133, upload-time = "2026-05-14T06:41:51.222Z" }
 wheels = [
-    { url = "https://pkgs.safetycli.com/package/po4yka/pypi/packages/00/05/8f5b0a35dca1d101e76dd7e2a56c66dd0fdd0ff573e1d4dcff644c3d33c2/json_repair-0.59.7-py3-none-any.whl", hash = "sha256:933fc5c81c5edabb004472e58c495f1ae656a8778e9fd26ca806ae42f3110b07", size = 47538, upload-time = "2026-05-11T09:19:25.831Z" },
+    { url = "https://pkgs.safetycli.com/package/po4yka/pypi/packages/ee/87/49b20c6b81493d55c311f711ed87319d0fbad8bd0bbfbe36e52103af36bd/json_repair-0.59.10-py3-none-any.whl", hash = "sha256:5468fa3eaadcc9b4a5646776bc4176e2fe5f374b5848a15f468cce3b60e3db0e", size = 47742, upload-time = "2026-05-14T06:41:49.812Z" },
 ]
 
 [[package]]
@@ -3030,7 +3030,7 @@ wheels = [
 
 [[package]]
 name = "openai"
-version = "2.36.0"
+version = "2.37.0"
 source = { registry = "https://pkgs.safetycli.com/repository/po4yka/project/ratatoskr/pypi/simple/" }
 dependencies = [
     { name = "anyio" },
@@ -3042,9 +3042,9 @@ dependencies = [
     { name = "tqdm" },
     { name = "typing-extensions" },
 ]
-sdist = { url = "https://pkgs.safetycli.com/package/po4yka/pypi/packages/f4/a1/4d5e84cf51720fc1526cc49e10ac1961abcccb55b0efb3d970db1e9a2728/openai-2.36.0.tar.gz", hash = "sha256:139dea0edd2f1b30c33d46ae1a6929e03906254140318e4608e98fe8c566f2e7", size = 753003, upload-time = "2026-05-07T17:33:17.075Z" }
+sdist = { url = "https://pkgs.safetycli.com/package/po4yka/pypi/packages/32/50/5901f01ef14e6c27788beb91e54fef5d6204fb5fb9e97402fc8a14de2e32/openai-2.37.0.tar.gz", hash = "sha256:f4bc562cc5f3a43d40d678105572d9d44765f6e0f50c125f63055419b72f4bd9", size = 754706, upload-time = "2026-05-15T22:30:35.428Z" }
 wheels = [
-    { url = "https://pkgs.safetycli.com/package/po4yka/pypi/packages/9d/1c/5d43735b2553baae2a5e899dcbcd0670a86930d993184d72ca909bf11c9b/openai-2.36.0-py3-none-any.whl", hash = "sha256:143f6194b548dbc2c921af1f1b03b9f14c85fed8a75b5b516f5bcc11a2a50c63", size = 1302361, upload-time = "2026-05-07T17:33:15.063Z" },
+    { url = "https://pkgs.safetycli.com/package/po4yka/pypi/packages/ed/4c/bce61680d0699a78a405fd9a67989b175ba020590428831aab2ab1d2be7c/openai-2.37.0-py3-none-any.whl", hash = "sha256:814633888b8f3b1ffd6615697c6e4ef93632d08b7c2e28c8c5ef3556e5a10107", size = 1303238, upload-time = "2026-05-15T22:30:32.767Z" },
 ]
 
 [[package]]
@@ -3566,21 +3566,21 @@ wheels = [
 
 [[package]]
 name = "playwright"
-version = "1.59.0"
+version = "1.60.0"
 source = { registry = "https://pkgs.safetycli.com/repository/po4yka/project/ratatoskr/pypi/simple/" }
 dependencies = [
     { name = "greenlet" },
     { name = "pyee" },
 ]
 wheels = [
-    { url = "https://pkgs.safetycli.com/package/po4yka/pypi/packages/5b/48/abab23f40643b4de8f2665816f0a1bf0994eeecda39d6d62f0f292b2ad01/playwright-1.59.0-py3-none-macosx_10_13_x86_64.whl", hash = "sha256:bfc6940100b57423175c819ce2422ec5880d55fa2769987f62ab7a1f5fe6783e", size = 43156922, upload-time = "2026-04-29T08:11:08.921Z" },
-    { url = "https://pkgs.safetycli.com/package/po4yka/pypi/packages/08/71/5e4d98b2ce3641b4343623c6450ff33b9de1c979d12a957505e392338b07/playwright-1.59.0-py3-none-macosx_11_0_arm64.whl", hash = "sha256:af068143a0c045ec11608b67d6c42e58db7e9cf65a742dd21fddedc1a9802c47", size = 41947177, upload-time = "2026-04-29T08:11:12.867Z" },
-    { url = "https://pkgs.safetycli.com/package/po4yka/pypi/packages/80/91/fd219aa78ca03d37e93aaedaed4e224131e3090a9264f9bb773c8271d67e/playwright-1.59.0-py3-none-macosx_11_0_universal2.whl", hash = "sha256:4a4a2d4842b0e4120de3fa48636e4b69085a05b81d8a35ad4353f530ade72ed6", size = 43156922, upload-time = "2026-04-29T08:11:16.595Z" },
-    { url = "https://pkgs.safetycli.com/package/po4yka/pypi/packages/73/0c/1e513d37c5be07d12829ebce93dbfe7baee230084cb66966c423432799c4/playwright-1.59.0-py3-none-manylinux1_x86_64.whl", hash = "sha256:c5792aad9e22b91a09264b9edbc18553cf05ea5a39404d65dc19a012c6b2e51d", size = 47151793, upload-time = "2026-04-29T08:11:19.979Z" },
-    { url = "https://pkgs.safetycli.com/package/po4yka/pypi/packages/a3/2d/15f72288cb65d690134e18fefb9483cc4976f7579b580648c45e494481a7/playwright-1.59.0-py3-none-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:8c881a19377d2b900af855fb525b5f22a27bf3cfbecba6d1edb36766d56cb100", size = 46877615, upload-time = "2026-04-29T08:11:23.863Z" },
-    { url = "https://pkgs.safetycli.com/package/po4yka/pypi/packages/72/a1/717ac5bc99f387c0f60def91271ea4262125c0815d764a5d1776a272275c/playwright-1.59.0-py3-none-win32.whl", hash = "sha256:6989c476be2b9cd3e24a18cc9dcf202e266fb3d91e3e5395cd668c54ea54b119", size = 37713698, upload-time = "2026-04-29T08:11:27.251Z" },
-    { url = "https://pkgs.safetycli.com/package/po4yka/pypi/packages/0f/a5/4e630ee05d8b46b840f943268e86d6063703e8dadb2d3eb405c7b9b2e48c/playwright-1.59.0-py3-none-win_amd64.whl", hash = "sha256:d5a5cc064b82ca92996080025710844e417f44df8fda9001102c28f44174171c", size = 37713704, upload-time = "2026-04-29T08:11:30.41Z" },
-    { url = "https://pkgs.safetycli.com/package/po4yka/pypi/packages/eb/0c/3ece41761ba13c8321009aefcaec7a016eb42799c42eef5e03ace7f2de5b/playwright-1.59.0-py3-none-win_arm64.whl", hash = "sha256:93581ad515728cadc8af39b288a5633ba6d36e7d72048e79d890ce01ea2156f9", size = 33956745, upload-time = "2026-04-29T08:11:34.738Z" },
+    { url = "https://pkgs.safetycli.com/package/po4yka/pypi/packages/21/f0/832bd9677194908da118064eef20082f2791e3d18215cc6d9391ee2c5a67/playwright-1.60.0-py3-none-macosx_10_13_x86_64.whl", hash = "sha256:6a8cd0fec171fb3089e95e898c8bc8a6f35dea0b78b399e12fcc19427e91b1d7", size = 43474635, upload-time = "2026-05-18T12:00:31.969Z" },
+    { url = "https://pkgs.safetycli.com/package/po4yka/pypi/packages/59/7b/e1d32ae8a3ed937ec2be3721c5f728b13d731a0b7c6442e0b3bec5094ac0/playwright-1.60.0-py3-none-macosx_11_0_arm64.whl", hash = "sha256:39b5420ba6145045b69ced4c5c47d4d9fe5bddfc8ff816c518913afcb25ec7a5", size = 42261327, upload-time = "2026-05-18T12:00:35.638Z" },
+    { url = "https://pkgs.safetycli.com/package/po4yka/pypi/packages/d7/bc/23de499ded6411c188a20c5a0dea6f0cd4ed5d2b3cc6042a5dbd3ed609aa/playwright-1.60.0-py3-none-macosx_11_0_universal2.whl", hash = "sha256:2581d0e6a3392c71f91b27460c7fd093356818dc430f48153896c8aeeaef7705", size = 43474636, upload-time = "2026-05-18T12:00:39.294Z" },
+    { url = "https://pkgs.safetycli.com/package/po4yka/pypi/packages/22/7b/1d679f4fced4ea94efadd17103856d8c565384f68382a1681264e46f5925/playwright-1.60.0-py3-none-manylinux1_x86_64.whl", hash = "sha256:1c2bfae7884fb3fb05b853290eab8f343d524e5016f2f1def702acbbdf14c93e", size = 47467220, upload-time = "2026-05-18T12:00:43.179Z" },
+    { url = "https://pkgs.safetycli.com/package/po4yka/pypi/packages/84/c2/1528d267d4442bd2c6b8eaeab819dd52c2030bf80e89293f0ba1f687473b/playwright-1.60.0-py3-none-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:43e66564125ee31b07a58cefb21e256d62d67d8d1713e6858df7a3019d8ed353", size = 47154856, upload-time = "2026-05-18T12:00:46.715Z" },
+    { url = "https://pkgs.safetycli.com/package/po4yka/pypi/packages/bb/4e/b008b6440a7a1624378041da94829956d4b8f7ab9ef5aad22d0dc3f2e26d/playwright-1.60.0-py3-none-win32.whl", hash = "sha256:ec94e416ea320711e0ad4bf185dcbf41833672961e90773e1885255d7db7b7e7", size = 37902157, upload-time = "2026-05-18T12:00:50.374Z" },
+    { url = "https://pkgs.safetycli.com/package/po4yka/pypi/packages/55/f0/0541524133104f9cc20bf900870ff4a736b76a23483f3a55295ddfa58409/playwright-1.60.0-py3-none-win_amd64.whl", hash = "sha256:9566821ce6030a1f9e7146a24e19355ab0d98805fd0f9be50bb3d8fef1750c02", size = 37902159, upload-time = "2026-05-18T12:00:53.728Z" },
+    { url = "https://pkgs.safetycli.com/package/po4yka/pypi/packages/80/c8/210f282d278e4709cdd71b12a31af45a30a22ab3207b387e29b37e478713/playwright-1.60.0-py3-none-win_arm64.whl", hash = "sha256:6e4f6700a4c2250efff8e690a81d66e3855754fb587b6b87cf5c784014f91537", size = 34037981, upload-time = "2026-05-18T12:00:57.584Z" },
 ]
 
 [[package]]
@@ -4200,11 +4200,11 @@ wheels = [
 
 [[package]]
 name = "python-multipart"
-version = "0.0.28"
+version = "0.0.29"
 source = { registry = "https://pkgs.safetycli.com/repository/po4yka/project/ratatoskr/pypi/simple/" }
-sdist = { url = "https://pkgs.safetycli.com/package/po4yka/pypi/packages/82/54/a85eb421fbdd5007bc5af39d0f4ed9fa609e0fedbfdc2adcf0b34526870e/python_multipart-0.0.28.tar.gz", hash = "sha256:8550da197eac0f7ab748961fc9509b999fa2662ea25cef857f05249f6893c0f8", size = 45314, upload-time = "2026-05-10T11:05:16.596Z" }
+sdist = { url = "https://pkgs.safetycli.com/package/po4yka/pypi/packages/4e/fe/70bd71a6738b09a0bdf6480ca6436b167469ca4578b2a0efbe390b4b0e70/python_multipart-0.0.29.tar.gz", hash = "sha256:643e93849196645e2dbdd81a0f8829a23123ad7f797a84a364c6fb3563f18904", size = 45678, upload-time = "2026-05-17T17:29:47.654Z" }
 wheels = [
-    { url = "https://pkgs.safetycli.com/package/po4yka/pypi/packages/f3/a2/43bbc5860b5034e2af4ef99a0e04d726ff329c43e192ef3abaa8d7ecfce5/python_multipart-0.0.28-py3-none-any.whl", hash = "sha256:10faac07eb966c3f48dc415f9dee46c04cb10d58d30a35677db8027c825ed9b6", size = 29438, upload-time = "2026-05-10T11:05:15.052Z" },
+    { url = "https://pkgs.safetycli.com/package/po4yka/pypi/packages/8f/cb/769cfc37177252872a45a71f3fbdde9d51b471a3f3c14bfe95dde3407386/python_multipart-0.0.29-py3-none-any.whl", hash = "sha256:2ddcc971cef266225f54f552d8fa10bcfbb1f14446caec199060daac59ff2d69", size = 29640, upload-time = "2026-05-17T17:29:45.69Z" },
 ]
 
 [[package]]
@@ -4282,7 +4282,7 @@ wheels = [
 
 [[package]]
 name = "qdrant-client"
-version = "1.17.1"
+version = "1.18.0"
 source = { registry = "https://pkgs.safetycli.com/repository/po4yka/project/ratatoskr/pypi/simple/" }
 dependencies = [
     { name = "grpcio" },
@@ -4293,9 +4293,9 @@ dependencies = [
     { name = "pydantic" },
     { name = "urllib3" },
 ]
-sdist = { url = "https://pkgs.safetycli.com/package/po4yka/pypi/packages/30/dd/f8a8261b83946af3cd65943c93c4f83e044f01184e8525404989d22a81a5/qdrant_client-1.17.1.tar.gz", hash = "sha256:22f990bbd63485ed97ba551a4c498181fcb723f71dcab5d6e4e43fe1050a2bc0", size = 344979, upload-time = "2026-03-13T17:13:44.678Z" }
+sdist = { url = "https://pkgs.safetycli.com/package/po4yka/pypi/packages/65/45/5b1bdd15a3c7730eefb9c113600829e20d689b82b5a23f9e07d107094004/qdrant_client-1.18.0.tar.gz", hash = "sha256:52e8ece1a7d40519801bf0b70713bfa0f6b7ae28c7275bbe0b0286fbed7f6db4", size = 352580, upload-time = "2026-05-11T14:12:38.702Z" }
 wheels = [
-    { url = "https://pkgs.safetycli.com/package/po4yka/pypi/packages/68/69/77d1a971c4b933e8c79403e99bcbb790463da5e48333cc4fd5d412c63c98/qdrant_client-1.17.1-py3-none-any.whl", hash = "sha256:6cda4064adfeaf211c751f3fbc00edbbdb499850918c7aff4855a9a759d56cbd", size = 389947, upload-time = "2026-03-13T17:13:43.156Z" },
+    { url = "https://pkgs.safetycli.com/package/po4yka/pypi/packages/d6/10/c437bd2ac41ef30d3019063e6ce537dc111e9214473b337ee88f7fa6359a/qdrant_client-1.18.0-py3-none-any.whl", hash = "sha256:093aa8cf8a420ee3ad2a68b007e1378d7992b2600e0b53c193fc172674f659cd", size = 398126, upload-time = "2026-05-11T14:12:36.998Z" },
 ]
 
 [[package]]
@@ -4438,7 +4438,7 @@ requires-dist = [
     { name = "asyncpg", specifier = ">=0.29" },
     { name = "browserforge", specifier = ">=1.2.4" },
     { name = "cocoindex", marker = "extra == 'cocoindex'", specifier = ">=1.0.3,<1.1" },
-    { name = "crawlee", extras = ["beautifulsoup", "playwright"], marker = "extra == 'browser-scraper'", specifier = ">=1.4.0" },
+    { name = "crawlee", extras = ["beautifulsoup", "playwright"], marker = "extra == 'browser-scraper'", specifier = ">=1.7.0" },
     { name = "cryptography", marker = "extra == 'api'", specifier = ">=48.0.0" },
     { name = "curl-cffi", specifier = ">=0.15.0" },
     { name = "defusedxml", marker = "extra == 'api'", specifier = ">=0.7.1" },
@@ -4448,14 +4448,14 @@ requires-dist = [
     { name = "greenlet", specifier = ">=3.0" },
     { name = "httpx", extras = ["http2"], specifier = ">=0.28.1" },
     { name = "instructor", specifier = ">=1.5.0" },
-    { name = "json-repair", specifier = ">=0.59.7" },
+    { name = "json-repair", specifier = ">=0.59.10" },
     { name = "langchain", marker = "extra == 'langgraph'", specifier = ">=1.0,<2" },
     { name = "langgraph", marker = "extra == 'langgraph'", specifier = ">=1.1.10" },
     { name = "langgraph-checkpoint-postgres", marker = "extra == 'langgraph'", specifier = ">=3.0.0" },
     { name = "loguru", specifier = ">=0.7.3" },
     { name = "markitdown", extras = ["docx", "pptx", "xlsx", "outlook"], marker = "extra == 'attachment'", specifier = ">=0.0.2" },
     { name = "mcp", marker = "extra == 'mcp'", specifier = ">=1.27.1,<2" },
-    { name = "openai", specifier = ">=2.36.0" },
+    { name = "openai", specifier = ">=2.37.0" },
     { name = "opentelemetry-api", marker = "extra == 'otel'", specifier = ">=1.41,<2" },
     { name = "opentelemetry-exporter-otlp-proto-grpc", marker = "extra == 'otel'", specifier = ">=1.41,<2" },
     { name = "opentelemetry-instrumentation-fastapi", marker = "extra == 'otel'", specifier = ">=0.62b0" },
@@ -4466,7 +4466,7 @@ requires-dist = [
     { name = "orjson", specifier = ">=3.11.9" },
     { name = "patchright", marker = "extra == 'browser-scraper'", specifier = ">=1.40" },
     { name = "pillow", marker = "extra == 'attachment'", specifier = ">=11.0.0" },
-    { name = "playwright", marker = "extra == 'browser-scraper'", specifier = ">=1.40" },
+    { name = "playwright", marker = "extra == 'browser-scraper'", specifier = ">=1.60.0" },
     { name = "prometheus-client", marker = "extra == 'monitoring'", specifier = ">=0.25.0" },
     { name = "psycopg", extras = ["binary"], marker = "extra == 'cocoindex'", specifier = ">=3.0" },
     { name = "psycopg", extras = ["binary"], marker = "extra == 'langgraph'", specifier = ">=3.0" },
@@ -4474,9 +4474,9 @@ requires-dist = [
     { name = "pydantic-settings", specifier = ">=2.14.1" },
     { name = "pyjwt", marker = "extra == 'api'", specifier = ">=2.12.0" },
     { name = "pymupdf", marker = "extra == 'attachment'", specifier = ">=1.27.2.3" },
-    { name = "python-multipart", marker = "extra == 'api'", specifier = ">=0.0.28" },
+    { name = "python-multipart", marker = "extra == 'api'", specifier = ">=0.0.29" },
     { name = "pyyaml", specifier = ">=6.0.3" },
-    { name = "qdrant-client", marker = "extra == 'inference-core'", specifier = ">=1.12.0" },
+    { name = "qdrant-client", marker = "extra == 'inference-core'", specifier = ">=1.18.0" },
     { name = "ratatoskr", extras = ["browser-scraper"], marker = "extra == 'api'" },
     { name = "ratatoskr", extras = ["inference-core"], marker = "extra == 'api'" },
     { name = "ratatoskr", extras = ["inference-core"], marker = "extra == 'ml'" },
@@ -4484,20 +4484,20 @@ requires-dist = [
     { name = "scikit-learn", marker = "extra == 'ml'", specifier = ">=1.8.0" },
     { name = "scrapegraphai", marker = "extra == 'scraper-ai'", specifier = ">=2.1.1" },
     { name = "scrapling", specifier = ">=0.4.8" },
-    { name = "sentence-transformers", marker = "extra == 'inference-core'", specifier = ">=5.2.2" },
+    { name = "sentence-transformers", marker = "extra == 'inference-core'", specifier = ">=5.5.0" },
     { name = "sentry-sdk", extras = ["fastapi", "loguru"], marker = "extra == 'monitoring'", specifier = ">=2.0.0" },
     { name = "spacy", specifier = ">=3.8.11,<4" },
     { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2.0.30,<3.0" },
-    { name = "sse-starlette", marker = "extra == 'api'", specifier = ">=3.4.1" },
+    { name = "sse-starlette", marker = "extra == 'api'", specifier = ">=3.4.4" },
     { name = "starlette", marker = "extra == 'api'", specifier = ">=0.50.0" },
     { name = "taskiq", marker = "extra == 'scheduler'", specifier = ">=0.12.4,<0.13.0" },
     { name = "taskiq-redis", marker = "extra == 'scheduler'", specifier = ">=1.0.0,<2.0.0" },
     { name = "telethon", specifier = ">=1.42.0" },
     { name = "tenacity", specifier = ">=8.2.0" },
-    { name = "torch", marker = "extra == 'ml'", specifier = ">=2.10.0" },
+    { name = "torch", marker = "extra == 'ml'", specifier = ">=2.12.0" },
     { name = "trafilatura", specifier = ">=2.0.0" },
-    { name = "transformers", marker = "extra == 'ml'", specifier = ">=5.8.0" },
-    { name = "uvicorn", extras = ["standard"], marker = "extra == 'api'", specifier = ">=0.40.0" },
+    { name = "transformers", marker = "extra == 'ml'", specifier = ">=5.8.1" },
+    { name = "uvicorn", extras = ["standard"], marker = "extra == 'api'", specifier = ">=0.47.0" },
     { name = "uvloop", specifier = ">=0.22.1" },
     { name = "weasyprint", marker = "extra == 'export'", specifier = ">=68.0" },
     { name = "youtube-transcript-api", marker = "extra == 'youtube'", specifier = ">=1.2.4" },
@@ -4509,7 +4509,7 @@ provides-extras = ["attachment", "browser-scraper", "scraper-ai", "inference-cor
 dev = [
     { name = "bandit", specifier = ">=1.7.9" },
     { name = "fakeredis", specifier = ">=2.33.0" },
-    { name = "hypothesis", specifier = ">=6.152.5" },
+    { name = "hypothesis", specifier = ">=6.152.7" },
     { name = "isort", specifier = ">=7.0.0" },
     { name = "mypy", specifier = ">=1.19.1" },
     { name = "openapi-spec-validator", specifier = ">=0.7.2" },
@@ -4519,7 +4519,7 @@ dev = [
     { name = "pytest-asyncio", specifier = ">=1.3.0" },
     { name = "pytest-benchmark", specifier = ">=5.0.0" },
     { name = "respx", specifier = ">=0.22.0" },
-    { name = "ruff", specifier = ">=0.14.14" },
+    { name = "ruff", specifier = ">=0.15.13" },
     { name = "taskiq", specifier = ">=0.12.4,<0.13.0" },
     { name = "taskiq-redis", specifier = ">=1.0.0,<2.0.0" },
 ]
@@ -4774,27 +4774,27 @@ wheels = [
 
 [[package]]
 name = "ruff"
-version = "0.15.12"
+version = "0.15.13"
 source = { registry = "https://pkgs.safetycli.com/repository/po4yka/project/ratatoskr/pypi/simple/" }
-sdist = { url = "https://pkgs.safetycli.com/package/po4yka/pypi/packages/99/43/3291f1cc9106f4c63bdce7a8d0df5047fe8422a75b091c16b5e9355e0b11/ruff-0.15.12.tar.gz", hash = "sha256:ecea26adb26b4232c0c2ca19ccbc0083a68344180bba2a600605538ce51a40a6", size = 4643852, upload-time = "2026-04-24T18:17:14.305Z" }
+sdist = { url = "https://pkgs.safetycli.com/package/po4yka/pypi/packages/24/21/a7d5c126d5b557715ef81098f3db2fe20f622a039ff2e626af28d674ab80/ruff-0.15.13.tar.gz", hash = "sha256:f9d89f17f7ba7fb2ed42921f0df75da797a9a5d71bc39049e2c687cf2baf44b7", size = 4678180, upload-time = "2026-05-14T13:44:37.869Z" }
 wheels = [
-    { url = "https://pkgs.safetycli.com/package/po4yka/pypi/packages/c3/6e/e78ffb61d4686f3d96ba3df2c801161843746dcbcbb17a1e927d4829312b/ruff-0.15.12-py3-none-linux_armv6l.whl", hash = "sha256:f86f176e188e94d6bdbc09f09bfd9dc729059ad93d0e7390b5a73efe19f8861c", size = 10640713, upload-time = "2026-04-24T18:17:22.841Z" },
-    { url = "https://pkgs.safetycli.com/package/po4yka/pypi/packages/ae/08/a317bc231fb9e7b93e4ef3089501e51922ff88d6936ce5cf870c4fe55419/ruff-0.15.12-py3-none-macosx_10_12_x86_64.whl", hash = "sha256:e3bcd123364c3770b8e1b7baaf343cc99a35f197c5c6e8af79015c666c423a6c", size = 11069267, upload-time = "2026-04-24T18:17:30.105Z" },
-    { url = "https://pkgs.safetycli.com/package/po4yka/pypi/packages/aa/a4/f828e9718d3dce1f5f11c39c4f65afd32783c8b2aebb2e3d259e492c47bd/ruff-0.15.12-py3-none-macosx_11_0_arm64.whl", hash = "sha256:fe87510d000220aa1ed530d4448a7c696a0cae1213e5ec30e5874287b66557b5", size = 10397182, upload-time = "2026-04-24T18:17:07.177Z" },
-    { url = "https://pkgs.safetycli.com/package/po4yka/pypi/packages/71/e0/3310fc6d1b5e1fdea22bf3b1b807c7e187b581021b0d7d4514cccdb5fb71/ruff-0.15.12-py3-none-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:84a1630093121375a3e2a95b4a6dc7b59e2b4ee76216e32d81aae550a832d002", size = 10758012, upload-time = "2026-04-24T18:16:55.759Z" },
-    { url = "https://pkgs.safetycli.com/package/po4yka/pypi/packages/11/c1/a606911aee04c324ddaa883ae418f3569792fd3c4a10c50e0dd0a2311e1e/ruff-0.15.12-py3-none-manylinux_2_17_armv7l.manylinux2014_armv7l.whl", hash = "sha256:fb129f40f114f089ebe0ca56c0d251cf2061b17651d464bb6478dc01e69f11f5", size = 10447479, upload-time = "2026-04-24T18:16:51.677Z" },
-    { url = "https://pkgs.safetycli.com/package/po4yka/pypi/packages/9d/68/4201e8444f0894f21ab4aeeaee68aa4f10b51613514a20d80bd628d57e88/ruff-0.15.12-py3-none-manylinux_2_17_i686.manylinux2014_i686.whl", hash = "sha256:b0c862b172d695db7598426b8af465e7e9ac00a3ea2a3630ee67eb82e366aaa6", size = 11234040, upload-time = "2026-04-24T18:17:16.529Z" },
-    { url = "https://pkgs.safetycli.com/package/po4yka/pypi/packages/34/ff/8a6d6cf4ccc23fd67060874e832c18919d1557a0611ebef03fdb01fff11e/ruff-0.15.12-py3-none-manylinux_2_17_ppc64le.manylinux2014_ppc64le.whl", hash = "sha256:2849ea9f3484c3aca43a82f484210370319e7170df4dfe4843395ddf6c57bc33", size = 12087377, upload-time = "2026-04-24T18:17:04.944Z" },
-    { url = "https://pkgs.safetycli.com/package/po4yka/pypi/packages/85/f6/c669cf73f5152f623d34e69866a46d5e6185816b19fcd5b6dd8a2d299922/ruff-0.15.12-py3-none-manylinux_2_17_s390x.manylinux2014_s390x.whl", hash = "sha256:9e77c7e51c07fe396826d5969a5b846d9cd4c402535835fb6e21ce8b28fef847", size = 11367784, upload-time = "2026-04-24T18:17:25.409Z" },
-    { url = "https://pkgs.safetycli.com/package/po4yka/pypi/packages/e8/39/c61d193b8a1daaa8977f7dea9e8d8ba866e02ea7b65d32f6861693aa4c12/ruff-0.15.12-py3-none-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:83b2f4f2f3b1026b5fb449b467d9264bf22067b600f7b6f41fc5958909f449d0", size = 11344088, upload-time = "2026-04-24T18:17:12.258Z" },
-    { url = "https://pkgs.safetycli.com/package/po4yka/pypi/packages/c2/8d/49afab3645e31e12c590acb6d3b5b69d7aab5b81926dbaf7461f9441f37a/ruff-0.15.12-py3-none-manylinux_2_31_riscv64.whl", hash = "sha256:9ba3b8f1afd7e2e43d8943e55f249e13f9682fde09711644a6e7290eb4f3e339", size = 11271770, upload-time = "2026-04-24T18:17:02.457Z" },
-    { url = "https://pkgs.safetycli.com/package/po4yka/pypi/packages/46/06/33f41fe94403e2b755481cdfb9b7ef3e4e0ed031c4581124658d935d52b4/ruff-0.15.12-py3-none-musllinux_1_2_aarch64.whl", hash = "sha256:e852ba9fdc890655e1d78f2df1499efbe0e54126bd405362154a75e2bde159c5", size = 10719355, upload-time = "2026-04-24T18:17:27.648Z" },
-    { url = "https://pkgs.safetycli.com/package/po4yka/pypi/packages/0d/59/18aa4e014debbf559670e4048e39260a85c7fcee84acfd761ac01e7b8d35/ruff-0.15.12-py3-none-musllinux_1_2_armv7l.whl", hash = "sha256:dd8aed930da53780d22fc70bdf84452c843cf64f8cb4eb38984319c24c5cd5fd", size = 10462758, upload-time = "2026-04-24T18:17:32.347Z" },
-    { url = "https://pkgs.safetycli.com/package/po4yka/pypi/packages/25/e7/cc9f16fd0f3b5fddcbd7ec3d6ae30c8f3fde1047f32a4093a98d633c6570/ruff-0.15.12-py3-none-musllinux_1_2_i686.whl", hash = "sha256:01da3988d225628b709493d7dc67c3b9b12c0210016b08690ef9bd27970b262b", size = 10953498, upload-time = "2026-04-24T18:17:20.674Z" },
-    { url = "https://pkgs.safetycli.com/package/po4yka/pypi/packages/72/7a/a9ba7f98c7a575978698f4230c5e8cc54bbc761af34f560818f933dafa0c/ruff-0.15.12-py3-none-musllinux_1_2_x86_64.whl", hash = "sha256:9cae0f92bd5700d1213188b31cd3bdd2b315361296d10b96b8e2337d3d11f53e", size = 11447765, upload-time = "2026-04-24T18:17:09.755Z" },
-    { url = "https://pkgs.safetycli.com/package/po4yka/pypi/packages/ea/f9/0ae446942c846b8266059ad8a30702a35afae55f5cdc54c5adf8d7afdc27/ruff-0.15.12-py3-none-win32.whl", hash = "sha256:d0185894e038d7043ba8fd6aee7499ece6462dc0ea9f1e260c7451807c714c20", size = 10657277, upload-time = "2026-04-24T18:17:18.591Z" },
-    { url = "https://pkgs.safetycli.com/package/po4yka/pypi/packages/33/f1/9614e03e1cdcbf9437570b5400ced8a720b5db22b28d8e0f1bda429f660d/ruff-0.15.12-py3-none-win_amd64.whl", hash = "sha256:c87a162d61ab3adca47c03f7f717c68672edec7d1b5499e652331780fe74950d", size = 11837758, upload-time = "2026-04-24T18:17:00.113Z" },
-    { url = "https://pkgs.safetycli.com/package/po4yka/pypi/packages/c0/98/6beb4b351e472e5f4c4613f7c35a5290b8be2497e183825310c4c3a3984b/ruff-0.15.12-py3-none-win_arm64.whl", hash = "sha256:a538f7a82d061cee7be55542aca1d86d1393d55d81d4fcc314370f4340930d4f", size = 11120821, upload-time = "2026-04-24T18:16:57.979Z" },
+    { url = "https://pkgs.safetycli.com/package/po4yka/pypi/packages/c6/61/11d458dc6ac22504fd8e237b29dfd40504c7fbbcc8930402cfe51a8e63ed/ruff-0.15.13-py3-none-linux_armv6l.whl", hash = "sha256:444b580fc72fd6887e650acd3e575e18cdc79dbcf42fb4030b491057921f61f8", size = 10738279, upload-time = "2026-05-14T13:44:18.7Z" },
+    { url = "https://pkgs.safetycli.com/package/po4yka/pypi/packages/86/ca/caa871ee7be718c45256fada4e16a218ee3e33f0c4a46b729a60a24912e6/ruff-0.15.13-py3-none-macosx_10_12_x86_64.whl", hash = "sha256:6590d009e7cb7ebf36f83dbdd44a3fa48a0994ff6f1cdc1b08006abe58f98dc7", size = 11124798, upload-time = "2026-05-14T13:44:06.427Z" },
+    { url = "https://pkgs.safetycli.com/package/po4yka/pypi/packages/d3/19/43f5f2e568dddde567fc41f8471f9432c09563e19d3e617a48cfa52f8f0a/ruff-0.15.13-py3-none-macosx_11_0_arm64.whl", hash = "sha256:1c26d2f66163deeb6e08d8b39fbbe983ce3c71cea06a6d7591cfd1421793c629", size = 10460761, upload-time = "2026-05-14T13:44:04.375Z" },
+    { url = "https://pkgs.safetycli.com/package/po4yka/pypi/packages/99/df/cf938cd6de3003178f03ad7c1ea2a6c099468c03a35037985070b37e76be/ruff-0.15.13-py3-none-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:9dbd6f94b434f896308e4d57fb7bfde0d02b99f7a64b3bdab0fdfa6a864203a5", size = 10804451, upload-time = "2026-05-14T13:44:25.221Z" },
+    { url = "https://pkgs.safetycli.com/package/po4yka/pypi/packages/c7/7d/5d0973129b154ded2225729169d7068f26b467760b146493fde138415f23/ruff-0.15.13-py3-none-manylinux_2_17_armv7l.manylinux2014_armv7l.whl", hash = "sha256:bf3259f3be4d181bda591da5db2571aed6853c6a048157756448020bc6c5cd22", size = 10534285, upload-time = "2026-05-14T13:44:08.888Z" },
+    { url = "https://pkgs.safetycli.com/package/po4yka/pypi/packages/1f/e3/6b999bbc66cd51e5f073842bc2a3995e99c5e0e72e16b15e7261f7abf57a/ruff-0.15.13-py3-none-manylinux_2_17_i686.manylinux2014_i686.whl", hash = "sha256:ae9c17e5eb4430c154e76abc25d79a318190f5a997f38fb6b114416c5319ffc9", size = 11312063, upload-time = "2026-05-14T13:44:11.274Z" },
+    { url = "https://pkgs.safetycli.com/package/po4yka/pypi/packages/af/5a/642639e9f5db04f1e97fbd6e091c6fd20725bdf072fb114d00eefb9e6eb8/ruff-0.15.13-py3-none-manylinux_2_17_ppc64le.manylinux2014_ppc64le.whl", hash = "sha256:2e2e39bff6c341f4b577a21b801326fab0b11847f48fcaa83f00a113c9b3cb55", size = 12183079, upload-time = "2026-05-14T13:44:01.634Z" },
+    { url = "https://pkgs.safetycli.com/package/po4yka/pypi/packages/19/4c/7585735f6b53b0f12de13618b2f7d250a844f018822efc899df2e7b8295f/ruff-0.15.13-py3-none-manylinux_2_17_s390x.manylinux2014_s390x.whl", hash = "sha256:e8d9a8e08013542e94d3220bc5b62cc3e5ef87c5f74bff367d3fac14fab013e6", size = 11440833, upload-time = "2026-05-14T13:43:59.043Z" },
+    { url = "https://pkgs.safetycli.com/package/po4yka/pypi/packages/e8/31/bf1a0803d077e679cfeee5f2f67290a0fa79c7385b5d9a8c17b9db2c48f0/ruff-0.15.13-py3-none-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:cc411dfebe5eebe55ce041c6ae080eb7668955e866daa2fbb16692a784f1c4ca", size = 11434486, upload-time = "2026-05-14T13:44:27.761Z" },
+    { url = "https://pkgs.safetycli.com/package/po4yka/pypi/packages/e1/4e/62c9b999875d4f14db80f277c030578f5e249c9852d65b7ac7ad0b43c041/ruff-0.15.13-py3-none-manylinux_2_31_riscv64.whl", hash = "sha256:768494eb08b9cee54e2fd27969966f74db5a57f6eaa7a90fcb3306af34dfc4bd", size = 11385189, upload-time = "2026-05-14T13:44:13.704Z" },
+    { url = "https://pkgs.safetycli.com/package/po4yka/pypi/packages/fc/89/7e959047a104df3eb12863447c110140191fc5b6c4f379ea2e803fcdb0e4/ruff-0.15.13-py3-none-musllinux_1_2_aarch64.whl", hash = "sha256:fb75f9a3a7e42ffe117d734494e6c5e5cb3565d66e12612cb63d0e572a41a5b6", size = 10781380, upload-time = "2026-05-14T13:43:56.734Z" },
+    { url = "https://pkgs.safetycli.com/package/po4yka/pypi/packages/ff/52/5fd18f3b88cab63e88aa11516b3b4e1e5f720e5c330f8dbe5c26210f41f8/ruff-0.15.13-py3-none-musllinux_1_2_armv7l.whl", hash = "sha256:8cb74dd33bb2f6613faf7fc03b660053b5ac4f80e706d5788c6335e2a8048d51", size = 10540605, upload-time = "2026-05-14T13:44:20.748Z" },
+    { url = "https://pkgs.safetycli.com/package/po4yka/pypi/packages/e8/e0/9e35f338990d3e41a82875ff7053ffe97541dae81c9d02143177f381d572/ruff-0.15.13-py3-none-musllinux_1_2_i686.whl", hash = "sha256:7ef823f817fcd191dc934e984be9cf4094f808effa16f2542ad8e821ba02bbf2", size = 11036554, upload-time = "2026-05-14T13:44:16.256Z" },
+    { url = "https://pkgs.safetycli.com/package/po4yka/pypi/packages/c2/13/070fb048c24080fba188f66371e2a92785be257ad02242066dc7255ac6e9/ruff-0.15.13-py3-none-musllinux_1_2_x86_64.whl", hash = "sha256:f345a13937bd7f09f6f5d19fa0721b0c103e00e7f62bc67089a8e5e037719e0b", size = 11528133, upload-time = "2026-05-14T13:44:22.808Z" },
+    { url = "https://pkgs.safetycli.com/package/po4yka/pypi/packages/6b/8c/b1e1666aef7fc6555094d73ae6cd981701781ae85b97ceefc0eebd0b4668/ruff-0.15.13-py3-none-win32.whl", hash = "sha256:4044f94208b3b05ba0fc4a4abd0558cf4d6459bd18325eead7fd8cc66f909b41", size = 10721455, upload-time = "2026-05-14T13:44:35.697Z" },
+    { url = "https://pkgs.safetycli.com/package/po4yka/pypi/packages/ab/a6/870a3e8a50590bb92be184ad928c2922f088b00d9dc5c5ec7b924ee08c22/ruff-0.15.13-py3-none-win_amd64.whl", hash = "sha256:7064884d442b7d477b4e7473d12da7f08851d2b1982763c5d3f388a19468a1a4", size = 11900409, upload-time = "2026-05-14T13:44:30.389Z" },
+    { url = "https://pkgs.safetycli.com/package/po4yka/pypi/packages/9b/36/9c015cd052fca743dae8cb2aeb16b551444787467db42ceab0fc968865af/ruff-0.15.13-py3-none-win_arm64.whl", hash = "sha256:2471da9bd1068c8c064b5fd9c0c4b6dddffd6369cb1cd68b29993b1709ff1b21", size = 11179336, upload-time = "2026-05-14T13:44:33.026Z" },
 ]
 
 [[package]]
@@ -4999,7 +4999,7 @@ wheels = [
 
 [[package]]
 name = "sentence-transformers"
-version = "5.4.1"
+version = "5.5.0"
 source = { registry = "https://pkgs.safetycli.com/repository/po4yka/project/ratatoskr/pypi/simple/" }
 dependencies = [
     { name = "huggingface-hub" },
@@ -5011,9 +5011,9 @@ dependencies = [
     { name = "transformers" },
     { name = "typing-extensions" },
 ]
-sdist = { url = "https://pkgs.safetycli.com/package/po4yka/pypi/packages/4d/68/7f98c221940ce783b492ad6140384daf2e2918cd7175009d6a362c22b9ee/sentence_transformers-5.4.1.tar.gz", hash = "sha256:436bcb1182a0ff42a8fb2b1c43498a70d0a75b688d182f2cd0d1dd115af61ddc", size = 428910, upload-time = "2026-04-14T13:34:59.006Z" }
+sdist = { url = "https://pkgs.safetycli.com/package/po4yka/pypi/packages/2c/27/16d127a61303e05847d878b23687f3371868c76e738557fa80b4373a8c2b/sentence_transformers-5.5.0.tar.gz", hash = "sha256:9cec675e68bfe09d07466d1f13ab06d1d79d60a0f45b154baf433bde6ae159cb", size = 444908, upload-time = "2026-05-12T14:05:42.383Z" }
 wheels = [
-    { url = "https://pkgs.safetycli.com/package/po4yka/pypi/packages/c5/d9/3a9b6f2ccdedc9dc00fe37b2fc58f58f8efbff44565cf4bf39d8568bb13a/sentence_transformers-5.4.1-py3-none-any.whl", hash = "sha256:a6d640fc363849b63affb8e140e9d328feabab86f83d58ac3e16b1c28140b790", size = 571311, upload-time = "2026-04-14T13:34:57.731Z" },
+    { url = "https://pkgs.safetycli.com/package/po4yka/pypi/packages/55/20/18416624bcbae866ec0b111979766cebabe8e5ff7563ab953ecbaf3ff9e7/sentence_transformers-5.5.0-py3-none-any.whl", hash = "sha256:75313fdcc2397ec4b58297c25d6187fcca5a6b2aeb09570a72eff5a3223d8d58", size = 588665, upload-time = "2026-05-12T14:05:40.899Z" },
 ]
 
 [[package]]
@@ -5246,15 +5246,15 @@ wheels = [
 
 [[package]]
 name = "sse-starlette"
-version = "3.4.1"
+version = "3.4.4"
 source = { registry = "https://pkgs.safetycli.com/repository/po4yka/project/ratatoskr/pypi/simple/" }
 dependencies = [
     { name = "anyio" },
     { name = "starlette" },
 ]
-sdist = { url = "https://pkgs.safetycli.com/package/po4yka/pypi/packages/e1/9a/f35932a8c0eb6b2287b66fa65a0321df8c84e4e355a659c1841a37c39fdb/sse_starlette-3.4.1.tar.gz", hash = "sha256:f780bebcf6c8997fe514e3bd8e8c648d8284976b391c8bed0bcb1f611632b555", size = 35127, upload-time = "2026-04-26T13:32:32.292Z" }
+sdist = { url = "https://pkgs.safetycli.com/package/po4yka/pypi/packages/f7/2b/58abc2d1fd397e7dde08e947e05c884d8ef2f78d5e2588c17a12d42d6994/sse_starlette-3.4.4.tar.gz", hash = "sha256:07e0fa0460138baf25cdd5fb28683472c3995dc1642225191b3832d62526bcb0", size = 31819, upload-time = "2026-05-12T17:37:17.019Z" }
 wheels = [
-    { url = "https://pkgs.safetycli.com/package/po4yka/pypi/packages/ff/07/45c21ed03d708c477367305726b89919b020a3a2a01f72aaf5ad941caf35/sse_starlette-3.4.1-py3-none-any.whl", hash = "sha256:6b43cf21f1d574d582a6e1b0cfbde1c94dc86a32a701a7168c99c4475c6bd1d0", size = 16487, upload-time = "2026-04-26T13:32:30.819Z" },
+    { url = "https://pkgs.safetycli.com/package/po4yka/pypi/packages/dc/67/805710444ea8cc75fbf70b920ed431a560c4bf9c57f7d5a3117213189399/sse_starlette-3.4.4-py3-none-any.whl", hash = "sha256:3f4dd50d8aed2771a091f3a83000323fc3844541c16b4fe585ae2420cc6df973", size = 16514, upload-time = "2026-05-12T17:37:15.601Z" },
 ]
 
 [[package]]
@@ -5559,7 +5559,7 @@ wheels = [
 
 [[package]]
 name = "torch"
-version = "2.11.0"
+version = "2.12.0"
 source = { registry = "https://pkgs.safetycli.com/repository/po4yka/project/ratatoskr/pypi/simple/" }
 dependencies = [
     { name = "cuda-bindings", marker = "platform_machine == 'x86_64' and sys_platform == 'linux'" },
@@ -5568,6 +5568,7 @@ dependencies = [
     { name = "fsspec" },
     { name = "jinja2" },
     { name = "networkx" },
+    { name = "nvidia-cublas", marker = "platform_machine == 'x86_64' and sys_platform == 'linux'" },
     { name = "nvidia-cudnn-cu13", marker = "platform_machine == 'x86_64' and sys_platform == 'linux'" },
     { name = "nvidia-cusparselt-cu13", marker = "platform_machine == 'x86_64' and sys_platform == 'linux'" },
     { name = "nvidia-nccl-cu13", marker = "platform_machine == 'x86_64' and sys_platform == 'linux'" },
@@ -5578,22 +5579,22 @@ dependencies = [
     { name = "typing-extensions" },
 ]
 wheels = [
-    { url = "https://pkgs.safetycli.com/package/po4yka/pypi/packages/87/89/5ea6722763acee56b045435fb84258db7375c48165ec8be7880ab2b281c5/torch-2.11.0-cp313-cp313-macosx_11_0_arm64.whl", hash = "sha256:1e6debd97ccd3205bbb37eb806a9d8219e1139d15419982c09e23ef7d4369d18", size = 80606801, upload-time = "2026-03-23T18:10:18.649Z" },
-    { url = "https://pkgs.safetycli.com/package/po4yka/pypi/packages/32/d1/8ed2173589cbfe744ed54e5a73efc107c0085ba5777ee93a5f4c1ab90553/torch-2.11.0-cp313-cp313-manylinux_2_28_aarch64.whl", hash = "sha256:63a68fa59de8f87acc7e85a5478bb2dddbb3392b7593ec3e78827c793c4b73fd", size = 419732382, upload-time = "2026-03-23T18:08:30.835Z" },
-    { url = "https://pkgs.safetycli.com/package/po4yka/pypi/packages/3d/e1/b73f7c575a4b8f87a5928f50a1e35416b5e27295d8be9397d5293e7e8d4c/torch-2.11.0-cp313-cp313-manylinux_2_28_x86_64.whl", hash = "sha256:cc89b9b173d9adfab59fd227f0ab5e5516d9a52b658ae41d64e59d2e55a418db", size = 530711509, upload-time = "2026-03-23T18:08:47.213Z" },
-    { url = "https://pkgs.safetycli.com/package/po4yka/pypi/packages/66/82/3e3fcdd388fbe54e29fd3f991f36846ff4ac90b0d0181e9c8f7236565f82/torch-2.11.0-cp313-cp313-win_amd64.whl", hash = "sha256:4dda3b3f52d121063a731ddb835f010dc137b920d7fec2778e52f60d8e4bf0cd", size = 114555842, upload-time = "2026-03-23T18:09:52.111Z" },
-    { url = "https://pkgs.safetycli.com/package/po4yka/pypi/packages/db/38/8ac78069621b8c2b4979c2f96dc8409ef5e9c4189f6aac629189a78677ca/torch-2.11.0-cp313-cp313t-macosx_11_0_arm64.whl", hash = "sha256:8b394322f49af4362d4f80e424bcaca7efcd049619af03a4cf4501520bdf0fb4", size = 80959574, upload-time = "2026-03-23T18:10:14.214Z" },
-    { url = "https://pkgs.safetycli.com/package/po4yka/pypi/packages/6d/6c/56bfb37073e7136e6dd86bfc6af7339946dd684e0ecf2155ac0eee687ae1/torch-2.11.0-cp313-cp313t-manylinux_2_28_aarch64.whl", hash = "sha256:2658f34ce7e2dabf4ec73b45e2ca68aedad7a5be87ea756ad656eaf32bf1e1ea", size = 419732324, upload-time = "2026-03-23T18:09:36.604Z" },
-    { url = "https://pkgs.safetycli.com/package/po4yka/pypi/packages/07/f4/1b666b6d61d3394cca306ea543ed03a64aad0a201b6cd159f1d41010aeb1/torch-2.11.0-cp313-cp313t-manylinux_2_28_x86_64.whl", hash = "sha256:98bb213c3084cfe176302949bdc360074b18a9da7ab59ef2edc9d9f742504778", size = 530596026, upload-time = "2026-03-23T18:09:20.842Z" },
-    { url = "https://pkgs.safetycli.com/package/po4yka/pypi/packages/48/6b/30d1459fa7e4b67e9e3fe1685ca1d8bb4ce7c62ef436c3a615963c6c866c/torch-2.11.0-cp313-cp313t-win_amd64.whl", hash = "sha256:a97b94bbf62992949b4730c6cd2cc9aee7b335921ee8dc207d930f2ed09ae2db", size = 114793702, upload-time = "2026-03-23T18:09:47.304Z" },
-    { url = "https://pkgs.safetycli.com/package/po4yka/pypi/packages/26/0d/8603382f61abd0db35841148ddc1ffd607bf3100b11c6e1dab6d2fc44e72/torch-2.11.0-cp314-cp314-macosx_11_0_arm64.whl", hash = "sha256:01018087326984a33b64e04c8cb5c2795f9120e0d775ada1f6638840227b04d7", size = 80573442, upload-time = "2026-03-23T18:09:10.117Z" },
-    { url = "https://pkgs.safetycli.com/package/po4yka/pypi/packages/c7/86/7cd7c66cb9cec6be330fff36db5bd0eef386d80c031b581ec81be1d4b26c/torch-2.11.0-cp314-cp314-manylinux_2_28_aarch64.whl", hash = "sha256:2bb3cc54bd0dea126b0060bb1ec9de0f9c7f7342d93d436646516b0330cd5be7", size = 419749385, upload-time = "2026-03-23T18:07:33.77Z" },
-    { url = "https://pkgs.safetycli.com/package/po4yka/pypi/packages/47/e8/b98ca2d39b2e0e4730c0ee52537e488e7008025bc77ca89552ff91021f7c/torch-2.11.0-cp314-cp314-manylinux_2_28_x86_64.whl", hash = "sha256:4dc8b3809469b6c30b411bb8c4cad3828efd26236153d9beb6a3ec500f211a60", size = 530716756, upload-time = "2026-03-23T18:07:50.02Z" },
-    { url = "https://pkgs.safetycli.com/package/po4yka/pypi/packages/78/88/d4a4cda8362f8a30d1ed428564878c3cafb0d87971fbd3947d4c84552095/torch-2.11.0-cp314-cp314-win_amd64.whl", hash = "sha256:2b4e811728bd0cc58fb2b0948fe939a1ee2bf1422f6025be2fca4c7bd9d79718", size = 114552300, upload-time = "2026-03-23T18:09:05.617Z" },
-    { url = "https://pkgs.safetycli.com/package/po4yka/pypi/packages/bf/46/4419098ed6d801750f26567b478fc185c3432e11e2cad712bc6b4c2ab0d0/torch-2.11.0-cp314-cp314t-macosx_11_0_arm64.whl", hash = "sha256:8245477871c3700d4370352ffec94b103cfcb737229445cf9946cddb7b2ca7cd", size = 80959460, upload-time = "2026-03-23T18:09:00.818Z" },
-    { url = "https://pkgs.safetycli.com/package/po4yka/pypi/packages/fd/66/54a56a4a6ceaffb567231994a9745821d3af922a854ed33b0b3a278e0a99/torch-2.11.0-cp314-cp314t-manylinux_2_28_aarch64.whl", hash = "sha256:ab9a8482f475f9ba20e12db84b0e55e2f58784bdca43a854a6ccd3fd4b9f75e6", size = 419735835, upload-time = "2026-03-23T18:07:18.974Z" },
-    { url = "https://pkgs.safetycli.com/package/po4yka/pypi/packages/b1/e7/0b6665f533aa9e337662dc190425abc0af1fe3234088f4454c52393ded61/torch-2.11.0-cp314-cp314t-manylinux_2_28_x86_64.whl", hash = "sha256:563ed3d25542d7e7bbc5b235ccfacfeb97fb470c7fee257eae599adb8005c8a2", size = 530613405, upload-time = "2026-03-23T18:08:07.014Z" },
-    { url = "https://pkgs.safetycli.com/package/po4yka/pypi/packages/cf/bf/c8d12a2c86dbfd7f40fb2f56fbf5a505ccf2d9ce131eb559dfc7c51e1a04/torch-2.11.0-cp314-cp314t-win_amd64.whl", hash = "sha256:b2a43985ff5ef6ddd923bbcf99943e5f58059805787c5c9a2622bf05ca2965b0", size = 114792991, upload-time = "2026-03-23T18:08:19.216Z" },
+    { url = "https://pkgs.safetycli.com/package/po4yka/pypi/packages/86/ca/01896c80ba921676aa45886b2c5b8d774912de2a1f719de48169c6f755cd/torch-2.12.0-cp313-cp313-macosx_14_0_arm64.whl", hash = "sha256:90dd587a5f61bfe1307148b581e2084fc5bc4a06e2b90a20e9a36b81087ff16b", size = 88009511, upload-time = "2026-05-13T14:54:47.411Z" },
+    { url = "https://pkgs.safetycli.com/package/po4yka/pypi/packages/a5/04/52bdaf4787eab6ac7d7f5851dff934e4def0bc8ead9c8fd2b69b3e529699/torch-2.12.0-cp313-cp313-manylinux_2_28_aarch64.whl", hash = "sha256:864392c73b7654f4d2b3ae712f607937d0dbb1101c4555fbb41848106b297f39", size = 426383231, upload-time = "2026-05-13T14:53:32.129Z" },
+    { url = "https://pkgs.safetycli.com/package/po4yka/pypi/packages/49/8a/94bdecd13f5aaa90d45920b89789d9fe7c6f4af8c3cdd7ce01fcb59908fc/torch-2.12.0-cp313-cp313-manylinux_2_28_x86_64.whl", hash = "sha256:5d6b560dfa7d56291c07d615c3bb73e8d9943d9b6d87f76cd0d9d570c4797fa6", size = 532269288, upload-time = "2026-05-13T14:53:49.423Z" },
+    { url = "https://pkgs.safetycli.com/package/po4yka/pypi/packages/3e/2f/bdbaaa267de519ef1b73054bf590d8c93c37a266c9a4e24a01bd38b6918f/torch-2.12.0-cp313-cp313-win_amd64.whl", hash = "sha256:3fee918902090ade827643e758e98363278815de583c75d111fdd665ebffde9f", size = 122987706, upload-time = "2026-05-13T14:54:00.335Z" },
+    { url = "https://pkgs.safetycli.com/package/po4yka/pypi/packages/9b/ad/e95e822f3538171e22640a7fbe839a1fdb666600bf6487025de2ff03b11a/torch-2.12.0-cp313-cp313t-macosx_14_0_arm64.whl", hash = "sha256:10ee1448a9f304d3b987eb4656f664ba6e4d7b410ca7a5a7c642199777a2cf88", size = 88319556, upload-time = "2026-05-13T14:54:05.574Z" },
+    { url = "https://pkgs.safetycli.com/package/po4yka/pypi/packages/b7/07/055d06d985b445d67422d25b033c11cf55bbb81785d4c4e68e28bca5820e/torch-2.12.0-cp313-cp313t-manylinux_2_28_aarch64.whl", hash = "sha256:af68dbf403439cae9ceaeaaf92f8352b460787dcd27b92aa05c40dd4a19c0f1e", size = 426397656, upload-time = "2026-05-13T14:52:38.84Z" },
+    { url = "https://pkgs.safetycli.com/package/po4yka/pypi/packages/43/94/b0b4fdc3014122e0a7302fb90086d352aa48f2576f0b252561ebb38c01a8/torch-2.12.0-cp313-cp313t-manylinux_2_28_x86_64.whl", hash = "sha256:a6a2eebb237d3b1d9ad3b378e86d9b9e0782afdea8b1e0eba6a13646b9b49c07", size = 532183124, upload-time = "2026-05-13T14:53:16.178Z" },
+    { url = "https://pkgs.safetycli.com/package/po4yka/pypi/packages/d8/c8/052405e6ad05d3237bfe5a4df78f917773956f8e17813a2d44c059068b74/torch-2.12.0-cp313-cp313t-win_amd64.whl", hash = "sha256:2140e373e9a51a3e22ef62e8d14366d0b470d18f0adf19fdc757368077133a34", size = 123232462, upload-time = "2026-05-13T14:52:27.26Z" },
+    { url = "https://pkgs.safetycli.com/package/po4yka/pypi/packages/67/dc/ac069f8d6e8be701535921141055293b0d4819d3d7f224a4612cf157c7f9/torch-2.12.0-cp314-cp314-macosx_14_0_arm64.whl", hash = "sha256:f7dfae4a519197dfa050e98d8e36378a0fb5899625a875c2b54445005a2e404e", size = 88027282, upload-time = "2026-05-13T14:53:05.258Z" },
+    { url = "https://pkgs.safetycli.com/package/po4yka/pypi/packages/33/c3/1c1eb00e34555b536dddf792676026a988d710ed36981aa00499b36b0620/torch-2.12.0-cp314-cp314-manylinux_2_28_aarch64.whl", hash = "sha256:891c769072637c74e9a5a77a3bc782894696d8ffec83b938df8536dee7f0ba78", size = 426386961, upload-time = "2026-05-13T14:51:28.406Z" },
+    { url = "https://pkgs.safetycli.com/package/po4yka/pypi/packages/cd/d4/7e730dba0c7032a4154dc9056b76cf9625515e030e269cfbf8098fcfee7d/torch-2.12.0-cp314-cp314-manylinux_2_28_x86_64.whl", hash = "sha256:e2ad3eb85d39c3cab62dfa93ed5a73516e6a53c6713cb97d004004fe089f0f1f", size = 532272265, upload-time = "2026-05-13T14:51:59.308Z" },
+    { url = "https://pkgs.safetycli.com/package/po4yka/pypi/packages/f1/b4/92c80d1bbfee1c0036c06d1d2155a3065bd2423134c83bf8a47e65cd6b9b/torch-2.12.0-cp314-cp314-win_amd64.whl", hash = "sha256:c66696857e987efb8bc1777a37357ec4f60ab5e8af6250b83d6034437fa2d8f3", size = 122987138, upload-time = "2026-05-13T14:51:45.942Z" },
+    { url = "https://pkgs.safetycli.com/package/po4yka/pypi/packages/7b/78/2e12b37ce50a19a037d7bc62d652a5a8f27385a7b05859d6bc9204f20cfe/torch-2.12.0-cp314-cp314t-macosx_14_0_arm64.whl", hash = "sha256:b4556715c8572758625d62b6e0ae3b1f76c440221913a6fb5e100f321fb4fb02", size = 88320100, upload-time = "2026-05-13T14:51:39.955Z" },
+    { url = "https://pkgs.safetycli.com/package/po4yka/pypi/packages/56/5e/83c450ec7b0bb40a7b74611c1b5440f9260e33c54c90d556fd4a1f0fd955/torch-2.12.0-cp314-cp314t-manylinux_2_28_aarch64.whl", hash = "sha256:a43ac605a5e13116c72b64c359644cce0229f213dde48d2ae0ae5eb5becf7feb", size = 426391871, upload-time = "2026-05-13T14:52:14.989Z" },
+    { url = "https://pkgs.safetycli.com/package/po4yka/pypi/packages/c9/e9/1a0b575d98d0afedd8f157d23fa3d2759421483660448e60d0a4b10b6daa/torch-2.12.0-cp314-cp314t-manylinux_2_28_x86_64.whl", hash = "sha256:6a7512adfdd7f6732e40de1c620831e3c75b39b98cef60b11d0c5f0a76473ec5", size = 532192241, upload-time = "2026-05-13T14:51:07.795Z" },
+    { url = "https://pkgs.safetycli.com/package/po4yka/pypi/packages/88/21/afadd25ecd81b3cea1e11c73cf1ab41a983a50271548c3ec7ec3b9efc3e9/torch-2.12.0-cp314-cp314t-win_amd64.whl", hash = "sha256:5f96b63f8287f66a005dd1b5a6abba2920f11156c5e5c4d815f3e2050fd1aa16", size = 123231092, upload-time = "2026-05-13T14:51:18.854Z" },
 ]
 
 [[package]]
@@ -5628,7 +5629,7 @@ wheels = [
 
 [[package]]
 name = "transformers"
-version = "5.8.0"
+version = "5.8.1"
 source = { registry = "https://pkgs.safetycli.com/repository/po4yka/project/ratatoskr/pypi/simple/" }
 dependencies = [
     { name = "huggingface-hub" },
@@ -5641,9 +5642,9 @@ dependencies = [
     { name = "tqdm" },
     { name = "typer" },
 ]
-sdist = { url = "https://pkgs.safetycli.com/package/po4yka/pypi/packages/f2/36/390075693b76d4fb4a2bea360fb6080347763bd1f1147c49ed0ed938778c/transformers-5.8.0.tar.gz", hash = "sha256:6cc9a1f0291d16b1c1b735bad775e78ebefff7722701d4e28f98aaaa2bd6fb91", size = 8528141, upload-time = "2026-05-05T16:50:04.778Z" }
+sdist = { url = "https://pkgs.safetycli.com/package/po4yka/pypi/packages/e7/e6/4134ea2fbea322cddc7ffc94a0d8ee47fe32ce8e876b320cd37d88edfc4d/transformers-5.8.1.tar.gz", hash = "sha256:4dd5b6de4105725104d84fd6abd74b305f4debfc251b38c648ee5dd087cf543b", size = 8532019, upload-time = "2026-05-13T03:21:57.234Z" }
 wheels = [
-    { url = "https://pkgs.safetycli.com/package/po4yka/pypi/packages/97/7b/5621d08b34ac35deb9fa14b58d27d124d21ef125ee1c64bc724ca47dfb63/transformers-5.8.0-py3-none-any.whl", hash = "sha256:e9d2cae6d195a7e1e05164c5ebf26142a7044e4dc4267274f4809204f92827e4", size = 10630279, upload-time = "2026-05-05T16:50:01.026Z" },
+    { url = "https://pkgs.safetycli.com/package/po4yka/pypi/packages/fc/b1/8be7e7ef0b5200491312201918b6125ef9c9df9dd0f0240ccef9ac824e6b/transformers-5.8.1-py3-none-any.whl", hash = "sha256:5340fb95962162cdfdae5cc91d7f8fedd92ed75216c1154c5e1f590fcf56dd0e", size = 10632882, upload-time = "2026-05-13T03:21:52.876Z" },
 ]
 
 [[package]]
@@ -5772,15 +5773,15 @@ wheels = [
 
 [[package]]
 name = "uvicorn"
-version = "0.46.0"
+version = "0.47.0"
 source = { registry = "https://pkgs.safetycli.com/repository/po4yka/project/ratatoskr/pypi/simple/" }
 dependencies = [
     { name = "click" },
     { name = "h11" },
 ]
-sdist = { url = "https://pkgs.safetycli.com/package/po4yka/pypi/packages/1f/93/041fca8274050e40e6791f267d82e0e2e27dd165627bd640d3e0e378d877/uvicorn-0.46.0.tar.gz", hash = "sha256:fb9da0926999cc6cb22dc7cd71a94a632f078e6ae47ff683c5c420750fb7413d", size = 88758, upload-time = "2026-04-23T07:16:00.151Z" }
+sdist = { url = "https://pkgs.safetycli.com/package/po4yka/pypi/packages/f6/b1/8e7077a8641086aea449e1b5752a570f1b5906c64e0a33cd6d93b63a066b/uvicorn-0.47.0.tar.gz", hash = "sha256:7c9a0ea1a9414106bbab7324609c162d8fa0cdcdcb703060987269d77c7bb533", size = 90582, upload-time = "2026-05-14T18:16:54.455Z" }
 wheels = [
-    { url = "https://pkgs.safetycli.com/package/po4yka/pypi/packages/31/a3/5b1562db76a5a488274b2332a97199b32d0442aca0ed193697fd47786316/uvicorn-0.46.0-py3-none-any.whl", hash = "sha256:bbebbcbed972d162afca128605223022bedd345b7bc7855ce66deb31487a9048", size = 70926, upload-time = "2026-04-23T07:15:58.355Z" },
+    { url = "https://pkgs.safetycli.com/package/po4yka/pypi/packages/15/41/ac2dfdbc1f60c7af4f994c7a335cfa7040c01642b605d65f611cecc2a1e4/uvicorn-0.47.0-py3-none-any.whl", hash = "sha256:2c5715bc12d1892d84752049f400cd1c3cb018514967fdfeb97640443a6a9432", size = 71301, upload-time = "2026-05-14T18:16:51.762Z" },
 ]
 
 [package.optional-dependencies]
