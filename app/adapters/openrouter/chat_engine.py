@@ -157,6 +157,11 @@ class OpenRouterChatEngine:
             else None
         )
 
+        # Short-circuit before opening an HTTP context if the legacy global
+        # breaker is open. (Per-model breakers are checked per-iteration below.)
+        if global_cb is not None and not global_cb.can_proceed():
+            return self._circuit_breaker_open_result(request_id)
+
         try:
             async with self._client._request_context() as http_client:
                 for model_index, model in enumerate(context.models_to_try):
