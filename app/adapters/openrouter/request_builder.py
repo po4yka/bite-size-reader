@@ -538,7 +538,7 @@ class RequestBuilder:
         # Return unchanged if content is neither string nor list
         return msg
 
-    def estimate_content_tokens(self, content: str | list) -> int:
+    def estimate_content_tokens(self, content: str | list[Any]) -> int:
         """Estimate token count for content.
 
         Args:

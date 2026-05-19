@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 from datetime import datetime
+from typing import Any
 
 from app.domain.services.import_parsers.base import ImportedBookmark
 
@@ -42,7 +43,7 @@ class OmnivoreParser:
 
             created_at = _parse_iso(item.get("savedAt"))
 
-            highlights: list[dict] | None = None
+            highlights: list[dict[str, Any]] | None = None
             raw_highlights = item.get("highlights")
             if isinstance(raw_highlights, list) and raw_highlights:
                 highlights = [h for h in raw_highlights if isinstance(h, dict)]

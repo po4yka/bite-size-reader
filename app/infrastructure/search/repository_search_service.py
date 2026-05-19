@@ -86,7 +86,7 @@ class RepositorySearchService:
             else None
         )
         if _timer is not None:
-            _timer.__enter__()
+            _timer.__enter__()  # type: ignore[no-untyped-call, unused-ignore]
         try:
             return await self._search_body(
                 query=query,
@@ -102,7 +102,7 @@ class RepositorySearchService:
             )
         finally:
             if _timer is not None:
-                _timer.__exit__(None, None, None)
+                _timer.__exit__(None, None, None)  # type: ignore[no-untyped-call, unused-ignore]
 
     async def _search_body(
         self,

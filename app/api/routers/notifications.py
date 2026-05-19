@@ -27,7 +27,7 @@ class DeviceRegistrationPayload(BaseModel):
 @router.post("/device")
 async def register_device(
     payload: DeviceRegistrationPayload,
-    user_data: Annotated[dict, Depends(get_current_user)],
+    user_data: Annotated[dict[str, Any], Depends(get_current_user)],
     device_repo: Any = Depends(get_device_repository),
 ) -> dict[str, Any]:
     """Register or update a device token for push notifications."""

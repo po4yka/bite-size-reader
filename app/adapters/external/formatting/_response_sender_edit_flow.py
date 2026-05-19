@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, cast
 
 from app.core.async_utils import raise_if_cancelled
 from app.core.logging_utils import get_logger
@@ -62,7 +62,7 @@ class ResponseSenderEditFlow:
                 extra={"chat_id": chat_id, "message_id": message_id},
             )
 
-        return await self._safe_reply_with_id(
+        result = await self._safe_reply_with_id(
             message,
             text,
             parse_mode=parse_mode,
@@ -70,6 +70,7 @@ class ResponseSenderEditFlow:
             disable_web_page_preview=disable_web_page_preview,
             message_thread_id=message_thread_id,
         )
+        return cast("int | None", result)
 
     @staticmethod
     def _is_retryable_edit_error(exc: Exception) -> bool:

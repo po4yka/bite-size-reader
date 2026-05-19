@@ -255,7 +255,7 @@ def _get_circuit_breaker_states() -> dict[str, str]:
 
 
 @router.get("/health/detailed")
-async def detailed_health_check(request: Request, _: dict = Depends(get_current_user)) -> Any:
+async def detailed_health_check(request: Request, _: dict[str, Any] = Depends(get_current_user)) -> Any:
     """Comprehensive health check with component status.
 
     Returns detailed status of all system components:

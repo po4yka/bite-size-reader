@@ -44,7 +44,7 @@ async def _read_limited_content(response: httpx.Response, max_bytes: int) -> byt
 @router.get("/image")
 async def proxy_image(
     url: str = Query(..., description="URL of the image to proxy"),
-    _user: dict = Depends(get_current_user),
+    _user: dict[str, Any] = Depends(get_current_user),
 ) -> Any:
     """
     Proxy an image from a remote URL.

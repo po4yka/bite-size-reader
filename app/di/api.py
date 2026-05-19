@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import asyncio
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from app.api.background_processor import BackgroundProcessor
 from app.api.services.sync import (
@@ -236,7 +236,7 @@ async def build_background_processor(
 ) -> BackgroundProcessor:
     """Compatibility helper for tests that need only the background processor."""
     runtime = await build_api_runtime(cfg, db=db, redis_client=redis_client)
-    return runtime.background_processor
+    return cast(BackgroundProcessor, runtime.background_processor)
 
 
 async def ensure_api_runtime() -> ApiRuntime:
@@ -274,7 +274,7 @@ def resolve_api_runtime(request: Request | None = None) -> ApiRuntime:
     if request is not None:
         runtime = getattr(request.app.state, "runtime", None)
         if runtime is not None:
-            return runtime
+            return cast(ApiRuntime, runtime)
     return get_current_api_runtime()
 
 

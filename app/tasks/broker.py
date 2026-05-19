@@ -11,6 +11,7 @@ Set TASKIQ_BROKER=memory for local dev / tests without Redis.
 from __future__ import annotations
 
 import os
+from typing import Any
 
 from app.tasks.middleware import ChronicFailureMiddleware, OTelPropagationMiddleware
 
@@ -42,7 +43,7 @@ else:
     )
     _result_ttl = int(os.getenv("TASKIQ_RESULT_TTL_SEC", "3600"))
 
-    _result_backend: RedisAsyncResultBackend = RedisAsyncResultBackend(
+    _result_backend: RedisAsyncResultBackend[Any] = RedisAsyncResultBackend(
         redis_url=_url,
         result_ex_time=_result_ttl,
     )

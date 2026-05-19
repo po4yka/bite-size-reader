@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from app.core.async_utils import raise_if_cancelled
 from app.core.call_status import CallStatus
@@ -189,7 +189,7 @@ class LLMWorkflowExecutionMixin:
                 llm.error_context = context
 
             if summary is not None:
-                return summary
+                return cast("dict[str, Any] | None", summary)
 
             failed_attempts.append((llm, attempt))
 

@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import time
 from enum import StrEnum
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from app.core.logging_utils import get_logger
 
@@ -70,4 +70,4 @@ class VerbosityResolver:
     @staticmethod
     def _extract_uid(message: Any) -> int | None:
         from_user = getattr(message, "from_user", None)
-        return getattr(from_user, "id", None) if from_user is not None else None
+        return cast("int | None", getattr(from_user, "id", None)) if from_user is not None else None

@@ -191,7 +191,7 @@ class RepoAnalysisAgent:
             )
             return None
 
-        parsed = result.parsed
+        parsed: RepoAnalysis = cast("RepoAnalysis", result.parsed)
         await self._persist(
             correlation_id=correlation_id,
             attempt_index=max(1, result.retry_count + 1),

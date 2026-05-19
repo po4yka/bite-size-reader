@@ -6,6 +6,7 @@ These functions contain no DB access -- they operate on values only.
 from __future__ import annotations
 
 import re
+from typing import Any, cast
 
 from app.core.logging_utils import get_logger
 
@@ -72,7 +73,7 @@ def validate_event_type(event_type: str) -> tuple[bool, str | None]:
     return True, None
 
 
-def validate_condition(condition: dict) -> tuple[bool, str | None]:
+def validate_condition(condition: dict[str, Any]) -> tuple[bool, str | None]:
     """Validate a single condition dict.
 
     Must contain ``type`` (in *VALID_CONDITION_TYPES*), ``operator``, and
@@ -88,7 +89,7 @@ def validate_condition(condition: dict) -> tuple[bool, str | None]:
     return True, None
 
 
-def validate_action(action: dict) -> tuple[bool, str | None]:
+def validate_action(action: dict[str, Any]) -> tuple[bool, str | None]:
     """Validate a single action dict.
 
     Must contain ``type`` (in *VALID_ACTION_TYPES*) and a ``params`` dict.
@@ -103,8 +104,8 @@ def validate_action(action: dict) -> tuple[bool, str | None]:
 
 def validate_rule(
     event_type: str,
-    conditions: list[dict],
-    actions: list[dict],
+    conditions: list[dict[str, Any]],
+    actions: list[dict[str, Any]],
     match_mode: str,
 ) -> tuple[bool, str | None]:
     """Combined validation for a complete rule definition."""
@@ -144,12 +145,12 @@ class RuleConditionEvaluator:
 
     @staticmethod
     def evaluate_conditions(
-        conditions: list[dict],
-        context: dict,
+        conditions: list[dict[str, Any]],
+        context: dict[str, Any],
         match_mode: str = "all",
-    ) -> tuple[bool, list[dict]]:
+    ) -> tuple[bool, list[dict[str, Any]]]:
         """Return *(overall_matched, per_condition_results)*."""
-        results: list[dict] = []
+        results: list[dict[str, Any]] = []
         for cond in conditions:
             matched = RuleConditionEvaluator._evaluate_single(cond, context)
             results.append({"condition": cond, "matched": matched})
@@ -161,7 +162,7 @@ class RuleConditionEvaluator:
     # -- dispatch -----------------------------------------------------------
 
     @staticmethod
-    def _evaluate_single(condition: dict, context: dict) -> bool:
+    def _evaluate_single(condition: dict[str, Any], context: dict[str, Any]) -> bool:
         cond_type = condition.get("type", "")
         evaluator = {
             "domain_matches": RuleConditionEvaluator._domain_matches,
@@ -179,20 +180,20 @@ class RuleConditionEvaluator:
     # -- individual evaluators ----------------------------------------------
 
     @staticmethod
-    def _domain_matches(cond: dict, ctx: dict) -> bool:
+    def _domain_matches(cond: dict[str, Any], ctx: dict[str, Any]) -> bool:
         url = ctx.get("url", "")
         value = cond.get("value", "")
         operator = cond.get("operator", "")
         if operator == "equals":
-            return url == value
+            return bool(url == value)
         if operator == "contains":
-            return value in url
+            return bool(value in url)
         if operator == "regex":
             return _regex_search(value, url)
         return False
 
     @staticmethod
-    def _title_contains(cond: dict, ctx: dict) -> bool:
+    def _title_contains(cond: dict[str, Any], ctx: dict[str, Any]) -> bool:
         title = ctx.get("title", "")
         value = cond.get("value", "")
         operator = cond.get("operator", "")
@@ -203,7 +204,7 @@ class RuleConditionEvaluator:
         return False
 
     @staticmethod
-    def _has_tag(cond: dict, ctx: dict) -> bool:
+    def _has_tag(cond: dict[str, Any], ctx: dict[str, Any]) -> bool:
         tags: list[str] = ctx.get("tags", [])
         value = cond.get("value", [])
         operator = cond.get("operator", "")
@@ -218,20 +219,20 @@ class RuleConditionEvaluator:
         return False
 
     @staticmethod
-    def _language_is(cond: dict, ctx: dict) -> bool:
+    def _language_is(cond: dict[str, Any], ctx: dict[str, Any]) -> bool:
         language = ctx.get("language", "")
         value = cond.get("value", "")
         operator = cond.get("operator", "")
         if operator == "equals":
-            return language == value
+            return bool(language == value)
         if operator == "in":
             if isinstance(value, list):
-                return language in value
-            return language in [v.strip() for v in value.split(",")]
+                return bool(language in value)
+            return bool(language in [v.strip() for v in value.split(",")])
         return False
 
     @staticmethod
-    def _reading_time(cond: dict, ctx: dict) -> bool:
+    def _reading_time(cond: dict[str, Any], ctx: dict[str, Any]) -> bool:
         reading_time = ctx.get("reading_time", 0)
         try:
             value = int(cond.get("value", 0))
@@ -239,28 +240,28 @@ class RuleConditionEvaluator:
             return False
         operator = cond.get("operator", "")
         if operator == "gt":
-            return reading_time > value
+            return bool(reading_time > value)
         if operator == "lt":
-            return reading_time < value
+            return bool(reading_time < value)
         if operator == "eq":
-            return reading_time == value
+            return bool(reading_time == value)
         return False
 
     @staticmethod
-    def _source_type(cond: dict, ctx: dict) -> bool:
+    def _source_type(cond: dict[str, Any], ctx: dict[str, Any]) -> bool:
         source_type = ctx.get("source_type", "")
         value = cond.get("value", "")
         operator = cond.get("operator", "")
         if operator == "equals":
-            return source_type == value
+            return bool(source_type == value)
         if operator == "in":
             if isinstance(value, list):
-                return source_type in value
-            return source_type in [v.strip() for v in value.split(",")]
+                return bool(source_type in value)
+            return bool(source_type in [v.strip() for v in value.split(",")])
         return False
 
     @staticmethod
-    def _content_contains(cond: dict, ctx: dict) -> bool:
+    def _content_contains(cond: dict[str, Any], ctx: dict[str, Any]) -> bool:
         content = ctx.get("content", "")
         value = cond.get("value", "")
         operator = cond.get("operator", "")

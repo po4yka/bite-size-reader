@@ -47,7 +47,7 @@ class ErrorHandler:
         """Check if error is non-retryable."""
         return status_code in (400, 401, 402, 403)
 
-    def is_schema_construct_rejection(self, data: dict) -> bool:
+    def is_schema_construct_rejection(self, data: dict[str, Any]) -> bool:
         """Detect 400s caused by specific JSON Schema constructs.
 
         Differentiates "this provider does not accept ``additionalProperties``
@@ -71,7 +71,7 @@ class ErrorHandler:
         )
         return any(keyword in err_dump for keyword in construct_keywords)
 
-    def is_provider_specific_rejection(self, data: dict) -> bool:
+    def is_provider_specific_rejection(self, data: dict[str, Any]) -> bool:
         """Check if a 400 error is from an upstream provider, not OpenRouter.
 
         Provider-specific rejections (content policy, format incompatibility,
@@ -124,7 +124,7 @@ class ErrorHandler:
     def should_downgrade_response_format(
         self,
         status_code: int,
-        data: dict,
+        data: dict[str, Any],
         rf_mode_current: str,
         rf_included: bool,
         attempt: int,
@@ -149,14 +149,14 @@ class ErrorHandler:
         self,
         model: str | None,
         text: str | None,
-        data: dict | None,
-        usage: dict,
+        data: dict[str, Any] | None,
+        usage: dict[str, Any],
         latency: int,
         error_message: str,
-        headers: dict,
-        messages: list[dict],
+        headers: dict[str, Any],
+        messages: list[dict[str, Any]],
         *,
-        error_context: dict | None = None,
+        error_context: dict[str, Any] | None = None,
     ) -> LLMCallResult:
         """Build error result consistently."""
         return LLMCallResult(
@@ -179,7 +179,7 @@ class ErrorHandler:
             error_context=error_context,
         )
 
-    def _audit_event(self, level: str, event: str, details: dict) -> None:
+    def _audit_event(self, level: str, event: str, details: dict[str, Any]) -> None:
         """Emit a single audit event if an audit function is configured."""
         if self._audit:
             self._audit(level, event, details)

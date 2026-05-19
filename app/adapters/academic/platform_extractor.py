@@ -30,7 +30,7 @@ from __future__ import annotations
 import asyncio
 import re
 import tempfile
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 import httpx
 
@@ -324,7 +324,7 @@ class AcademicPlatformExtractor(PlatformExtractor):
         async with client_cm as client:
             resp = await client.get(pdf_url)
             resp.raise_for_status()
-            return resp.content
+            return cast("bytes", resp.content)
 
     # ------------------------------------------------------------------
     # Helpers

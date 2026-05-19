@@ -330,7 +330,7 @@ def _scrape_article_sync(
             ]
             page.evaluate(_ARTICLE_EXPAND_BUTTONS_SCRIPT, expand_labels)
             page.wait_for_timeout(300)
-            return page.evaluate(_ARTICLE_SCRAPE_SCRIPT)
+            return cast("dict[str, Any]", page.evaluate(_ARTICLE_SCRAPE_SCRIPT))
         finally:
             page.close()
             browser.close()

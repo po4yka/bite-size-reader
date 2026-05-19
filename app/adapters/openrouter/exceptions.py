@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 
 class OpenRouterError(Exception):
     """Base exception for OpenRouter client errors."""
@@ -13,7 +15,7 @@ class OpenRouterError(Exception):
         model: str | None = None,
         attempt: int | None = None,
         request_id: int | None = None,
-        context: dict | None = None,
+        context: dict[str, Any] | None = None,
     ) -> None:
         super().__init__(message)
         self.model = model
@@ -32,7 +34,7 @@ class ConfigurationError(OpenRouterError):
         model: str | None = None,
         attempt: int | None = None,
         request_id: int | None = None,
-        context: dict | None = None,
+        context: dict[str, Any] | None = None,
     ) -> None:
         super().__init__(
             message, model=model, attempt=attempt, request_id=request_id, context=context
@@ -50,7 +52,7 @@ class ValidationError(OpenRouterError):
         model: str | None = None,
         attempt: int | None = None,
         request_id: int | None = None,
-        context: dict | None = None,
+        context: dict[str, Any] | None = None,
     ) -> None:
         super().__init__(
             message, model=model, attempt=attempt, request_id=request_id, context=context
@@ -69,7 +71,7 @@ class APIError(OpenRouterError):
         attempt: int | None = None,
         request_id: int | None = None,
         status_code: int | None = None,
-        context: dict | None = None,
+        context: dict[str, Any] | None = None,
     ) -> None:
         super().__init__(
             message, model=model, attempt=attempt, request_id=request_id, context=context
@@ -92,7 +94,7 @@ class RateLimitError(APIError):
         request_id: int | None = None,
         status_code: int | None = None,
         retry_after: int | None = None,
-        context: dict | None = None,
+        context: dict[str, Any] | None = None,
     ) -> None:
         super().__init__(
             message,
@@ -118,7 +120,7 @@ class NetworkError(OpenRouterError):
         model: str | None = None,
         attempt: int | None = None,
         request_id: int | None = None,
-        context: dict | None = None,
+        context: dict[str, Any] | None = None,
     ) -> None:
         super().__init__(
             message, model=model, attempt=attempt, request_id=request_id, context=context
@@ -136,7 +138,7 @@ class ModelError(OpenRouterError):
         model: str | None = None,
         attempt: int | None = None,
         request_id: int | None = None,
-        context: dict | None = None,
+        context: dict[str, Any] | None = None,
     ) -> None:
         super().__init__(
             message, model=model, attempt=attempt, request_id=request_id, context=context
@@ -154,7 +156,7 @@ class StructuredOutputError(OpenRouterError):
         model: str | None = None,
         attempt: int | None = None,
         request_id: int | None = None,
-        context: dict | None = None,
+        context: dict[str, Any] | None = None,
     ) -> None:
         super().__init__(
             message, model=model, attempt=attempt, request_id=request_id, context=context
@@ -172,7 +174,7 @@ class ClientError(OpenRouterError):
         model: str | None = None,
         attempt: int | None = None,
         request_id: int | None = None,
-        context: dict | None = None,
+        context: dict[str, Any] | None = None,
     ) -> None:
         super().__init__(
             message, model=model, attempt=attempt, request_id=request_id, context=context

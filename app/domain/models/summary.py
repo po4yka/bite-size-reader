@@ -6,7 +6,7 @@ content summary with its metadata and insights.
 
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, cast
 
 from app.core.time_utils import coerce_datetime
 
@@ -71,19 +71,19 @@ class Summary:
 
     def get_reading_time_minutes(self) -> int:
         """Return estimated reading time in minutes, or 0 if not available."""
-        return self.content.get("estimated_reading_time_min", 0)
+        return cast(int, self.content.get("estimated_reading_time_min", 0))
 
     def get_tldr(self) -> str:
         """Return TL;DR text, or empty string if not available."""
-        return self.content.get("tldr", "")
+        return cast(str, self.content.get("tldr", ""))
 
     def get_summary_250(self) -> str:
         """Return 250-character summary text, or empty string if not available."""
-        return self.content.get("summary_250", "")
+        return cast(str, self.content.get("summary_250", ""))
 
     def get_summary_1000(self) -> str:
         """Return 1000-character summary text, or empty string if not available."""
-        return self.content.get("summary_1000", "")
+        return cast(str, self.content.get("summary_1000", ""))
 
     def get_key_ideas(self) -> list[str]:
         """Return list of key ideas, or empty list if not available."""

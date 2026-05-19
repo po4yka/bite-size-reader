@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import re
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from app.adapters.content.quality_filters import best_content_text, detect_low_value_content
 from app.adapters.external.firecrawl.models import FirecrawlResult
@@ -50,7 +50,7 @@ class ContentScraperChain:
     def __init__(
         self,
         providers: list[ContentScraperProtocol],
-        audit: Callable[[str, str, dict], None] | None = None,
+        audit: Callable[[str, str, dict[str, Any]], None] | None = None,
         *,
         min_content_length: int = 0,
         js_heavy_hosts: tuple[str, ...] = (),

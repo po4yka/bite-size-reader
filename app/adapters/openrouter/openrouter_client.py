@@ -383,7 +383,7 @@ class OpenRouterClient:
         """Async context manager entry."""
         return self
 
-    async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
+    async def __aexit__(self, exc_type: type[BaseException] | None, exc_val: BaseException | None, exc_tb: object) -> None:
         """Async context manager exit."""
         await self.aclose()
 
@@ -529,7 +529,7 @@ class OpenRouterClient:
                 span.set_attribute("llm.cost_usd", result.cost_usd)
             if hasattr(result, "latency_ms") and result.latency_ms:
                 span.set_attribute("llm.latency_ms", result.latency_ms)
-            return result
+            return cast("LLMCallResult", result)
 
     async def chat_structured(
         self,
@@ -671,11 +671,11 @@ class OpenRouterClient:
         if self._closed:
             msg = "Client has been closed"
             raise RuntimeError(msg)
-        return await self.model_capabilities.get_models()
+        return cast("dict[str, Any]", await self.model_capabilities.get_models())
 
     async def get_structured_models(self) -> set[str]:
         """Get set of models that support structured outputs."""
         if self._closed:
             msg = "Client has been closed"
             raise RuntimeError(msg)
-        return await self.model_capabilities.get_structured_models()
+        return cast("set[str]", await self.model_capabilities.get_structured_models())

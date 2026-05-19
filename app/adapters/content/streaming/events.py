@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel
 
@@ -48,7 +48,7 @@ _PAYLOAD_MODELS: dict[str, type[BaseModel]] = {
 @dataclass(slots=True, frozen=True)
 class StreamEvent:
     kind: StreamEventKind
-    payload: dict
+    payload: dict[str, Any]
     timestamp: datetime
     correlation_id: str
 
@@ -56,7 +56,7 @@ class StreamEvent:
     def now(
         cls,
         kind: StreamEventKind,
-        payload: BaseModel | dict,
+        payload: BaseModel | dict[str, Any],
         correlation_id: str,
     ) -> StreamEvent:
         model_cls = _PAYLOAD_MODELS[kind]

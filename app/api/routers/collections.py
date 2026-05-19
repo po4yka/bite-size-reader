@@ -40,7 +40,7 @@ logger = get_logger(__name__)
 router = APIRouter()
 
 
-def _build_collection_response(c: dict) -> CollectionResponse:
+def _build_collection_response(c: dict[str, Any]) -> CollectionResponse:
     """Build a CollectionResponse from a collection dict."""
     return CollectionResponse(
         id=c["id"],
@@ -286,7 +286,7 @@ async def get_collection_tree(
 ) -> Any:
     tree = await CollectionService.get_tree(user_id=user["user_id"], max_depth=max_depth)
 
-    def to_response(col: dict) -> CollectionResponse:
+    def to_response(col: dict[str, Any]) -> CollectionResponse:
         children = col.get("_children") or []
         resp = _build_collection_response(col)
         resp.children = [to_response(c) for c in children]

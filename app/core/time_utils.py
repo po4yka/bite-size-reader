@@ -3,9 +3,11 @@ from __future__ import annotations
 from datetime import datetime, timezone
 
 try:  # Python 3.11+
-    from datetime import UTC
+    from datetime import UTC as UTC
 except ImportError:  # pragma: no cover - Python < 3.11
     UTC = timezone.utc  # noqa: UP017
+
+__all__ = ["UTC", "utc_now", "coerce_datetime", "format_iso_z"]
 
 
 def utc_now() -> datetime:

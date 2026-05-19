@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from typing import Any
 
 from app.core.logging_utils import get_logger, log_exception
 from app.di.api import get_current_api_runtime
@@ -20,7 +21,7 @@ async def process_url_request(
     tasks = processor._processing_tasks
     tasks.add(task)
 
-    def _on_task_done(t: asyncio.Task) -> None:
+    def _on_task_done(t: asyncio.Task[None]) -> None:
         tasks.discard(t)
         if t.cancelled():
             return

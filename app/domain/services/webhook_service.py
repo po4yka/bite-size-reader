@@ -7,6 +7,7 @@ import hmac
 import secrets
 from datetime import UTC, datetime
 from ipaddress import ip_address
+from typing import Any
 from urllib.parse import urlparse
 
 from app.security.ssrf import is_url_safe
@@ -90,9 +91,9 @@ def validate_webhook_url(url: str) -> tuple[bool, str | None]:
 
 def build_webhook_payload(
     event_type: str,
-    data: dict,
+    data: dict[str, Any],
     delivery_id: int | None = None,
-) -> dict:
+) -> dict[str, Any]:
     """Build standardized webhook payload envelope."""
     return {
         "event": event_type,

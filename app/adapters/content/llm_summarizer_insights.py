@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from typing import Any
+from typing import Any, cast
 
 from app.core.async_utils import raise_if_cancelled
 from app.core.call_status import CallStatus
@@ -123,7 +123,7 @@ class LLMInsightsGenerator:
                 "selected": selected,
             },
         )
-        return selected
+        return cast("int", selected)
 
     async def generate_additional_insights(
         self,
@@ -176,7 +176,7 @@ class LLMInsightsGenerator:
                     self._last_insights = cached
                     if isinstance(summary_candidate, dict):
                         summary_candidate.setdefault("insights", cached)
-                    return cached
+                    return cast("dict[str, Any]", cached)
 
         system_prompt = self._build_insights_system_prompt(chosen_lang)
         source_text = self._build_insights_source_text(content_text, summary_candidate)
@@ -356,7 +356,7 @@ class LLMInsightsGenerator:
             "insights_source_truncated",
             extra={"original_len": len(content_text), "truncated_len": len(truncated)},
         )
-        return truncated
+        return cast("str", truncated)
 
     def _build_insights_system_prompt(self, lang: str) -> str:
         """Return system prompt instructing additional insight behaviour."""

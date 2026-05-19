@@ -285,7 +285,7 @@ class LLMWorkflowRepairMixin:
         notification_cb: Any | None,
         notification_label: str,
         interaction_id: Any | None,
-        interaction_kwargs: dict | None,
+        interaction_kwargs: dict[str, Any] | None,
         interaction_label: str,
     ) -> None:
         """Update request status to error, notify, and update interaction record."""

@@ -6,6 +6,8 @@ import asyncio
 import importlib
 import time
 
+from typing import Any, cast
+
 from app.adapters.external.firecrawl.models import FirecrawlResult
 from app.core.call_status import CallStatus
 from app.core.logging_utils import get_logger
@@ -85,7 +87,7 @@ class ScrapeGraphAIProvider:
         # model_provider="openai" and passes the remainder (original slash-form string)
         # to OpenRouter, which accepts the full model identifier unchanged.
         # TODO: drop the "openai/" prefix once https://github.com/ScrapeGraphAI/Scrapegraph-ai/issues/560 lands and exposes `override_provider` for OpenAI-compatible base URLs.
-        graph_config: dict = {
+        graph_config: dict[str, Any] = {
             "llm": {
                 "api_key": self._openrouter_api_key,
                 "model": f"openai/{self._openrouter_model}",
@@ -95,13 +97,13 @@ class ScrapeGraphAIProvider:
             "headless": True,
         }
 
-        def _run_graph() -> dict:
+        def _run_graph() -> dict[str, Any]:
             graph = SmartScraperGraph(
                 prompt=_EXTRACTION_PROMPT,
                 source=url,
                 config=graph_config,
             )
-            return graph.run()
+            return cast("dict[str, Any]", graph.run())
 
         try:
             result = await asyncio.wait_for(

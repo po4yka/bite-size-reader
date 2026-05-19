@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, cast
 
 from app.core.async_utils import raise_if_cancelled
 from app.core.logging_utils import get_logger
@@ -316,4 +316,4 @@ class ResponseSenderReplyFlow:
             "reply_with_id_result",
             extra={"message_id": message_id, "sent_message_type": type(sent_message).__name__},
         )
-        return message_id
+        return cast("int | None", message_id)

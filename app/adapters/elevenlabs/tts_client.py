@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import re
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import httpx
 
@@ -86,7 +86,7 @@ class ElevenLabsTTSClient:
         for chunk in chunks:
             vid = self._config.voice_id
             url = f"{_BASE_URL}/text-to-speech/{vid}"
-            payload: dict = {
+            payload: dict[str, Any] = {
                 "text": chunk,
                 "model_id": self._config.model,
                 "voice_settings": {
@@ -129,7 +129,7 @@ class ElevenLabsTTSClient:
 
         return chunks
 
-    async def _request_with_retry(self, url: str, payload: dict) -> bytes:
+    async def _request_with_retry(self, url: str, payload: dict[str, Any]) -> bytes:
         """Execute POST request with retry on transient errors."""
         client = self._get_client()
         last_exc: Exception | None = None

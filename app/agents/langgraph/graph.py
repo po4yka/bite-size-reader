@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
+from langchain_core.runnables import RunnableConfig
 from langgraph.graph import END, START, StateGraph
 
 from app.agents.base_agent import AgentResult
@@ -47,15 +48,15 @@ def build_summarization_graph(
     pure_summary_service: PureSummaryService,
     validation_agent: ValidationAgent,
     web_search_agent: WebSearchAgent | None = None,
-) -> StateGraph:
+) -> StateGraph[SummarizationGraphState]:
     """Return a compiled-ready StateGraph for the summarize→validate→retry cycle."""
-    builder: StateGraph = StateGraph(SummarizationGraphState)
+    builder: StateGraph[SummarizationGraphState] = StateGraph(SummarizationGraphState)
 
-    builder.add_node("summarize", make_summarize_node(pure_summary_service))
-    builder.add_node("validate", make_validate_node(validation_agent))
+    builder.add_node("summarize", cast(Any, make_summarize_node(pure_summary_service)))
+    builder.add_node("validate", cast(Any, make_validate_node(validation_agent)))
 
     if web_search_agent is not None:
-        builder.add_node("web_search", make_web_search_node(web_search_agent))
+        builder.add_node("web_search", cast(Any, make_web_search_node(web_search_agent)))
         builder.add_edge(START, "web_search")
         builder.add_edge("web_search", "summarize")
     else:
@@ -84,7 +85,7 @@ class SummarizationGraph:
         pure_summary_service: PureSummaryService,
         validation_agent: ValidationAgent,
         web_search_agent: WebSearchAgent | None = None,
-        checkpointer: BaseCheckpointSaver | None = None,
+        checkpointer: BaseCheckpointSaver[str] | None = None,
     ) -> None:
         graph = build_summarization_graph(pure_summary_service, validation_agent, web_search_agent)
         self._graph = graph.compile(checkpointer=checkpointer)
@@ -107,11 +108,12 @@ class SummarizationGraph:
             "feedback_ignored": False,
             "web_search_context": "",
         }
-        config: dict[str, Any] = {"configurable": {"thread_id": input_data.correlation_id}}
+        config: RunnableConfig = {"configurable": {"thread_id": input_data.correlation_id}}
 
         try:
-            final_state: SummarizationGraphState = await self._graph.ainvoke(
-                initial_state, config=config
+            final_state: SummarizationGraphState = cast(
+                "SummarizationGraphState",
+                await self._graph.ainvoke(initial_state, config=config),
             )
         except Exception as exc:
             logger.error(

@@ -5,7 +5,7 @@ Authentication service - business logic for auth operations.
 from __future__ import annotations
 
 from datetime import datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from app.api.dependencies.database import get_user_repository
 from app.api.exceptions import AuthorizationError, ResourceNotFoundError
@@ -42,7 +42,7 @@ class AuthService:
     """Service for authentication-related business logic."""
 
     @staticmethod
-    async def require_owner(user: AuthenticatedUser) -> dict:
+    async def require_owner(user: AuthenticatedUser) -> dict[str, Any]:
         """Verify user is an owner and return user data dict.
 
         Args:
@@ -66,7 +66,7 @@ class AuthService:
         *,
         target_user_id: int,
         client_id: str,
-    ) -> dict:
+    ) -> dict[str, Any]:
         """Allow owners broad access and users self-service on allowed client types only."""
         user_record = await AuthService.ensure_user(user["user_id"])
         if user_record.get("is_owner"):
@@ -86,7 +86,7 @@ class AuthService:
         return user_record
 
     @staticmethod
-    async def get_or_create_target_user(user_id: int, username: str | None = None) -> dict:
+    async def get_or_create_target_user(user_id: int, username: str | None = None) -> dict[str, Any]:
         """Get or create target user, returning user data dict.
 
         Args:
@@ -105,7 +105,7 @@ class AuthService:
         return user_data
 
     @staticmethod
-    async def ensure_user(user_id: int) -> dict:
+    async def ensure_user(user_id: int) -> dict[str, Any]:
         """Ensure user exists and return user data dict.
 
         Args:
@@ -150,7 +150,7 @@ class AuthService:
         await user_repo.async_clear_link_nonce(telegram_user_id=user_id)
 
     @staticmethod
-    def build_link_status_payload(user: dict) -> TelegramLinkStatus:
+    def build_link_status_payload(user: dict[str, Any]) -> TelegramLinkStatus:
         """Build link status payload from user dict.
 
         Args:

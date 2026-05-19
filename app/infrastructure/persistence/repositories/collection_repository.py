@@ -76,7 +76,7 @@ class CollectionRepositoryAdapter:
         parent_id: int | None,
         position: int,
         collection_type: str = "manual",
-        query_conditions_json: list[dict] | None = None,
+        query_conditions_json: list[dict[str, Any]] | None = None,
         query_match_mode: str = "all",
     ) -> int:
         async with self._database.transaction() as session:
@@ -625,7 +625,7 @@ class CollectionRepositoryAdapter:
             invite.updated_at = _now()
             return {"collection_id": collection.id, "role": invite.role, "status": "accepted"}
 
-    async def async_list_smart_collections_for_user(self, user_id: int) -> list[dict]:
+    async def async_list_smart_collections_for_user(self, user_id: int) -> list[dict[str, Any]]:
         async with self._database.session() as session:
             rows = (
                 await session.execute(
@@ -642,7 +642,7 @@ class CollectionRepositoryAdapter:
 
     async def async_list_user_summaries_with_request(
         self, user_id: int, limit: int = 10000
-    ) -> list[dict]:
+    ) -> list[dict[str, Any]]:
         async with self._database.session() as session:
             rows = await session.execute(
                 select(Summary, Request)

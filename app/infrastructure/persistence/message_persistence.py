@@ -157,7 +157,7 @@ class MessagePersistence:
 
         try:
 
-            def _ent_to_dict(e: Any) -> dict:
+            def _ent_to_dict(e: Any) -> dict[str, Any]:
                 if hasattr(e, "to_dict"):
                     try:
                         entity_dict = e.to_dict()

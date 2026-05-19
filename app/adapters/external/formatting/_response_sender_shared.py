@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from app.adapters.external.formatting.html_repair import repair_html_chunk
 from app.adapters.telegram.telethon_compat import normalize_parse_mode as _normalize_parse_mode
@@ -27,7 +27,7 @@ class ResponseSenderSharedState:
     validator: MessageValidator
     max_message_chars: int
     safe_reply_func: Callable[[Any, str], Awaitable[None]] | None
-    reply_json_func: Callable[[Any, dict], Awaitable[None]] | None
+    reply_json_func: Callable[[Any, dict[str, Any]], Awaitable[None]] | None
     telegram_client: Any
     admin_log_chat_id: int | None
     draft_stream_sender: DraftStreamSender
@@ -94,7 +94,7 @@ def extract_message_id(sent_message: Any) -> int | None:
     message_id = getattr(sent_message, "message_id", None)
     if message_id is None:
         message_id = getattr(sent_message, "id", None)
-    return message_id
+    return cast("int | None", message_id)
 
 
 def slugify(text: str, *, max_len: int = 60) -> str:

@@ -6,7 +6,7 @@ These are pure data containers and a protocol -- no DB or network access.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
 if TYPE_CHECKING:
     from datetime import datetime
@@ -20,8 +20,8 @@ class ImportedBookmark:
     notes: str | None = None
     created_at: datetime | None = None
     collection_name: str | None = None
-    highlights: list[dict] | None = None
-    extra: dict = field(default_factory=dict)
+    highlights: list[dict[str, Any]] | None = None
+    extra: dict[str, Any] = field(default_factory=dict)
 
 
 @runtime_checkable

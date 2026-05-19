@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 if TYPE_CHECKING:
     from ._response_sender_shared import ResponseSenderSharedState
@@ -66,7 +66,7 @@ class ResponseSenderDraftFlow:
         )
         if draft_ok:
             return message_id
-        return await self._edit_or_send(
+        result = await self._edit_or_send(
             message,
             text,
             message_id=message_id,
@@ -75,3 +75,4 @@ class ResponseSenderDraftFlow:
             disable_web_page_preview=disable_web_page_preview,
             message_thread_id=message_thread_id,
         )
+        return cast("int | None", result)

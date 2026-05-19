@@ -10,7 +10,7 @@ import threading
 import time
 import weakref
 from importlib.util import find_spec
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 import httpx
 
@@ -253,12 +253,12 @@ class OpenAIClient:
                 attempt=attempt,
             )
 
-        return await self._run_with_retry(
+        return cast("LLMCallResult", await self._run_with_retry(
             models_to_try,
             _attempt,
             primary_model=primary_model,
             exhausted_endpoint="/v1/chat/completions",
-        )
+        ))
 
     async def _attempt_request(
         self,
@@ -316,7 +316,7 @@ class OpenAIClient:
 
         data, err = self._parse_http_response(resp, model, latency, "OpenAI")
         if err is not None:
-            return err
+            return cast("LLMCallResult", err)
 
         # Extract successful response
         return self._parse_success_response(data, model, latency, headers, messages)

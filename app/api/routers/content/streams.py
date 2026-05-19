@@ -97,7 +97,7 @@ async def stream_request(
 
     hub = get_stream_hub()
 
-    async def event_generator() -> AsyncIterator[dict]:
+    async def event_generator() -> AsyncIterator[dict[str, Any]]:
         subscription = hub.subscribe(str(request_id))
         try:
             async for event in subscription:

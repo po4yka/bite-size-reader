@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from datetime import UTC, datetime
 from time import monotonic
 from typing import Any
@@ -24,7 +25,7 @@ _LISTINGS = {"hot", "new", "top", "rising"}
 class RequestRateBudget:
     """Small in-process request budget for source pollers."""
 
-    def __init__(self, *, max_requests_per_minute: int, now=monotonic) -> None:
+    def __init__(self, *, max_requests_per_minute: int, now: Callable[[], float] = monotonic) -> None:
         self.max_requests_per_minute = max(1, min(int(max_requests_per_minute), 100))
         self._now = now
         self._timestamps: list[float] = []

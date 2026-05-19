@@ -154,7 +154,7 @@ def get_current_user(
     raise AuthenticationError("Authentication required")
 
 
-def get_webapp_user(request: Request) -> dict:
+def get_webapp_user(request: Request) -> dict[str, Any]:
     """Dependency to get user from Telegram WebApp initData.
 
     Validates the X-Telegram-Init-Data header using HMAC-SHA256.

@@ -22,13 +22,15 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
 
+    from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
+
 from app.core.logging_utils import get_logger
 
 logger = get_logger(__name__)
 
 
 @asynccontextmanager
-async def create_checkpointer(connection_string: str) -> AsyncIterator:
+async def create_checkpointer(connection_string: str) -> AsyncIterator[AsyncPostgresSaver]:
     """Yield a ready-to-use ``AsyncPostgresSaver``.
 
     Calls ``checkpointer.setup()`` on entry (idempotent — creates four tables

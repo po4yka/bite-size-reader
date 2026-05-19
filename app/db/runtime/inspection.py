@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import time
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from sqlalchemy import func, select, text
 from sqlalchemy.exc import SQLAlchemyError
@@ -27,7 +27,7 @@ class DatabaseInspectionService:
         self._last_rollback_checked_at = 0.0
 
     def check_integrity(self) -> tuple[bool, str]:
-        return _run_sync(self.async_check_integrity())
+        return cast("tuple[bool, str]", _run_sync(self.async_check_integrity()))
 
     async def async_check_integrity(self) -> tuple[bool, str]:
         try:
@@ -61,7 +61,7 @@ class DatabaseInspectionService:
         return True, "ok"
 
     def get_database_overview(self) -> dict[str, Any]:
-        return _run_sync(self.async_get_database_overview())
+        return cast("dict[str, Any]", _run_sync(self.async_get_database_overview()))
 
     async def async_get_database_overview(self) -> dict[str, Any]:
         overview: dict[str, Any] = {"tables": {}, "errors": []}
@@ -112,9 +112,9 @@ class DatabaseInspectionService:
         required_fields: Iterable[str] | None = None,
         limit: int | None = None,
     ) -> dict[str, Any]:
-        return _run_sync(
+        return cast("dict[str, Any]", _run_sync(
             self.async_verify_processing_integrity(required_fields=required_fields, limit=limit)
-        )
+        ))
 
     async def async_verify_processing_integrity(
         self,

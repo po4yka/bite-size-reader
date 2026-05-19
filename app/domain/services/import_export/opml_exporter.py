@@ -24,8 +24,8 @@ class OPMLExporter:
         body = ET.SubElement(opml, "body")
 
         # Group feeds by category
-        categorized: dict[str, list[dict]] = {}
-        uncategorized: list[dict] = []
+        categorized: dict[str, list[dict[str, Any]]] = {}
+        uncategorized: list[dict[str, Any]] = []
         for feed in feeds:
             cat = feed.get("category_name")
             if cat:

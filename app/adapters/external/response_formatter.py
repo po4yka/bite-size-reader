@@ -60,7 +60,7 @@ class ResponseFormatter:
     def __init__(
         self,
         safe_reply_func: Callable[[Any, str], Awaitable[None]] | None = None,
-        reply_json_func: Callable[[Any, dict], Awaitable[None]] | None = None,
+        reply_json_func: Callable[[Any, dict[str, Any]], Awaitable[None]] | None = None,
         telegram_client: Any = None,
         telegram_limits: Any = None,
         telegram_config: Any = None,
@@ -289,7 +289,7 @@ class ResponseFormatter:
         return self._response_sender.is_draft_streaming_enabled()
 
     async def reply_json(
-        self, message: Any, obj: dict, *, correlation_id: str | None = None, success: bool = True
+        self, message: Any, obj: dict[str, Any], *, correlation_id: str | None = None, success: bool = True
     ) -> None:
         """Reply with JSON object, using file upload for large content."""
         await self._response_sender.reply_json(
@@ -634,7 +634,7 @@ class ResponseFormatter:
         """Create a filesystem-friendly slug from text."""
         return self._text_processor.slugify(text, max_len=max_len)
 
-    def _build_json_filename(self, obj: dict) -> str:
+    def _build_json_filename(self, obj: dict[str, Any]) -> str:
         """Build a descriptive filename for the JSON attachment."""
         return self._text_processor.build_json_filename(obj)
 

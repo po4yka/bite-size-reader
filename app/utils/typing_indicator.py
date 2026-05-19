@@ -7,6 +7,7 @@ during long-running operations.
 from __future__ import annotations
 
 import asyncio
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from typing import TYPE_CHECKING, Any
 
@@ -142,7 +143,7 @@ async def typing_indicator(
     message: Any,
     action: str = "typing",
     interval: float | None = None,
-):
+) -> AsyncGenerator[TypingIndicator | None, None]:
     """Context manager for typing indicators.
 
     Args:
@@ -160,7 +161,7 @@ async def typing_indicator(
 
     if not chat_id or not hasattr(response_formatter, "send_chat_action"):
         # No chat ID or formatter doesn't support typing indicators
-        yield
+        yield None
         return
 
     indicator = TypingIndicator(

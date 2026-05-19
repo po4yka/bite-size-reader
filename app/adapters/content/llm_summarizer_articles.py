@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from typing import Any
+from typing import Any, cast
 
 from app.core.async_utils import raise_if_cancelled
 from app.core.call_status import CallStatus
@@ -86,7 +86,7 @@ class LLMArticleGenerator:
                             "custom_article_cache_hit",
                             extra={"cid": correlation_id, "model": model_name},
                         )
-                        return cached
+                        return cast("dict[str, Any] | None", cached)
 
             max_tokens = self._select_max_tokens(" ".join(topics + tags))
 
@@ -179,7 +179,7 @@ class LLMArticleGenerator:
                         "translation_cache_hit",
                         extra={"cid": correlation_id, "model": model_name},
                     )
-                    return cached
+                    return cast("str | None", cached)
 
         summary_json = json.dumps(summary, ensure_ascii=False, indent=2)
 

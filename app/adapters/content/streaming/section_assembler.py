@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import re
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, cast
 
 from app.core.json_utils import extract_json
 
@@ -164,7 +164,7 @@ class SummarySectionStreamAssembler:
     @staticmethod
     def _decode_json_string(value: str) -> str:
         try:
-            return json.loads(f'"{value}"')
+            return cast("str", json.loads(f'"{value}"'))
         except Exception:
             return value
 

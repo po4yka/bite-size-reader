@@ -6,6 +6,8 @@ Reuses RuleConditionEvaluator from the rule engine.
 
 from __future__ import annotations
 
+from typing import Any
+
 from app.domain.services.rule_engine import (
     RuleConditionEvaluator,
     validate_condition,
@@ -19,7 +21,7 @@ VALID_MATCH_MODES = frozenset({"all", "any"})
 
 
 def validate_smart_conditions(
-    conditions: list[dict], match_mode: str = "all"
+    conditions: list[dict[str, Any]], match_mode: str = "all"
 ) -> tuple[bool, str | None]:
     """Validate conditions for a smart collection.
 
@@ -42,7 +44,7 @@ def validate_smart_conditions(
     return True, None
 
 
-def evaluate_summary(conditions: list[dict], context: dict, match_mode: str = "all") -> bool:
+def evaluate_summary(conditions: list[dict[str, Any]], context: dict[str, Any], match_mode: str = "all") -> bool:
     """Evaluate a summary context against smart collection conditions.
 
     Returns True if the summary matches.

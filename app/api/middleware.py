@@ -52,7 +52,7 @@ def _check_local_rate_limit(user_id: str, limit: int, window: int) -> tuple[bool
     return _local_rate_limiter.check(user_id, limit=limit, window=window)
 
 
-async def webapp_auth_middleware(request: Request, call_next: Callable) -> Response:
+async def webapp_auth_middleware(request: Request, call_next: Callable[..., Any]) -> Response:
     """Validate Telegram WebApp initData and attach user to request.state.
 
     When X-Telegram-Init-Data header is present and no Authorization header,
@@ -74,7 +74,7 @@ async def webapp_auth_middleware(request: Request, call_next: Callable) -> Respo
     return cast("Response", await call_next(request))
 
 
-async def correlation_id_middleware(request: Request, call_next: Callable) -> Response:
+async def correlation_id_middleware(request: Request, call_next: Callable[..., Any]) -> Response:
     """
     Add correlation ID to all requests for tracing.
 
@@ -290,7 +290,7 @@ def _log_redis_unavailable_once(cfg: AppConfig, correlation_id: str | None, path
     if _redis_warning_emitted[0]:
         return
     is_prod = cfg.deployment.is_production_mode
-    extra: dict = {
+    extra: dict[str, Any] = {
         "required": cfg.redis.required,
         "correlation_id": correlation_id,
         "path": path,
@@ -309,7 +309,7 @@ def _log_redis_unavailable_once(cfg: AppConfig, correlation_id: str | None, path
 async def _handle_local_rate_limit(
     *,
     request: Request,
-    call_next: Callable,
+    call_next: Callable[..., Any],
     cfg: AppConfig,
     correlation_id: str | None,
     rate_key: str,
@@ -358,7 +358,7 @@ async def _handle_local_rate_limit(
 async def _handle_redis_rate_limit(
     *,
     request: Request,
-    call_next: Callable,
+    call_next: Callable[..., Any],
     cfg: AppConfig,
     correlation_id: str | None,
     redis_client: Any,
@@ -513,7 +513,7 @@ async def _enforce_client_limit_redis(
     )
 
 
-async def rate_limit_middleware(request: Request, call_next: Callable) -> Response:
+async def rate_limit_middleware(request: Request, call_next: Callable[..., Any]) -> Response:
     """Redis-backed rate limiting middleware with graceful fallback."""
     cfg = _get_cfg()
     correlation_id = getattr(request.state, "correlation_id", None)

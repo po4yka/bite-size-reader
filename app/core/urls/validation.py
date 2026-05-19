@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import contextvars
 from contextlib import contextmanager
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 from urllib.parse import urlparse
 
 from app.core.logging_utils import get_logger
@@ -12,7 +12,7 @@ if TYPE_CHECKING:
 
 logger = get_logger(__name__)
 
-_dns_cache: contextvars.ContextVar[dict[str, list] | None] = contextvars.ContextVar(
+_dns_cache: contextvars.ContextVar[dict[str, list[Any]] | None] = contextvars.ContextVar(
     "_dns_cache", default=None
 )
 
@@ -151,7 +151,7 @@ def _validate_suspicious_domain_pattern(hostname_lower: str) -> None:
             raise ValueError(msg)
 
 
-def _resolve_hostname_to_addrs(hostname: str, hostname_lower: str) -> list:
+def _resolve_hostname_to_addrs(hostname: str, hostname_lower: str) -> list[Any]:
     """Resolve hostname, respecting the per-task DNS cache when active."""
     import socket
 

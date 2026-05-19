@@ -27,7 +27,7 @@ class ResponseSenderImpl:
         *,
         max_message_chars: int = 3500,
         safe_reply_func: Callable[[Any, str], Awaitable[None]] | None = None,
-        reply_json_func: Callable[[Any, dict], Awaitable[None]] | None = None,
+        reply_json_func: Callable[[Any, dict[str, Any]], Awaitable[None]] | None = None,
         telegram_client: Any = None,
         admin_log_chat_id: int | None = None,
         draft_streaming_enabled: bool = True,
@@ -207,7 +207,7 @@ class ResponseSenderImpl:
         )
 
     async def reply_json(
-        self, message: Any, obj: dict, *, correlation_id: str | None = None, success: bool = True
+        self, message: Any, obj: dict[str, Any], *, correlation_id: str | None = None, success: bool = True
     ) -> None:
         await self._payload_flow.reply_json(
             message,

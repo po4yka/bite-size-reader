@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import time
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from app.application.dto.audio_generation import AudioGenerationResult
 from app.core.logging_utils import get_logger
@@ -165,7 +165,7 @@ class TTSService:
         await self._tts_provider.close()
 
     @staticmethod
-    def _resolve_source_text(payload: dict, source_field: str) -> tuple[str, str]:
+    def _resolve_source_text(payload: dict[str, Any], source_field: str) -> tuple[str, str]:
         text = str(payload.get(source_field, "") or "").strip()
         if text:
             return text, source_field

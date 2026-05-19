@@ -16,7 +16,7 @@ _TRANSCRIPT_MAX_RETRIES = 3
 
 
 def format_transcript(
-    transcript_data: list[dict],
+    transcript_data: list[dict[str, Any]],
     *,
     max_chars: int,
     log: logging.Logger | None = None,

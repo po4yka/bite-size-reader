@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import Any
+from typing import Any, cast
 
 from app.core.async_utils import raise_if_cancelled
 from app.core.logging_utils import get_logger
@@ -187,7 +187,7 @@ class TelethonBotClient:
         if events is None:
             return
 
-        @self._client.on(events.NewMessage(incoming=True))
+        @self._client.on(events.NewMessage(incoming=True))  # type: ignore[untyped-decorator, unused-ignore]
         async def _on_message(event: Any) -> None:
             await handler(TelethonMessageAdapter(event, self))
 
@@ -195,7 +195,7 @@ class TelethonBotClient:
         if events is None:
             return
 
-        @self._client.on(events.CallbackQuery)
+        @self._client.on(events.CallbackQuery)  # type: ignore[untyped-decorator, unused-ignore]
         async def _on_callback(event: Any) -> None:
             await handler(TelethonCallbackQueryAdapter(event, self))
 
@@ -441,7 +441,7 @@ class TelethonMessageAdapter:
 
     @property
     def text(self) -> str | None:
-        return getattr(self._message, "raw_text", None) or getattr(self._message, "text", None)
+        return cast("str | None", getattr(self._message, "raw_text", None) or getattr(self._message, "text", None))
 
     @property
     def caption(self) -> str | None:
@@ -495,12 +495,12 @@ class TelethonMessageAdapter:
     def forward_sender_name(self) -> str | None:
         """Origin name for forwards where the sender hid their account."""
         header = self._fwd_header
-        return getattr(header, "from_name", None) if header is not None else None
+        return cast("str | None", getattr(header, "from_name", None)) if header is not None else None
 
     @property
     def forward_signature(self) -> str | None:
         header = self._fwd_header
-        return getattr(header, "post_author", None) if header is not None else None
+        return cast("str | None", getattr(header, "post_author", None)) if header is not None else None
 
     @property
     def forward_from_message_id(self) -> int | None:
@@ -583,7 +583,7 @@ class TelethonMessageAdapter:
         )
 
     async def download(self, *, file_name: str | None = None) -> str | None:
-        return await self._bot.raw.download_media(self._message, file=file_name)
+        return cast("str | None", await self._bot.raw.download_media(self._message, file=file_name))
 
 
 class TelethonCallbackQueryAdapter:

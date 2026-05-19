@@ -55,7 +55,7 @@ class BackgroundProcessor:
         url_processor: Any,
         redis: Any | None,
         semaphore: asyncio.Semaphore,
-        audit_func: Callable[[str, str, dict], None],
+        audit_func: Callable[[str, str, dict[str, Any]], None],
         url_processor_factory: Callable[[Database], Any] | None = None,
         database_builder: Callable[[AppConfig], Database] | None = None,
         request_repo: Any | None = None,

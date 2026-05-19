@@ -7,6 +7,8 @@ from app.core.logging_utils import get_logger
 
 logger = get_logger(__name__)
 
+__all__ = ["APIRouter", "Depends"]
+
 TFn = TypeVar("TFn", bound=Callable[..., Any])
 
 if TYPE_CHECKING:

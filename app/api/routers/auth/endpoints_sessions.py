@@ -273,9 +273,9 @@ async def logout(
 
 @router.get("/sessions")
 async def list_sessions(
-    current_user: dict = Depends(get_current_user),
+    current_user: dict[str, Any] = Depends(get_current_user),
     auth_repo: Any = Depends(get_auth_repository),
-) -> dict:
+) -> dict[str, Any]:
     """List active sessions for the current user."""
     user_id = current_user["user_id"]
     now = datetime.now(UTC)
@@ -301,9 +301,9 @@ async def list_sessions(
 @router.delete("/sessions/{session_id}")
 async def revoke_session(
     session_id: int,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict[str, Any] = Depends(get_current_user),
     auth_repo: Any = Depends(get_auth_repository),
-) -> dict:
+) -> dict[str, Any]:
     """Revoke a specific session by ID. Cannot revoke the current session via this endpoint."""
     user_id = current_user["user_id"]
     revoked = await auth_repo.async_revoke_session_by_id(session_id, user_id)

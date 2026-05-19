@@ -10,6 +10,7 @@ import hashlib
 import hmac
 import json
 import time
+from typing import Any
 from urllib.parse import parse_qs
 
 from app.api.exceptions import AuthenticationError, AuthorizationError
@@ -23,7 +24,7 @@ _AUTH_DATE_MAX_AGE_SEC = 15 * 60
 _CLOCK_SKEW_SEC = 60
 
 
-def verify_telegram_webapp_init_data(init_data: str) -> dict:
+def verify_telegram_webapp_init_data(init_data: str) -> dict[str, Any]:
     """Validate Telegram WebApp initData and return parsed user info.
 
     Args:

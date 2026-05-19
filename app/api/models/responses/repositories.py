@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 from datetime import datetime  # noqa: TC003  # used at runtime by Pydantic schema generation
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -41,8 +41,8 @@ class RepositoryAnalysis(BaseModel):
     purpose: str
     tech_stack: list[str]
     architecture_summary: str
-    key_concepts: list[dict]  # [{term, explanation}]
-    code_patterns: list[dict]  # [{name, description}]
+    key_concepts: list[dict[str, Any]]  # [{term, explanation}]
+    code_patterns: list[dict[str, Any]]  # [{name, description}]
     use_cases: list[str]
     target_audience: str
     maturity: str

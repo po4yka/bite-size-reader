@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from app.core.logging_utils import get_logger
 
@@ -245,7 +245,7 @@ def _load_metadata_file(*, metadata_file: Path, fallback: dict[str, Any]) -> dic
     if not metadata_file.exists():
         return fallback
     try:
-        return json.loads(metadata_file.read_text(encoding="utf-8"))
+        return cast(dict[str, Any], json.loads(metadata_file.read_text(encoding="utf-8")))
     except (json.JSONDecodeError, OSError) as exc:
         logger.warning(
             "youtube_metadata_file_corrupt",

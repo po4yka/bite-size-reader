@@ -12,7 +12,7 @@ import threading
 import weakref
 from contextlib import asynccontextmanager
 from importlib.util import find_spec
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 import httpx
 
@@ -291,10 +291,10 @@ class BaseLLMClient:
         """Extract error message from API error response."""
         error = data.get("error", {})
         if isinstance(error, dict):
-            return error.get("message", "Unknown API error")
+            return cast("str", error.get("message", "Unknown API error"))
         if isinstance(error, str):
             return error
-        return data.get("message", "Unknown API error")
+        return cast("str", data.get("message", "Unknown API error"))
 
     def _parse_http_response(
         self,

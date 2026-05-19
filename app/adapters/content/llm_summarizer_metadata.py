@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import re
-from typing import Any
+from typing import Any, cast
 
 from app.core.async_utils import raise_if_cancelled
 from app.core.call_status import CallStatus
@@ -180,12 +180,12 @@ class LLMSummaryMetadataHelper:
             )
 
         # Enrich with RAG-optimized fields for retrieval
-        return await self._semantic_helper.enrich_with_rag_fields(
+        return cast("dict[str, Any]", await self._semantic_helper.enrich_with_rag_fields(
             summary,
             content_text=content_text,
             chosen_lang=chosen_lang,
             req_id=req_id,
-        )
+        ))
 
     def _apply_firecrawl_metadata(
         self,

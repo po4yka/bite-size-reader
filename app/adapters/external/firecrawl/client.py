@@ -21,7 +21,7 @@ import asyncio
 import json
 import time
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 import httpx
 
@@ -338,13 +338,13 @@ class FirecrawlClient:
         headers = {"Authorization": f"Bearer {self._api_key}"}
         resp = await self._client.post(self._crawl_url, headers=headers, json=payload)
         validate_response_size(resp, self._max_response_size_bytes, "Firecrawl Crawl")
-        return resp.json()
+        return cast("dict[str, Any]", resp.json())
 
     async def get_crawl_status(self, job_id: str) -> dict[str, Any]:
         headers = {"Authorization": f"Bearer {self._api_key}"}
         resp = await self._client.get(f"{self._crawl_url}/{job_id}", headers=headers)
         validate_response_size(resp, self._max_response_size_bytes, "Firecrawl Crawl")
-        return resp.json()
+        return cast("dict[str, Any]", resp.json())
 
     async def crawl(
         self,
@@ -419,13 +419,13 @@ class FirecrawlClient:
         headers = {"Authorization": f"Bearer {self._api_key}"}
         resp = await self._client.post(self._batch_scrape_url, headers=headers, json=payload)
         validate_response_size(resp, self._max_response_size_bytes, "Firecrawl BatchScrape")
-        return resp.json()
+        return cast("dict[str, Any]", resp.json())
 
     async def get_batch_scrape_status(self, job_id: str) -> dict[str, Any]:
         headers = {"Authorization": f"Bearer {self._api_key}"}
         resp = await self._client.get(f"{self._batch_scrape_url}/{job_id}", headers=headers)
         validate_response_size(resp, self._max_response_size_bytes, "Firecrawl BatchScrape")
-        return resp.json()
+        return cast("dict[str, Any]", resp.json())
 
     async def extract(self, args: dict[str, Any]) -> dict[str, Any]:
         payload = dict(args)
@@ -433,7 +433,7 @@ class FirecrawlClient:
         headers = {"Authorization": f"Bearer {self._api_key}"}
         resp = await self._client.post(self._extract_url, headers=headers, json=payload)
         validate_response_size(resp, self._max_response_size_bytes, "Firecrawl Extract")
-        return resp.json()
+        return cast("dict[str, Any]", resp.json())
 
     async def scrape_markdown(
         self,
@@ -568,7 +568,7 @@ class FirecrawlClient:
         request_id: int | None,
         started: float,
         wait_for_ms_override: int | None,
-    ) -> FirecrawlResult | tuple[bool, float, dict | None, int | None, str | None] | None:
+    ) -> FirecrawlResult | tuple[bool, float, dict[str, Any] | None, int | None, str | None] | None:
         """Execute a single scrape attempt.
 
         Returns:

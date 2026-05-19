@@ -6,7 +6,7 @@ import hashlib
 import json
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 from sqlalchemy import select
 
@@ -242,7 +242,7 @@ def _compute_content_hash(repository: Repository) -> str:
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
-def _deserialize_analysis(analysis_json: dict) -> RepoAnalysis | None:
+def _deserialize_analysis(analysis_json: dict[str, Any]) -> RepoAnalysis | None:
     """Reconstruct a :class:`RepoAnalysis` from a stored JSON dict."""
     try:
         from app.core.repo_analysis_schema import RepoAnalysis

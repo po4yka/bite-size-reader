@@ -101,7 +101,7 @@ class ResponseSender(Protocol):
         ...
 
     async def reply_json(
-        self, message: Any, obj: dict, *, correlation_id: str | None = None, success: bool = True
+        self, message: Any, obj: dict[str, Any], *, correlation_id: str | None = None, success: bool = True
     ) -> None:
         """Reply with JSON object, using file upload for large content."""
         ...
@@ -154,7 +154,7 @@ class TextProcessor(Protocol):
         """Create a filesystem-friendly slug from text."""
         ...
 
-    def build_json_filename(self, obj: dict) -> str:
+    def build_json_filename(self, obj: dict[str, Any]) -> str:
         """Build a descriptive filename for the JSON attachment."""
         ...
 

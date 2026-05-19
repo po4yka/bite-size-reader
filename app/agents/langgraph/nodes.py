@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from collections.abc import Awaitable, Callable
 from typing import TYPE_CHECKING, Any
 
 from app.core.logging_utils import get_logger
@@ -20,13 +21,15 @@ if TYPE_CHECKING:
     from app.agents.validation_agent import ValidationAgent
     from app.agents.web_search_agent import WebSearchAgent
 
+NodeFn = Callable[["SummarizationGraphState"], Awaitable[dict[str, Any]]]
+
 logger = get_logger(__name__)
 
 
 # ── web search ────────────────────────────────────────────────────────────────
 
 
-def make_web_search_node(web_search_agent: WebSearchAgent):
+def make_web_search_node(web_search_agent: WebSearchAgent) -> NodeFn:
     """Return a node that runs web search enrichment before summarization."""
 
     async def web_search_node(state: SummarizationGraphState) -> dict[str, Any]:
@@ -49,7 +52,7 @@ def make_web_search_node(web_search_agent: WebSearchAgent):
 # ── summarize ─────────────────────────────────────────────────────────────────
 
 
-def make_summarize_node(pure_summary_service: PureSummaryService):
+def make_summarize_node(pure_summary_service: PureSummaryService) -> NodeFn:
     """Return a node that calls the LLM and tracks duplicate responses."""
 
     async def summarize_node(state: SummarizationGraphState) -> dict[str, Any]:
@@ -122,7 +125,7 @@ def make_summarize_node(pure_summary_service: PureSummaryService):
 # ── validate ──────────────────────────────────────────────────────────────────
 
 
-def make_validate_node(validation_agent: ValidationAgent):
+def make_validate_node(validation_agent: ValidationAgent) -> NodeFn:
     """Return a node that validates the current summary_json against contract."""
 
     async def validate_node(state: SummarizationGraphState) -> dict[str, Any]:

@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import time
 from datetime import timedelta
+from typing import Any
 
 from app.adapters.content.scraper.runtime_tuning import tuned_provider_timeout
 from app.adapters.external.firecrawl.models import FirecrawlResult
@@ -220,7 +221,7 @@ class CrawleeProvider:
             _extra_headers = {
                 k: v for k, v in (_fp.headers or {}).items() if k.lower() != "user-agent"
             }
-            _new_context_opts: dict = {
+            _new_context_opts: dict[str, Any] = {
                 "user_agent": _fp.navigator.userAgent,
                 "extra_http_headers": _extra_headers,
             }

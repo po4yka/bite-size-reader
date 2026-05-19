@@ -45,8 +45,8 @@ class CocoIndexRuntime:
         dsn = coco_cfg.dsn_override or db_cfg.dsn
         dsn = dsn.replace("postgresql+asyncpg://", "postgresql://")
 
-        cocoindex.init(
-            cocoindex.Settings(
+        cocoindex.init(  # type: ignore[attr-defined]
+            cocoindex.Settings(  # type: ignore[call-arg]
                 database_url=dsn,
                 target_schema="cocoindex",
             )
@@ -84,12 +84,12 @@ class CocoIndexRuntime:
         )
 
         # Start live updaters in background
-        live_updater_cls = cocoindex.FlowLiveUpdater
+        live_updater_cls = cocoindex.FlowLiveUpdater  # type: ignore[attr-defined]
         self._updaters = []
         for flow in self._flows:
             updater = live_updater_cls(
                 flow,
-                cocoindex.FlowLiveUpdaterOptions(live_mode=True),
+                cocoindex.FlowLiveUpdaterOptions(live_mode=True),  # type: ignore[attr-defined]
             )
             await asyncio.to_thread(updater.__enter__)
             self._updaters.append(updater)

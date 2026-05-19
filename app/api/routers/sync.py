@@ -29,7 +29,7 @@ async def create_sync_session(
     body: SyncSessionRequest | None = None,
     user: dict[str, Any] = Depends(get_current_user),
     svc: Any = Depends(_get_sync_service),
-) -> dict:
+) -> dict[str, Any]:
     """Create or resume a sync session."""
     session = await svc.start_session(
         user_id=user["user_id"],
@@ -52,7 +52,7 @@ async def full_sync(
     limit: int | None = Query(None, ge=1, le=500),
     user: dict[str, Any] = Depends(get_current_user),
     svc: Any = Depends(_get_sync_service),
-) -> dict:
+) -> dict[str, Any]:
     """Fetch full sync data in bounded chunks."""
     page: FullSyncResponseData = await svc.get_full(
         session_id=session_id,
@@ -72,7 +72,7 @@ async def delta_sync(
     limit: int | None = Query(None, ge=1, le=500),
     user: dict[str, Any] = Depends(get_current_user),
     svc: Any = Depends(_get_sync_service),
-) -> dict | Response:
+) -> dict[str, Any] | Response:
     """Fetch delta sync (created/updated/deleted) since a cursor."""
     # Compute ETag from max server_version
     max_sv = await svc.get_max_server_version(user["user_id"])
@@ -107,7 +107,7 @@ async def apply_changes(
     payload: SyncApplyRequest,
     user: dict[str, Any] = Depends(get_current_user),
     svc: Any = Depends(_get_sync_service),
-) -> dict:
+) -> dict[str, Any]:
     """Apply client-side changes with conflict detection."""
     result: SyncApplyResponseData = await svc.apply_changes(
         session_id=payload.session_id,

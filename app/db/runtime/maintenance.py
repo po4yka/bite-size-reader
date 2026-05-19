@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import asyncio
-from typing import TYPE_CHECKING, Any
+from collections.abc import Coroutine
+from typing import TYPE_CHECKING, Any, TypeVar
+
+_T = TypeVar("_T")
 
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
@@ -99,7 +102,7 @@ class DatabaseMaintenanceService:
         }
 
 
-def _run_sync(awaitable: Any) -> Any:
+def _run_sync(awaitable: Coroutine[Any, Any, _T]) -> _T:
     try:
         asyncio.get_running_loop()
     except RuntimeError:

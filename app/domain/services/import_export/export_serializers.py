@@ -10,6 +10,7 @@ import html
 import io
 import json
 from datetime import UTC, datetime
+from typing import Any
 
 
 class JsonExporter:
@@ -17,9 +18,9 @@ class JsonExporter:
 
     @staticmethod
     def serialize(
-        summaries: list[dict],
-        tags: list[dict] | None = None,
-        collections: list[dict] | None = None,
+        summaries: list[dict[str, Any]],
+        tags: list[dict[str, Any]] | None = None,
+        collections: list[dict[str, Any]] | None = None,
     ) -> str:
         payload = {
             "version": 1,
@@ -38,9 +39,9 @@ class CsvExporter:
 
     @staticmethod
     def serialize(
-        summaries: list[dict],
-        tags: list[dict] | None = None,
-        collections: list[dict] | None = None,
+        summaries: list[dict[str, Any]],
+        tags: list[dict[str, Any]] | None = None,
+        collections: list[dict[str, Any]] | None = None,
     ) -> str:
         buf = io.StringIO()
         writer = csv.DictWriter(buf, fieldnames=CsvExporter._HEADERS, extrasaction="ignore")
@@ -65,9 +66,9 @@ class NetscapeHtmlExporter:
 
     @staticmethod
     def serialize(
-        summaries: list[dict],
-        tags: list[dict] | None = None,
-        collections: list[dict] | None = None,
+        summaries: list[dict[str, Any]],
+        tags: list[dict[str, Any]] | None = None,
+        collections: list[dict[str, Any]] | None = None,
     ) -> str:
         lines = [
             "<!DOCTYPE NETSCAPE-Bookmark-file-1>",
@@ -99,7 +100,7 @@ class NetscapeHtmlExporter:
 # ---------------------------------------------------------------------------
 
 
-def _tag_names(summary: dict) -> list[str]:
+def _tag_names(summary: dict[str, Any]) -> list[str]:
     """Extract tag name strings from a summary dict."""
     raw = summary.get("tags")
     if not raw:
@@ -115,7 +116,7 @@ def _tag_names(summary: dict) -> list[str]:
     return result
 
 
-def _enrich_summary(s: dict) -> dict:
+def _enrich_summary(s: dict[str, Any]) -> dict[str, Any]:
     """Return a copy of the summary dict with canonical export keys."""
     return {
         "url": s.get("url", ""),
@@ -132,7 +133,7 @@ def _enrich_summary(s: dict) -> dict:
     }
 
 
-def _collection_names(summary: dict) -> list[str]:
+def _collection_names(summary: dict[str, Any]) -> list[str]:
     """Extract collection name strings from a summary dict."""
     raw = summary.get("collections")
     if not raw:

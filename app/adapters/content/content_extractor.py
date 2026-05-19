@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from app.adapters.content.article_media import extract_firecrawl_image_assets
 from app.adapters.content.content_extractor_crawl import ContentExtractorCrawlMixin
@@ -92,7 +92,7 @@ class ContentExtractor(
         db: Database,
         firecrawl: ContentScraperProtocol,
         response_formatter: ResponseFormatter,
-        audit_func: Callable[[str, str, dict], None],
+        audit_func: Callable[[str, str, dict[str, Any]], None],
         sem: Callable[[], Any],
         quality_llm_client: LLMClientProtocol | None = None,
     ) -> None:
@@ -118,7 +118,7 @@ class ContentExtractor(
 
     async def clear_cache(self) -> int:
         """Clear the extraction cache."""
-        return await self._cache.clear()
+        return cast(int, await self._cache.clear())
 
     def _aggregation_article_media_enabled(self) -> bool:
         return bool(getattr(self.cfg.runtime, "aggregation_article_media_enabled", True))

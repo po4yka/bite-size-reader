@@ -140,7 +140,7 @@ def is_gray_zone_for_llm_check(reason: LowValueReason, metrics: dict[str, Any]) 
         return False
     wc = metrics.get("word_count", 0)
     ssc = metrics.get("substantive_sentence_count", 0)
-    return 15 <= wc <= 150 and ssc <= 3
+    return bool(15 <= wc <= 150 and ssc <= 3)
 
 
 _QUALITY_PROMPT_PATH = Path(__file__).resolve().parents[2] / "prompts" / "quality_check_system.txt"

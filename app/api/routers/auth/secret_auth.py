@@ -139,7 +139,7 @@ def generate_secret_value() -> str:
     return candidate
 
 
-def serialize_secret(record: dict) -> ClientSecretInfo:
+def serialize_secret(record: dict[str, Any]) -> ClientSecretInfo:
     """Serialize a client secret dict to ClientSecretInfo."""
 
     def _fmt(dt_value: datetime | str | None) -> str | None:
@@ -172,7 +172,7 @@ def serialize_secret(record: dict) -> ClientSecretInfo:
     )
 
 
-async def check_expired(record: dict) -> None:
+async def check_expired(record: dict[str, Any]) -> None:
     """Check if secret has expired and update status if so."""
     now = utcnow_naive()
     expires_at = record.get("expires_at")
@@ -187,12 +187,12 @@ async def check_expired(record: dict) -> None:
             raise AuthenticationError("Secret has expired")
 
 
-async def handle_failed_attempt(record: dict) -> dict:
+async def handle_failed_attempt(record: dict[str, Any]) -> dict[str, Any]:
     """Increment failed attempts and potentially lock the secret."""
     cfg = _get_auth_config()
     auth_repo = get_auth_repository()
     return cast(
-        "dict",
+        "dict[str, Any]",
         await auth_repo.async_increment_failed_attempts(
             record["id"],
             max_attempts=cfg.secret_max_failed_attempts,
@@ -201,7 +201,7 @@ async def handle_failed_attempt(record: dict) -> dict:
     )
 
 
-async def reset_failed_attempts(record: dict) -> None:
+async def reset_failed_attempts(record: dict[str, Any]) -> None:
     """Reset failed attempts and unlock secret."""
     auth_repo = get_auth_repository()
     await auth_repo.async_reset_failed_attempts(record["id"])
@@ -215,7 +215,7 @@ async def build_secret_record(
     label: str | None,
     description: str | None,
     expires_at: datetime | None,
-) -> tuple[str, dict]:
+) -> tuple[str, dict[str, Any]]:
     """Build and create a client secret record.
 
     Returns:

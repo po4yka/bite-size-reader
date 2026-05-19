@@ -48,7 +48,7 @@ class ProgressMessageUpdater:
         self._interval = update_interval
         self._parse_mode = parse_mode
         self._start_time = time.time()
-        self._task: asyncio.Task | None = None
+        self._task: asyncio.Task[None] | None = None
         self._stop_event = asyncio.Event()
         self._current_formatter: Callable[[float], str] | None = None
 
@@ -117,7 +117,7 @@ class ProgressMessageUpdater:
         """Context manager entry."""
         return self
 
-    async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
+    async def __aexit__(self, exc_type: type[BaseException] | None, exc_val: BaseException | None, exc_tb: object) -> None:
         """Context manager exit."""
         # Stop updates on exit (but don't finalize - caller should do that)
         self._stop_event.set()

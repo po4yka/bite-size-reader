@@ -51,7 +51,7 @@ class ContentChunker:
         cfg: AppConfig,
         openrouter: LLMClientProtocol,
         response_formatter: ResponseFormatter,
-        audit_func: Callable[[str, str, dict], None],
+        audit_func: Callable[[str, str, dict[str, Any]], None],
         sem: Callable[[], Any],
     ) -> None:
         self.cfg = cfg

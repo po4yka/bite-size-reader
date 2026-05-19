@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import datetime as dt  # noqa: TC003 - SQLAlchemy resolves string annotations at runtime.
 import enum
+from typing import Any
 
 from sqlalchemy import (
     BigInteger,
@@ -75,8 +76,8 @@ class Repository(Base):
     homepage_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     primary_language: Mapped[str | None] = mapped_column(String(100), nullable=True)
-    languages_json: Mapped[dict | None] = mapped_column(JSONB, nullable=True, default=dict)
-    topics_json: Mapped[list | None] = mapped_column(JSONB, nullable=True, default=list)
+    languages_json: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True, default=dict)
+    topics_json: Mapped[list[Any] | None] = mapped_column(JSONB, nullable=True, default=list)
     stars: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     forks: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     watchers: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
@@ -91,7 +92,7 @@ class Repository(Base):
     )
     readme_excerpt: Mapped[str | None] = mapped_column(Text, nullable=True)
     readme_etag: Mapped[str | None] = mapped_column(String(200), nullable=True)
-    analysis_json: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    analysis_json: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
     analysis_model: Mapped[str | None] = mapped_column(String(200), nullable=True)
     analysis_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     content_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)

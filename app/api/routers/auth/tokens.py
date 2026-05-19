@@ -202,7 +202,7 @@ async def create_refresh_token(
     return token, session_id
 
 
-def decode_token(token: str, expected_type: str | None = None) -> dict:
+def decode_token(token: str, expected_type: str | None = None) -> dict[str, Any]:
     """Decode and validate JWT token.
 
     Args:

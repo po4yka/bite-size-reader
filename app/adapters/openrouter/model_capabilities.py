@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 import time
-from typing import Any
+from typing import Any, cast
 
 import httpx
 
@@ -274,7 +274,7 @@ class ModelCapabilities:
             async with httpx.AsyncClient(timeout=self._timeout, limits=limits) as client:
                 resp = await client.get(f"{self._base_url}/models", headers=headers)
                 resp.raise_for_status()
-                return resp.json()
+                return cast("dict[str, Any]", resp.json())
         except Exception as e:
             self._logger.exception("openrouter_models_error", extra={"error": str(e)})
             raise

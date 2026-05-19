@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from app.core.logging_utils import get_logger
 
@@ -138,7 +138,7 @@ class PlatformRequestLifecycle:
                     "snapshot_error",
                     extra={"error": str(exc), "cid": request.correlation_id},
                 )
-        return req_id
+        return cast("int", req_id)
 
     async def persist_detected_lang(self, request_id: int, detected_lang: str) -> None:
         try:

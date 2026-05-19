@@ -38,7 +38,7 @@ class ResponseProcessor:
     def __init__(self, enable_stats: bool = False) -> None:
         self._enable_stats = enable_stats
 
-    def extract_structured_content(self, message_obj: dict, rf_included: bool) -> str | None:
+    def extract_structured_content(self, message_obj: dict[str, Any], rf_included: bool) -> str | None:
         """Extract structured content from response message."""
         text = None
 
@@ -187,8 +187,8 @@ class ResponseProcessor:
         return text
 
     def extract_response_data(
-        self, data: dict, rf_included: bool
-    ) -> tuple[str | None, dict, float | None]:
+        self, data: dict[str, Any], rf_included: bool
+    ) -> tuple[str | None, dict[str, Any], float | None]:
         """Extract response text, usage data, and cost from API response.
 
         If OPENROUTER usage.total_cost is present, use it. Otherwise, return None for cost
@@ -324,7 +324,7 @@ class ResponseProcessor:
         # Invalid JSON with structured outputs
         return False, text_str
 
-    def inspect_completion_truncation(self, data: dict) -> tuple[bool, str | None, str | None]:
+    def inspect_completion_truncation(self, data: dict[str, Any]) -> tuple[bool, str | None, str | None]:
         """Inspect response metadata and determine if the completion was truncated."""
         try:
             choices = data.get("choices") or []
@@ -354,7 +354,7 @@ class ResponseProcessor:
             return False, None, None
 
     def should_downgrade_response_format(
-        self, status_code: int, data: dict, rf_included: bool
+        self, status_code: int, data: dict[str, Any], rf_included: bool
     ) -> bool:
         """Check if response format should be downgraded due to errors."""
         if status_code == 400 and rf_included:
@@ -362,7 +362,7 @@ class ResponseProcessor:
             return "response_format" in err_dump
         return False
 
-    def get_error_context(self, status_code: int, data: dict) -> dict[str, Any]:
+    def get_error_context(self, status_code: int, data: dict[str, Any]) -> dict[str, Any]:
         """Return structured error context for logging and user messaging."""
         error_messages = {
             400: "Invalid or missing request parameters",

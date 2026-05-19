@@ -19,7 +19,7 @@ if TYPE_CHECKING:
 logger = get_logger(__name__)
 
 
-_update_tasks: set[asyncio.Task] = set()
+_update_tasks: set[asyncio.Task[None]] = set()
 
 
 def safe_update_user_interaction(
@@ -78,7 +78,7 @@ def safe_update_user_interaction(
             task = loop.create_task(coro)
             _update_tasks.add(task)
 
-            def _on_task_done(t: asyncio.Task) -> None:
+            def _on_task_done(t: asyncio.Task[None]) -> None:
                 _update_tasks.discard(t)
                 if t.cancelled():
                     return

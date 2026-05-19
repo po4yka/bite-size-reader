@@ -161,8 +161,8 @@ async def get_user_stats(user: dict[str, Any] = Depends(get_current_user)) -> An
 
     # Calculate reading time, favorite topics, and domains
     total_reading_time = 0
-    topic_counter: Counter = Counter()
-    domain_counter: Counter = Counter()
+    topic_counter: Counter[str] = Counter()
+    domain_counter: Counter[str] = Counter()
     en_count = 0
     ru_count = 0
 

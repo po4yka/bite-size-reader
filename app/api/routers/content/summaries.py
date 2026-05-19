@@ -275,7 +275,7 @@ async def get_recommendations(
     )
 
     # Score by tag overlap
-    def _score(s: dict) -> int:
+    def _score(s: dict[str, Any]) -> int:
         payload = ensure_mapping(s.get("json_payload"))
         tags = {t.lower() for t in payload.get("topic_tags", []) if isinstance(t, str)}
         return len(tags & interest_tags)

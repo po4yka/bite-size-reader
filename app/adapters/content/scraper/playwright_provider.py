@@ -12,6 +12,8 @@ from __future__ import annotations
 import asyncio
 import time
 
+from typing import cast
+
 from app.adapters.content.scraper.runtime_tuning import is_js_heavy_url, tuned_provider_timeout
 from app.adapters.external.firecrawl.models import FirecrawlResult
 from app.core.call_status import CallStatus
@@ -279,7 +281,7 @@ class PlaywrightProvider:
                         exc_info=True,
                     )
 
-                return page.content()
+                return cast("str | None", page.content())
             finally:
                 page.close()
                 context.close()

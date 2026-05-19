@@ -8,6 +8,8 @@ from urllib.parse import urljoin
 
 import httpx
 
+from typing import Any
+
 from app.adapters.external.firecrawl.models import FirecrawlResult
 from app.core.call_status import CallStatus
 from app.core.logging_utils import get_logger
@@ -190,7 +192,7 @@ class DefuddleProvider:
         pass  # No persistent resources
 
 
-def _parse_frontmatter(raw: str) -> tuple[dict, str]:
+def _parse_frontmatter(raw: str) -> tuple[dict[str, Any], str]:
     """Split YAML frontmatter from Markdown body.
 
     Returns (metadata_dict, markdown_body). If no valid frontmatter,
@@ -214,7 +216,7 @@ def _parse_frontmatter(raw: str) -> tuple[dict, str]:
     return _parse_yaml_safe(yaml_block), markdown_body
 
 
-def _parse_yaml_safe(yaml_text: str) -> dict:
+def _parse_yaml_safe(yaml_text: str) -> dict[str, Any]:
     """Parse YAML, returning empty dict on any error."""
     if not yaml_text.strip():
         return {}

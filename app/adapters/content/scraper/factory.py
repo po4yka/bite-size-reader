@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from app.adapters.content.scraper.chain import ContentScraperChain
 from app.adapters.content.scraper.diagnostics import build_scraper_diagnostics
@@ -23,7 +23,7 @@ class ContentScraperFactory:
     @staticmethod
     def create_from_config(
         cfg: AppConfig,
-        audit: Callable[[str, str, dict], None] | None = None,
+        audit: Callable[[str, str, dict[str, Any]], None] | None = None,
     ) -> ContentScraperChain:
         """Build a scraper chain from config, respecting provider_order."""
         scraper_cfg = cfg.scraper
@@ -72,7 +72,7 @@ class ContentScraperFactory:
                 logger.warning("scraper_unknown_provider", extra={"provider": name})
                 continue
 
-            provider = builder()
+            provider = builder()  # type: ignore[no-untyped-call, unused-ignore]
             if provider is not None:
                 providers.append(provider)
                 logger.info("scraper_provider_registered", extra={"provider": name})
@@ -153,7 +153,7 @@ def _build_defuddle(scraper_cfg: object) -> ContentScraperProtocol | None:
 
 def _build_firecrawl(
     cfg: AppConfig,
-    audit: Callable[[str, str, dict], None] | None,
+    audit: Callable[[str, str, dict[str, Any]], None] | None,
 ) -> ContentScraperProtocol | None:
     """Build Firecrawl provider for self-hosted instance only; cloud is not supported."""
     scraper_cfg = cfg.scraper
@@ -322,7 +322,7 @@ def _build_crawlee(scraper_cfg: object) -> ContentScraperProtocol | None:
 
 def _build_crawl4ai(
     scraper_cfg: object,
-    audit: Callable[[str, str, dict], None] | None,
+    audit: Callable[[str, str, dict[str, Any]], None] | None,
 ) -> ContentScraperProtocol | None:
     if not getattr(scraper_cfg, "crawl4ai_enabled", True):
         return None

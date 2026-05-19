@@ -76,7 +76,7 @@ class URLProcessor:
         firecrawl: ContentScraperProtocol,
         openrouter: LLMClientProtocol,
         response_formatter: ResponseFormatter,
-        audit_func: Callable[[str, str, dict], None],
+        audit_func: Callable[[str, str, dict[str, Any]], None],
         sem: Callable[[], Any],
         topic_search: TopicSearchService | None = None,
         db_write_queue: DbWriteQueue | None = None,
@@ -185,7 +185,7 @@ class URLProcessor:
         )
 
     @property
-    def audit_func(self) -> Callable[[str, str, dict], None]:
+    def audit_func(self) -> Callable[[str, str, dict[str, Any]], None]:
         """Expose the audit callable to platform extractors that need to log events."""
         return self._audit
 

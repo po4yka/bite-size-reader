@@ -23,7 +23,7 @@ from __future__ import annotations
 
 import asyncio
 import time
-from typing import Any
+from typing import Any, cast
 
 from app.adapters.content.scraper.runtime_tuning import tuned_provider_timeout
 from app.adapters.external.firecrawl.models import FirecrawlResult
@@ -303,4 +303,4 @@ def _extract_text(html: str) -> str | None:
     import importlib
 
     trafilatura = importlib.import_module("trafilatura")
-    return trafilatura.extract(html, include_comments=False, include_tables=True)
+    return cast("str | None", trafilatura.extract(html, include_comments=False, include_tables=True))

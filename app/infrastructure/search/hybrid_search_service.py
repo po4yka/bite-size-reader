@@ -149,7 +149,7 @@ class HybridSearchService:
         self,
         fts_results: list[TopicArticle],
         vector_results: list[StoreVectorSearchResult],
-    ) -> list[dict]:
+    ) -> list[dict[str, Any]]:
         fts_scores: dict[str, float] = {}
         fts_data: dict[str, TopicArticle] = {}
         for idx, result in enumerate(fts_results):

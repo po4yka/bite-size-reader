@@ -126,7 +126,7 @@ class TextProcessorImpl:
             text = text[:max_len].rstrip("-")
         return text or "summary"
 
-    def build_json_filename(self, obj: dict) -> str:
+    def build_json_filename(self, obj: dict[str, Any]) -> str:
         """Build a descriptive filename for the JSON attachment."""
         # Prefer SEO keywords; fallback to first words of TL;DR
         seo = obj.get("seo_keywords") or []
