@@ -371,9 +371,7 @@ async def test_check_duplicate_different_user(client, search_data, search_user, 
     await db.engine.dispose()
 
     # Add both users to ALLOWED_USER_IDS
-    monkeypatch.setenv(
-        "ALLOWED_USER_IDS", f"{search_user.telegram_user_id},{other_user_id}"
-    )
+    monkeypatch.setenv("ALLOWED_USER_IDS", f"{search_user.telegram_user_id},{other_user_id}")
 
     other_token = create_access_token(other_user_id, client_id="test")
 

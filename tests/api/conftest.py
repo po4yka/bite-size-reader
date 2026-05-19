@@ -58,7 +58,9 @@ async def _truncate_all_tables(database: Database) -> None:
         )
         existing_tables = {row[0] for row in existing_rows}
 
-    table_names = [t.name for t in reversed(Base.metadata.sorted_tables) if t.name in existing_tables]
+    table_names = [
+        t.name for t in reversed(Base.metadata.sorted_tables) if t.name in existing_tables
+    ]
     if not table_names:
         return
     quoted = ", ".join(f'"{name}"' for name in table_names)
