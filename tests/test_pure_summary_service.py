@@ -119,9 +119,12 @@ async def test_long_context_model_selected(redis_cache_mock: MagicMock) -> None:
     )
     service = PureSummaryService(runtime=runtime)
 
+    # The hard-coded threshold when model_routing.enabled=False is 320 000
+    # characters; the previous 60 000 stopped tripping the long-context branch
+    # after that constant was raised. Push well past it.
     await service.summarize(
         PureSummaryRequest(
-            content_text="A" * 60000,
+            content_text="A" * 400000,
             chosen_lang="en",
             system_prompt="prompt",
             correlation_id="cid-long",

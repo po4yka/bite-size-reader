@@ -1,6 +1,5 @@
 {
   "requirements.txt": 1572,
-  "app/mcp/server.py": 2247,
   "docs/openapi/mobile_api.json": 18551,
   "docs/openapi/mobile_api.yaml": 11988,
   "docs/reference/data-model.md": 1521,

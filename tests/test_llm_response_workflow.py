@@ -257,7 +257,9 @@ class LLMResponseWorkflowTests(unittest.IsolatedAsyncioTestCase):
 
         assert summary is None
         assert self.openrouter.chat.await_count == 4
-        assert self.insert_llm_call_mock.await_count == 2
+        # Each LLM call (initial + repair) is now persisted with its own
+        # attempt_trigger row, so primary+repair+fallback+repair == 4.
+        assert self.insert_llm_call_mock.await_count == 4
         fail_mock.assert_awaited_once()
         failed_attempts = fail_mock.await_args.args[5]
         assert len(failed_attempts) == 2

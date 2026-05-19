@@ -15,6 +15,7 @@ from app.api import middleware
 from app.api.routers.auth.tokens import create_access_token
 from app.api.services.sync_service import SyncService
 from app.config import ApiLimitsConfig, RedisConfig, SyncConfig
+from app.config.deployment import DeploymentConfig
 from app.infrastructure.redis import redis_key
 
 
@@ -44,6 +45,9 @@ class DummyCfg:
             aggregation_create_client_limit=aggregation_client_limit,
         )
         self.sync = SyncConfig(expiry_hours=1, default_limit=100, min_limit=1, max_limit=500)
+        # rate_limit_middleware reads cfg.deployment.is_production_mode when the
+        # redis backend is unavailable; supply a default DeploymentConfig.
+        self.deployment = DeploymentConfig()
 
 
 def _auth_header(user_id: int, client_id: str) -> list[tuple[bytes, bytes]]:
@@ -56,7 +60,7 @@ async def test_rate_limit_allows_then_blocks(monkeypatch):
     redis_client = fakeredis.aioredis.FakeRedis(decode_responses=True)
     cfg = DummyCfg(limit=1, window_seconds=1)
 
-    middleware._cfg = cfg
+    monkeypatch.setattr(middleware, "_cfg_holder", [cfg])
     middleware._redis_warning_logged = False
 
     async def fake_get_redis(_: DummyCfg):
@@ -111,7 +115,7 @@ async def test_rate_limit_allows_then_blocks(monkeypatch):
 @pytest.mark.asyncio
 async def test_rate_limit_backend_required_returns_503(monkeypatch):
     cfg = DummyCfg(required=True, limit=1, window_seconds=1)
-    middleware._cfg = cfg
+    monkeypatch.setattr(middleware, "_cfg_holder", [cfg])
     middleware._redis_warning_logged = False
 
     async def fake_get_redis(_: DummyCfg):
@@ -176,7 +180,7 @@ async def test_rate_limit_uses_webapp_user_id_over_client_host(monkeypatch):
     redis_client = fakeredis.aioredis.FakeRedis(decode_responses=True)
     cfg = DummyCfg(limit=5, window_seconds=60)
 
-    middleware._cfg = cfg
+    monkeypatch.setattr(middleware, "_cfg_holder", [cfg])
     middleware._redis_warning_logged = False
 
     async def fake_get_redis(_: DummyCfg):
@@ -213,7 +217,7 @@ async def test_rate_limit_buckets_are_isolated(monkeypatch):
     redis_client = fakeredis.aioredis.FakeRedis(decode_responses=True)
     cfg = DummyCfg(limit=1, window_seconds=60)
 
-    middleware._cfg = cfg
+    monkeypatch.setattr(middleware, "_cfg_holder", [cfg])
     middleware._redis_warning_logged = False
 
     async def fake_get_redis(_: DummyCfg):
@@ -263,7 +267,7 @@ async def test_aggregation_create_rate_limit_blocks_same_user(monkeypatch):
         aggregation_client_limit=10,
     )
 
-    middleware._cfg = cfg
+    monkeypatch.setattr(middleware, "_cfg_holder", [cfg])
     middleware._redis_warning_logged = False
 
     async def fake_get_redis(_: DummyCfg):
@@ -303,7 +307,7 @@ async def test_aggregation_create_client_limit_blocks_shared_client(monkeypatch)
         aggregation_client_limit=1,
     )
 
-    middleware._cfg = cfg
+    monkeypatch.setattr(middleware, "_cfg_holder", [cfg])
     middleware._redis_warning_logged = False
 
     async def fake_get_redis(_: DummyCfg):
@@ -351,7 +355,7 @@ async def test_secret_login_rate_limit_uses_dedicated_bucket(monkeypatch):
     redis_client = fakeredis.aioredis.FakeRedis(decode_responses=True)
     cfg = DummyCfg(limit=100, window_seconds=60, secret_login_limit=1)
 
-    middleware._cfg = cfg
+    monkeypatch.setattr(middleware, "_cfg_holder", [cfg])
     middleware._redis_warning_logged = False
 
     async def fake_get_redis(_: DummyCfg):

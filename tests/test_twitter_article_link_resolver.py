@@ -47,10 +47,27 @@ async def test_resolver_detects_article_via_head_redirect(monkeypatch) -> None:
             return False
 
         async def head(self, url: str) -> SimpleNamespace:
-            return _fake_response(url="https://x.com/i/article/777")
+            # Manual redirect-following resolver: t.co -> 302 to article URL,
+            # second hop returns 200 so the loop breaks and resolved_url is
+            # set to the article URL.
+            if "t.co" in url:
+                resp = _fake_response(url=url, status_code=302)
+                resp.headers = {
+                    **resp.headers,
+                    "location": "https://x.com/i/article/777",
+                }
+                return resp
+            return _fake_response(url=url)
 
     monkeypatch.setattr(
-        "app.adapters.twitter.article_link_resolver.httpx.AsyncClient", _FakeAsyncClient
+        "app.security.ssrf.httpx.AsyncClient", _FakeAsyncClient
+    )
+    # The real is_url_safe rejects t.co / x.com in CI because their public
+    # DNS records resolve to addresses inside ranges the SSRF allowlist treats
+    # as private. Stub it for tests that exercise the post-preflight flow.
+    monkeypatch.setattr(
+        "app.adapters.twitter.article_link_resolver.is_url_safe",
+        lambda _url: (True, None),
     )
 
     result = await resolve_twitter_article_link("https://t.co/abc")
@@ -83,7 +100,14 @@ async def test_resolver_falls_back_to_get_and_uses_canonical_hint(monkeypatch) -
             )
 
     monkeypatch.setattr(
-        "app.adapters.twitter.article_link_resolver.httpx.AsyncClient", _FakeAsyncClient
+        "app.security.ssrf.httpx.AsyncClient", _FakeAsyncClient
+    )
+    # The real is_url_safe rejects t.co / x.com in CI because their public
+    # DNS records resolve to addresses inside ranges the SSRF allowlist treats
+    # as private. Stub it for tests that exercise the post-preflight flow.
+    monkeypatch.setattr(
+        "app.adapters.twitter.article_link_resolver.is_url_safe",
+        lambda _url: (True, None),
     )
 
     result = await resolve_twitter_article_link("https://t.co/needs-get")
@@ -119,7 +143,14 @@ async def test_resolver_returns_resolve_failed_on_http_error(monkeypatch) -> Non
             raise RuntimeError("network down")
 
     monkeypatch.setattr(
-        "app.adapters.twitter.article_link_resolver.httpx.AsyncClient", _FakeAsyncClient
+        "app.security.ssrf.httpx.AsyncClient", _FakeAsyncClient
+    )
+    # The real is_url_safe rejects t.co / x.com in CI because their public
+    # DNS records resolve to addresses inside ranges the SSRF allowlist treats
+    # as private. Stub it for tests that exercise the post-preflight flow.
+    monkeypatch.setattr(
+        "app.adapters.twitter.article_link_resolver.is_url_safe",
+        lambda _url: (True, None),
     )
 
     result = await resolve_twitter_article_link("https://t.co/fail")

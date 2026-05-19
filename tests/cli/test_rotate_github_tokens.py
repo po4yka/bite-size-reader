@@ -11,8 +11,13 @@ from app.security.token_crypto import reset_key_cache
 
 
 @pytest.fixture(autouse=True)
-def _reset_crypto_cache():
+def _reset_crypto_cache(monkeypatch: pytest.MonkeyPatch):
     # Pre-reset is the real protection against cross-test cache pollution.
+    # Earlier tests in the suite may have set these env vars directly via
+    # os.environ (bypassing monkeypatch); strip them here so each test
+    # starts with a clean Fernet key environment.
+    monkeypatch.delenv("GITHUB_TOKEN_ENCRYPTION_KEY", raising=False)
+    monkeypatch.delenv("GITHUB_TOKEN_PREVIOUS_KEYS", raising=False)
     reset_key_cache()
     yield
     reset_key_cache()

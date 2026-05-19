@@ -53,6 +53,7 @@ class TestContentScraperFactory:
         names = [p.provider_name for p in chain.providers]
         assert names == [
             "scrapling",
+            "direct_pdf",
             "crawl4ai",
             "defuddle",
             "playwright",
@@ -105,6 +106,7 @@ class TestContentScraperFactory:
         names = [p.provider_name for p in chain.providers]
         assert names == [
             "scrapling",
+            "direct_pdf",
             "crawl4ai",
             "firecrawl_self_hosted",
             "defuddle",

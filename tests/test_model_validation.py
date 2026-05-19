@@ -4,6 +4,10 @@ from unittest.mock import patch
 
 import pytest
 
+# DatabaseConfig now requires a postgresql+asyncpg DSN; provide a syntactically
+# valid stub for tests that exercise Settings/load_config without a live DB.
+_DATABASE_URL_STUB = "postgresql+asyncpg://test:test@localhost:5432/test"
+
 
 class TestModelValidation(unittest.TestCase):
     def test_validate_model_name_allows_openrouter_ids(self) -> None:
@@ -42,6 +46,7 @@ class TestModelValidation(unittest.TestCase):
             "API_ID": "123456",
             "API_HASH": "a" * 32,
             "BOT_TOKEN": "123456:abcdefghijklmnopqrstuvwxyz0123456789abcdefghij",
+            "DATABASE_URL": _DATABASE_URL_STUB,
             "FIRECRAWL_API_KEY": "fc_" + "b" * 20,
             "OPENROUTER_API_KEY": "or_" + "c" * 20,
             "ALLOWED_USER_IDS": "123456789",
@@ -68,6 +73,7 @@ class TestModelValidation(unittest.TestCase):
             "API_ID": "123456",
             "API_HASH": "a" * 32,
             "BOT_TOKEN": "123456:abcdefghijklmnopqrstuvwxyz0123456789abcdefghij",
+            "DATABASE_URL": _DATABASE_URL_STUB,
             "FIRECRAWL_API_KEY": "fc_" + "f" * 20,
             "OPENROUTER_API_KEY": "or_" + "g" * 20,
             "ALLOWED_USER_IDS": "1001, 1002",
@@ -94,6 +100,7 @@ class TestModelValidation(unittest.TestCase):
             "API_ID": "123456",
             "API_HASH": "a" * 32,
             "BOT_TOKEN": "123456:abcdefghijklmnopqrstuvwxyz0123456789abcdefghij",
+            "DATABASE_URL": _DATABASE_URL_STUB,
             "FIRECRAWL_API_KEY": "fc_" + "h" * 20,
             "OPENROUTER_API_KEY": "or_" + "i" * 20,
             "ALLOWED_USER_IDS": "77",
@@ -111,7 +118,8 @@ class TestModelValidation(unittest.TestCase):
             assert cfg.openrouter.model == "deepseek/deepseek-v4-flash"
             # Default fallback models from config.py
             assert cfg.openrouter.fallback_models == (
-                "qwen/qwen3.5-plus-02-15",
+                "qwen/qwen3.6-flash",
+                "qwen/qwen3.6-plus-04-02",
                 "moonshotai/kimi-k2-0905",
                 "minimax/minimax-m2",
             )
@@ -143,6 +151,7 @@ class TestModelValidation(unittest.TestCase):
         from app.config import Settings
 
         test_env = {
+            "DATABASE_URL": _DATABASE_URL_STUB,
             "FIRECRAWL_API_KEY": "fc_" + "j" * 20,
             "OPENROUTER_API_KEY": "or_" + "k" * 20,
         }
@@ -174,6 +183,7 @@ class TestModelValidation(unittest.TestCase):
             "API_ID": "123456",
             "API_HASH": "a" * 32,
             "BOT_TOKEN": "123456:abcdefghijklmnopqrstuvwxyz0123456789abcdefghij",
+            "DATABASE_URL": _DATABASE_URL_STUB,
             "FIRECRAWL_API_KEY": "fc_" + "l" * 20,
             "OPENROUTER_API_KEY": "or_" + "m" * 20,
             # No ALLOWED_USER_IDS
@@ -190,6 +200,7 @@ class TestModelValidation(unittest.TestCase):
             "API_ID": "123456",
             "API_HASH": "a" * 32,
             "BOT_TOKEN": "123456:abcdefghijklmnopqrstuvwxyz0123456789abcdefghij",
+            "DATABASE_URL": _DATABASE_URL_STUB,
             "FIRECRAWL_API_KEY": "fc_" + "n" * 20,
             "OPENROUTER_API_KEY": "or_" + "o" * 20,
             "ALLOWED_USER_IDS": "77",

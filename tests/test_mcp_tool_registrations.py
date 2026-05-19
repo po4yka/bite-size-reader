@@ -182,7 +182,7 @@ async def test_mcp_tool_registration_records_error_metrics_for_service_errors() 
 
     with patch("app.mcp.tool_registrations.record_request") as metrics_mock:
         with pytest.raises(RuntimeError, match="boom"):
-            mcp.tools["search_articles"]("query", 5)
+            await mcp.tools["search_articles"]("query", 5)
 
     metric_kwargs = metrics_mock.call_args.kwargs
     assert metric_kwargs["request_type"] == "search_articles"

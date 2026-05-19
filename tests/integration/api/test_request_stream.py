@@ -60,11 +60,11 @@ def _build_app_and_client(monkeypatch: pytest.MonkeyPatch, owner_id: int = _OWNE
 
     monkeypatch.setattr(_ESR, "_ping", _wait_forever)
 
-    # Reset AppStatus.should_exit_event so sse-starlette recreates it in the
-    # current event loop.  Each TestClient call spins up a fresh anyio loop;
-    # a stale Event object bound to a previous loop raises RuntimeError.
+    # Each TestClient call spins up a fresh anyio loop; reset
+    # AppStatus.should_exit so sse-starlette doesn't carry over the "should
+    # exit" signal from a previous test. (sse-starlette 3.x dropped the
+    # explicit should_exit_event attribute and recreates the Event lazily.)
     monkeypatch.setattr(AppStatus, "should_exit", False)
-    monkeypatch.setattr(AppStatus, "should_exit_event", None)
 
     try:
         from fastapi.testclient import TestClient
@@ -88,7 +88,7 @@ def _build_app_and_client(monkeypatch: pytest.MonkeyPatch, owner_id: int = _OWNE
 
     mock_svc.get_request_by_id = _check_ownership
 
-    import app.api.routers.streams as _streams_mod
+    import app.api.routers.content.streams as _streams_mod
 
     fastapi_app.dependency_overrides[_streams_mod._get_request_service] = lambda: mock_svc
 
@@ -104,7 +104,7 @@ def _build_app_and_client(monkeypatch: pytest.MonkeyPatch, owner_id: int = _OWNE
 
 def _patch_hub(monkeypatch: pytest.MonkeyPatch, hub: Any) -> None:
     """Patch get_stream_hub() in both the hub module and the streams router."""
-    import app.api.routers.streams as _streams_mod
+    import app.api.routers.content.streams as _streams_mod
     from app.adapters.content.streaming import stream_hub as _hub_mod
 
     monkeypatch.setattr(_hub_mod, "get_stream_hub", lambda: hub)

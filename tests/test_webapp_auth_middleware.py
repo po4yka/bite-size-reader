@@ -83,8 +83,10 @@ class TestWebAppAuthMiddleware:
                 return_value=None,
             ),
             patch(
+                # ALLOWED_USER_IDS is fail-closed now: include the JWT user so
+                # the auth dependency lets the request through.
                 "app.api.routers.auth.dependencies.Config.get_allowed_user_ids",
-                return_value=set(),
+                return_value={789},
             ),
         ):
             resp = client.get(
@@ -112,8 +114,10 @@ class TestWebAppAuthMiddleware:
                 return_value=None,
             ),
             patch(
+                # ALLOWED_USER_IDS is fail-closed now: include the JWT user so
+                # the auth dependency lets the request through.
                 "app.api.routers.auth.dependencies.Config.get_allowed_user_ids",
-                return_value=set(),
+                return_value={789},
             ),
         ):
             resp = client.get(

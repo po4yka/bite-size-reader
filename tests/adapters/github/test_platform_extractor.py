@@ -170,7 +170,7 @@ class TestExtractIntegrationErrors:
 
 @pytest.mark.asyncio
 class TestExtractHappyPath:
-    async def test_inserts_repository_and_calls_analyze(self) -> None:
+    async def test_inserts_repository_and_calls_analyze(self, monkeypatch: pytest.MonkeyPatch) -> None:
         repo_dto = _make_repo_dto()
         languages = {"Python": 123456, "Shell": 1234}
         ig = _make_integration()
@@ -185,26 +185,16 @@ class TestExtractHappyPath:
             client_factory=factory,
         )
 
-        # Patch decrypt_token so we never import app.security.token_crypto
-        with patch(
-            "app.adapters.github.platform_extractor.decrypt_token", return_value="tok", create=True
-        ):
-            # The lazy import inside extract() will resolve to the patch
-            # We need to patch at import time inside the method
-            pass
+        # The lazy ``from app.security.token_crypto import decrypt_token`` inside
+        # extract() looks the function up on the real module at call time;
+        # monkeypatch the attribute there so we get a stub without poking
+        # sys.modules (which leaks state into later tests that hold cached
+        # bindings to the original module).
+        monkeypatch.setattr(
+            "app.security.token_crypto.decrypt_token", lambda _ct: "stub_token"
+        )
 
-        # Use monkeypatch approach: inject into sys.modules before calling
-        import sys
-        import types
-
-        fake_module = types.ModuleType("app.security.token_crypto")
-        fake_module.decrypt_token = lambda ct: "stub_token"  # type: ignore[attr-defined]
-        sys.modules["app.security.token_crypto"] = fake_module
-
-        try:
-            result = await ext.extract(_make_request())
-        finally:
-            sys.modules.pop("app.security.token_crypto", None)
+        result = await ext.extract(_make_request())
 
         analyze_uc.analyze.assert_awaited_once()
         call_kwargs = analyze_uc.analyze.call_args
@@ -217,7 +207,7 @@ class TestExtractHappyPath:
         assert result.metadata["stars"] == 75000
         assert result.metadata["license"] == "MIT"
 
-    async def test_upserts_existing_repository_preserves_analysis(self) -> None:
+    async def test_upserts_existing_repository_preserves_analysis(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Second extraction must not overwrite analysis_json (it's in the excluded set_)."""
         repo_dto = _make_repo_dto()
         languages = {"Python": 100}
@@ -234,17 +224,11 @@ class TestExtractHappyPath:
             client_factory=factory,
         )
 
-        import sys
-        import types
+        monkeypatch.setattr(
+            "app.security.token_crypto.decrypt_token", lambda _ct: "stub_token"
+        )
 
-        fake_module = types.ModuleType("app.security.token_crypto")
-        fake_module.decrypt_token = lambda ct: "stub_token"  # type: ignore[attr-defined]
-        sys.modules["app.security.token_crypto"] = fake_module
-
-        try:
-            result = await ext.extract(_make_request())
-        finally:
-            sys.modules.pop("app.security.token_crypto", None)
+        result = await ext.extract(_make_request())
 
         # Confirm repository_id used in analyze call is the upserted row id
         analyze_uc.analyze.assert_awaited_once_with(
@@ -264,7 +248,7 @@ class TestExtractHappyPath:
             "analysis_json must not appear in update_set — it would overwrite existing analysis"
         )
 
-    async def test_readme_404_results_in_empty_excerpt(self) -> None:
+    async def test_readme_404_results_in_empty_excerpt(self, monkeypatch: pytest.MonkeyPatch) -> None:
         repo_dto = _make_repo_dto()
         languages: dict[str, int] = {}
         ig = _make_integration()
@@ -280,17 +264,11 @@ class TestExtractHappyPath:
             client_factory=factory,
         )
 
-        import sys
-        import types
+        monkeypatch.setattr(
+            "app.security.token_crypto.decrypt_token", lambda _ct: "stub_token"
+        )
 
-        fake_module = types.ModuleType("app.security.token_crypto")
-        fake_module.decrypt_token = lambda ct: "stub_token"  # type: ignore[attr-defined]
-        sys.modules["app.security.token_crypto"] = fake_module
-
-        try:
-            result = await ext.extract(_make_request())
-        finally:
-            sys.modules.pop("app.security.token_crypto", None)
+        result = await ext.extract(_make_request())
 
         # content_text should still be formed, just without readme body
         assert "# README" in result.content_text

@@ -184,6 +184,8 @@ class ModelCapabilities:
             # Qwen models
             "qwen/qwen3-max",
             "qwen/qwen3.5-plus-02-15",
+            "qwen/qwen3.6-flash",
+            "qwen/qwen3.6-plus-04-02",
             "qwen/qwen3-235b-a22b-2507",
             "qwen/qwen3-next-80b-a3b-thinking",
             "qwen/qwen3-coder-plus",
