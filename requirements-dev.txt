@@ -57,7 +57,7 @@ httpcore==1.0.9
     # via httpx
 httpx==0.28.1
     # via respx
-hypothesis==6.152.6
+hypothesis==6.152.8
 identify==2.6.19
     # via pre-commit
 idna==3.13
@@ -198,7 +198,7 @@ rpds-py==0.30.0
     # via
     #   jsonschema
     #   referencing
-ruff==0.15.12
+ruff==0.15.13
 six==1.17.0
     # via rfc3339-validator
 sortedcontainers==2.4.0

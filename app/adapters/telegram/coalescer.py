@@ -22,7 +22,6 @@ from app.core.logging_utils import generate_correlation_id, get_logger
 from app.utils.typing_indicator import TypingIndicator
 
 if TYPE_CHECKING:
-    from app.application.dto.aggregation import SourceSubmission
     from collections.abc import Awaitable, Callable
 
     from app.adapters.external.formatting.protocols import (
@@ -36,6 +35,7 @@ if TYPE_CHECKING:
     from app.adapters.telegram.routing.models import PreparedRouteContext
     from app.adapters.telegram.routing.rate_limit import MessageRateLimitCoordinator
     from app.adapters.telegram.url_handler import URLHandler
+    from app.application.dto.aggregation import SourceSubmission
 
 logger = get_logger(__name__)
 

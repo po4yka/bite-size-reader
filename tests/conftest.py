@@ -364,7 +364,9 @@ async def session(database):
         )
         existing_tables = {row[0] for row in existing_rows}
 
-    table_names = [t.name for t in reversed(Base.metadata.sorted_tables) if t.name in existing_tables]
+    table_names = [
+        t.name for t in reversed(Base.metadata.sorted_tables) if t.name in existing_tables
+    ]
     if table_names:
         quoted = ", ".join(f'"{name}"' for name in table_names)
         async with database.transaction() as cleanup:
