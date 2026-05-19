@@ -190,7 +190,9 @@ def test_get_error_message_returns_generic_for_unknown_status() -> None:
 # ---------------------------------------------------------------------------
 
 
-_VALID_KWARGS = {
+from typing import Any
+
+_VALID_KWARGS: dict[str, Any] = {
     "api_key": "sk-or-v1-test-key-1234567890",
     "model": "qwen/qwen3-max",
     "fallback_models": (),

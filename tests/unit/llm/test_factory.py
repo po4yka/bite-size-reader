@@ -145,7 +145,7 @@ def test_get_provider_from_config_reads_runtime_field() -> None:
 
 def test_get_provider_from_config_defaults_to_openrouter_when_unset() -> None:
     cfg = SimpleNamespace(runtime=SimpleNamespace())
-    assert LLMClientFactory.get_provider_from_config(cfg) == "openrouter"
+    assert LLMClientFactory.get_provider_from_config(cfg) == "openrouter"  # type: ignore[arg-type]
 
 
 def test_create_from_config_uses_provider_from_config() -> None:

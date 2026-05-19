@@ -10,12 +10,15 @@ from __future__ import annotations
 
 import asyncio
 from types import SimpleNamespace
-from typing import Any
+from typing import Any, cast
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
 from app.adapters.telegram.coalescer import MessageCoalescer
+from app.adapters.telegram.routing.content_router import MessageContentRouter
+from app.adapters.telegram.routing.models import PreparedRouteContext
+from app.adapters.telegram.routing.rate_limit import MessageRateLimitCoordinator
 from app.application.dto.aggregation import SourceSubmission
 
 
@@ -25,14 +28,17 @@ def _prepared(
     chat_id: int = 999,
     text: str = "https://example.com/a",
     message_id: int = 1,
-) -> SimpleNamespace:
+) -> PreparedRouteContext:
     """Minimal stand-in for ``PreparedRouteContext``."""
-    return SimpleNamespace(
-        uid=uid,
-        chat_id=chat_id,
-        text=text,
-        message_id=message_id,
-        correlation_id=f"cid-{message_id}",
+    return cast(
+        "PreparedRouteContext",
+        SimpleNamespace(
+            uid=uid,
+            chat_id=chat_id,
+            text=text,
+            message_id=message_id,
+            correlation_id=f"cid-{message_id}",
+        ),
     )
 
 
@@ -75,9 +81,11 @@ def _make_coalescer(
     coalescer = MessageCoalescer(
         window_sec=window_sec,
         enabled=enabled,
-        content_router=content_router,
+        content_router=cast("MessageContentRouter", content_router),
         aggregation_handler=aggregation_handler,
-        rate_limit_coordinator=rate_limit_coordinator,
+        rate_limit_coordinator=cast(
+            "MessageRateLimitCoordinator", rate_limit_coordinator
+        ),
         response_formatter=response_formatter,
         callback_handler=callback_handler,
         url_handler=url_handler,

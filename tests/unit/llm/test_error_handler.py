@@ -260,7 +260,7 @@ async def test_handle_rate_limit_swallows_invalid_header(
 ) -> None:
     slept: list[float] = []
     monkeypatch.setattr(
-        "asyncio.sleep", lambda s: slept.append(s)  # type: ignore[arg-type]
+        "asyncio.sleep", lambda s: slept.append(s)  # type: ignore[arg-type, unused-ignore]
     )
     h = _make_handler()
     # Non-numeric retry-after must not crash.
