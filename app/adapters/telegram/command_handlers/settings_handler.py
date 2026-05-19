@@ -21,7 +21,7 @@ if TYPE_CHECKING:
 
 logger = get_logger(__name__)
 
-_DIGEST_WEB_PATH = "/web/digest"
+_DIGEST_WEB_PATH = "/digest"
 
 
 class _UserPrefs(TypedDict, total=False):

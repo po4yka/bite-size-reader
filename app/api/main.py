@@ -289,7 +289,16 @@ def _serve_web_index() -> FileResponse:
     return FileResponse(str(_web_index))
 
 
-@app.get("/web/privacy.html")
+@app.get("/manifest.webmanifest")
+def web_manifest() -> FileResponse:
+    """Serve PWA manifest at the SPA's scope root."""
+    _manifest = _static_dir / "web" / "manifest.webmanifest"
+    if not _manifest.is_file():
+        raise HTTPException(status_code=404, detail="Web manifest not found")
+    return FileResponse(str(_manifest), media_type="application/manifest+json")
+
+
+@app.get("/privacy.html")
 def privacy_policy() -> FileResponse:
     """Serve Privacy Policy static page."""
     _privacy = _static_dir / "web" / "privacy.html"
@@ -298,7 +307,7 @@ def privacy_policy() -> FileResponse:
     return FileResponse(str(_privacy))
 
 
-@app.get("/web/terms.html")
+@app.get("/terms.html")
 def terms_of_service() -> FileResponse:
     """Serve Terms of Service static page."""
     _terms = _static_dir / "web" / "terms.html"
@@ -307,17 +316,9 @@ def terms_of_service() -> FileResponse:
     return FileResponse(str(_terms))
 
 
-@app.get("/web")
-@app.get("/web/{path:path}")
-def web_interface(path: str = "") -> FileResponse:
-    """Serve web SPA entrypoint."""
-    del path
-    return _serve_web_index()
-
-
-@app.get("/")
-def root(request: Request) -> dict[str, Any]:
-    """API root endpoint."""
+@app.get("/api")
+def api_root(request: Request) -> dict[str, Any]:
+    """Mobile API root endpoint."""
     return success_response(
         {
             "service": "Ratatoskr Mobile API",
@@ -357,6 +358,15 @@ async def metrics(user: dict[str, Any] = Depends(get_current_user)) -> Any:
         content=get_metrics(),
         media_type=get_metrics_content_type(),
     )
+
+
+# SPA catch-all — MUST be registered last so explicit API routes win.
+@app.get("/")
+@app.get("/{path:path}")
+def web_interface(path: str = "") -> FileResponse:
+    """Serve web SPA entrypoint for any non-API path."""
+    del path
+    return _serve_web_index()
 
 
 # Register exception handlers

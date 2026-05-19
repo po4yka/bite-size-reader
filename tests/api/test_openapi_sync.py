@@ -39,11 +39,14 @@ IGNORED_APP_ROUTES = frozenset(
         ("HEAD", "/docs/oauth2-redirect"),
         ("HEAD", "/redoc"),
         # SPA frontend routes -- not REST API endpoints
-        ("GET", "/web"),
-        ("GET", "/web/{path:path}"),
+        ("GET", "/"),
+        ("GET", "/{path:path}"),
+        # Mobile API metadata root
+        ("GET", "/api"),
         # Static legal pages served by the web layer
-        ("GET", "/web/privacy.html"),
-        ("GET", "/web/terms.html"),
+        ("GET", "/privacy.html"),
+        ("GET", "/terms.html"),
+        ("GET", "/manifest.webmanifest"),
         # Bulk summary helpers are internal client acceleration routes until
         # the mobile contract is expanded for bulk article operations.
         ("POST", "/v1/articles/bulk/delete"),
