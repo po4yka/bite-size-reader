@@ -555,9 +555,9 @@ jiter==0.13.0 \
     # via
     #   instructor
     #   openai
-json-repair==0.59.7 \
-    --hash=sha256:933fc5c81c5edabb004472e58c495f1ae656a8778e9fd26ca806ae42f3110b07 \
-    --hash=sha256:f23c7890b7d1760185ff316421bc776d31a29290a8d45997cfaf6c3add895aaa
+json-repair==0.59.10 \
+    --hash=sha256:2e4b85537c752d8a513ea28fdad891e5ede32c83de745366b97f648b8c34ede7 \
+    --hash=sha256:5468fa3eaadcc9b4a5646776bc4176e2fe5f374b5848a15f468cce3b60e3db0e
     # via ratatoskr
 justext==3.0.2 \
     --hash=sha256:13496a450c44c4cd5b5a75a5efcd9996066d2a189794ea99a49949685a0beb05 \
@@ -858,9 +858,9 @@ numpy==2.4.4 \
     #   blis
     #   spacy
     #   thinc
-openai==2.36.0 \
-    --hash=sha256:139dea0edd2f1b30c33d46ae1a6929e03906254140318e4608e98fe8c566f2e7 \
-    --hash=sha256:143f6194b548dbc2c921af1f1b03b9f14c85fed8a75b5b516f5bcc11a2a50c63
+openai==2.37.0 \
+    --hash=sha256:814633888b8f3b1ffd6615697c6e4ef93632d08b7c2e28c8c5ef3556e5a10107 \
+    --hash=sha256:f4bc562cc5f3a43d40d678105572d9d44765f6e0f50c125f63055419b72f4bd9
     # via
     #   instructor
     #   ratatoskr
