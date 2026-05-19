@@ -19,9 +19,7 @@ def _skill_names(root: Path) -> set[str]:
     if not root.is_dir():
         return set()
     return {
-        child.name
-        for child in root.iterdir()
-        if child.is_dir() and (child / "SKILL.md").is_file()
+        child.name for child in root.iterdir() if child.is_dir() and (child / "SKILL.md").is_file()
     }
 
 
