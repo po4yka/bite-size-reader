@@ -5,7 +5,6 @@ from __future__ import annotations
 import asyncio
 import importlib
 import time
-
 from typing import Any, cast
 
 from app.adapters.external.firecrawl.models import FirecrawlResult

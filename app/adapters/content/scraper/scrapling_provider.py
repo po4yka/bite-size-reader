@@ -303,4 +303,6 @@ def _extract_text(html: str) -> str | None:
     import importlib
 
     trafilatura = importlib.import_module("trafilatura")
-    return cast("str | None", trafilatura.extract(html, include_comments=False, include_tables=True))
+    return cast(
+        "str | None", trafilatura.extract(html, include_comments=False, include_tables=True)
+    )

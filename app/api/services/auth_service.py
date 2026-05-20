@@ -86,7 +86,9 @@ class AuthService:
         return user_record
 
     @staticmethod
-    async def get_or_create_target_user(user_id: int, username: str | None = None) -> dict[str, Any]:
+    async def get_or_create_target_user(
+        user_id: int, username: str | None = None
+    ) -> dict[str, Any]:
         """Get or create target user, returning user data dict.
 
         Args:

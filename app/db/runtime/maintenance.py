@@ -3,16 +3,17 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Coroutine
 from typing import TYPE_CHECKING, Any, TypeVar
-
-_T = TypeVar("_T")
 
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 
 if TYPE_CHECKING:
+    from collections.abc import Coroutine
+
     from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
+
+_T = TypeVar("_T")
 
 
 class DatabaseMaintenanceService:

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, cast
 
-from langchain_core.runnables import RunnableConfig
 from langgraph.graph import END, START, StateGraph
 
 from app.agents.base_agent import AgentResult
@@ -18,6 +17,7 @@ from app.agents.summarization_agent import SummarizationInput, SummarizationOutp
 from app.core.logging_utils import get_logger
 
 if TYPE_CHECKING:
+    from langchain_core.runnables import RunnableConfig
     from langgraph.checkpoint.base import BaseCheckpointSaver
 
     from app.adapters.content.pure_summary_service import PureSummaryService
@@ -52,11 +52,11 @@ def build_summarization_graph(
     """Return a compiled-ready StateGraph for the summarize→validate→retry cycle."""
     builder: StateGraph[SummarizationGraphState] = StateGraph(SummarizationGraphState)
 
-    builder.add_node("summarize", cast(Any, make_summarize_node(pure_summary_service)))
-    builder.add_node("validate", cast(Any, make_validate_node(validation_agent)))
+    builder.add_node("summarize", cast("Any", make_summarize_node(pure_summary_service)))
+    builder.add_node("validate", cast("Any", make_validate_node(validation_agent)))
 
     if web_search_agent is not None:
-        builder.add_node("web_search", cast(Any, make_web_search_node(web_search_agent)))
+        builder.add_node("web_search", cast("Any", make_web_search_node(web_search_agent)))
         builder.add_edge(START, "web_search")
         builder.add_edge("web_search", "summarize")
     else:

@@ -207,7 +207,12 @@ class ResponseSenderImpl:
         )
 
     async def reply_json(
-        self, message: Any, obj: dict[str, Any], *, correlation_id: str | None = None, success: bool = True
+        self,
+        message: Any,
+        obj: dict[str, Any],
+        *,
+        correlation_id: str | None = None,
+        success: bool = True,
     ) -> None:
         await self._payload_flow.reply_json(
             message,

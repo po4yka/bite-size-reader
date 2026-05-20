@@ -253,12 +253,15 @@ class OpenAIClient:
                 attempt=attempt,
             )
 
-        return cast("LLMCallResult", await self._run_with_retry(
-            models_to_try,
-            _attempt,
-            primary_model=primary_model,
-            exhausted_endpoint="/v1/chat/completions",
-        ))
+        return cast(
+            "LLMCallResult",
+            await self._run_with_retry(
+                models_to_try,
+                _attempt,
+                primary_model=primary_model,
+                exhausted_endpoint="/v1/chat/completions",
+            ),
+        )
 
     async def _attempt_request(
         self,

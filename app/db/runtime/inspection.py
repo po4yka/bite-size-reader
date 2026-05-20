@@ -112,9 +112,12 @@ class DatabaseInspectionService:
         required_fields: Iterable[str] | None = None,
         limit: int | None = None,
     ) -> dict[str, Any]:
-        return cast("dict[str, Any]", _run_sync(
-            self.async_verify_processing_integrity(required_fields=required_fields, limit=limit)
-        ))
+        return cast(
+            "dict[str, Any]",
+            _run_sync(
+                self.async_verify_processing_integrity(required_fields=required_fields, limit=limit)
+            ),
+        )
 
     async def async_verify_processing_integrity(
         self,

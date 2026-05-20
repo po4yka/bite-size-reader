@@ -6,7 +6,7 @@ These functions contain no DB access -- they operate on values only.
 from __future__ import annotations
 
 import re
-from typing import Any, cast
+from typing import Any
 
 from app.core.logging_utils import get_logger
 

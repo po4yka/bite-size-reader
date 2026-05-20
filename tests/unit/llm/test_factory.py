@@ -56,7 +56,7 @@ def _stub_config(provider: str = "openrouter") -> Any:
 
 
 def test_valid_providers_constant_exposes_all_four() -> None:
-    assert VALID_PROVIDERS == frozenset({"openrouter", "openai", "anthropic", "ollama"})
+    assert frozenset({"openrouter", "openai", "anthropic", "ollama"}) == VALID_PROVIDERS
 
 
 @pytest.mark.parametrize(

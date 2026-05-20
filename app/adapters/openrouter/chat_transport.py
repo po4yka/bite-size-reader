@@ -37,7 +37,9 @@ class RequestBuilderModeOverride:
         self._original_mode = getattr(self.request_builder, "_structured_output_mode", None)
         self.request_builder._structured_output_mode = self.mode
 
-    def __exit__(self, exc_type: type[BaseException] | None, exc: BaseException | None, exc_tb: object) -> None:
+    def __exit__(
+        self, exc_type: type[BaseException] | None, exc: BaseException | None, exc_tb: object
+    ) -> None:
         self.request_builder._structured_output_mode = self._original_mode
 
 

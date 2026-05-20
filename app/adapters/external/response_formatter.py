@@ -289,7 +289,12 @@ class ResponseFormatter:
         return self._response_sender.is_draft_streaming_enabled()
 
     async def reply_json(
-        self, message: Any, obj: dict[str, Any], *, correlation_id: str | None = None, success: bool = True
+        self,
+        message: Any,
+        obj: dict[str, Any],
+        *,
+        correlation_id: str | None = None,
+        success: bool = True,
     ) -> None:
         """Reply with JSON object, using file upload for large content."""
         await self._response_sender.reply_json(

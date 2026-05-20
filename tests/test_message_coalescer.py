@@ -83,9 +83,7 @@ def _make_coalescer(
         enabled=enabled,
         content_router=cast("MessageContentRouter", content_router),
         aggregation_handler=aggregation_handler,
-        rate_limit_coordinator=cast(
-            "MessageRateLimitCoordinator", rate_limit_coordinator
-        ),
+        rate_limit_coordinator=cast("MessageRateLimitCoordinator", rate_limit_coordinator),
         response_formatter=response_formatter,
         callback_handler=callback_handler,
         url_handler=url_handler,

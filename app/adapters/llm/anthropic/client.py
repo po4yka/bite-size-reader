@@ -260,13 +260,16 @@ class AnthropicClient:
                 attempt=attempt,
             )
 
-        return cast("LLMCallResult", await self._run_with_retry(
-            models_to_try,
-            _attempt,
-            primary_model=primary_model,
-            exhausted_endpoint="/v1/messages",
-            retryable_error_substrings=("rate_limit", "overloaded"),
-        ))
+        return cast(
+            "LLMCallResult",
+            await self._run_with_retry(
+                models_to_try,
+                _attempt,
+                primary_model=primary_model,
+                exhausted_endpoint="/v1/messages",
+                retryable_error_substrings=("rate_limit", "overloaded"),
+            ),
+        )
 
     async def _attempt_request(
         self,

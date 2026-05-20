@@ -6,11 +6,12 @@ Guards all OTel imports so the module is importable even when the
 
 from __future__ import annotations
 
-import contextlib
 import os
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
+    import contextlib
+
     from app.config.settings import AppConfig
 
 _initialized = False
@@ -115,7 +116,9 @@ def set_correlation_id_attr(cid: str | None) -> None:
 class _NoOpTracer:
     """Minimal no-op tracer returned when OTel SDK is not installed."""
 
-    def start_as_current_span(self, name: str, **kwargs: Any) -> contextlib.AbstractContextManager[_NoOpSpan]:
+    def start_as_current_span(
+        self, name: str, **kwargs: Any
+    ) -> contextlib.AbstractContextManager[_NoOpSpan]:
         import contextlib
 
         return contextlib.nullcontext(_NoOpSpan())

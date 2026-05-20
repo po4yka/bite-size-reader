@@ -7,10 +7,6 @@ offline.
 
 from __future__ import annotations
 
-from contextlib import contextmanager
-from typing import Iterator
-from unittest.mock import patch
-
 import pytest
 
 from app.adapters.content.scraper.attempt_log import (
@@ -131,8 +127,11 @@ def test_tuned_provider_timeout_applies_profile_multiplier() -> None:
 
 def test_tuned_provider_timeout_speeds_up_scrapling_on_js_heavy_url() -> None:
     base = tuned_provider_timeout(
-        base_timeout_sec=10.0, profile="balanced", provider="scrapling",
-        url="https://x.com/", js_heavy_hosts=("x.com",),
+        base_timeout_sec=10.0,
+        profile="balanced",
+        provider="scrapling",
+        url="https://x.com/",
+        js_heavy_hosts=("x.com",),
     )
     # 10 * 1.0 * 0.8 == 8
     assert base == pytest.approx(8.0)
@@ -140,8 +139,11 @@ def test_tuned_provider_timeout_speeds_up_scrapling_on_js_heavy_url() -> None:
 
 def test_tuned_provider_timeout_extends_browser_provider_on_js_heavy_url() -> None:
     base = tuned_provider_timeout(
-        base_timeout_sec=10.0, profile="balanced", provider="playwright",
-        url="https://x.com/", js_heavy_hosts=("x.com",),
+        base_timeout_sec=10.0,
+        profile="balanced",
+        provider="playwright",
+        url="https://x.com/",
+        js_heavy_hosts=("x.com",),
     )
     # 10 * 1.0 * 1.25 == 12.5
     assert base == pytest.approx(12.5)
@@ -168,9 +170,12 @@ def test_tuned_firecrawl_wait_for_ms_extends_for_js_heavy_url() -> None:
 
 
 def test_tuned_firecrawl_wait_for_ms_returns_zero_for_zero_base() -> None:
-    assert tuned_firecrawl_wait_for_ms(
-        base_wait_for_ms=0, url="https://x.com/", js_heavy_hosts=("x.com",)
-    ) == 0
+    assert (
+        tuned_firecrawl_wait_for_ms(
+            base_wait_for_ms=0, url="https://x.com/", js_heavy_hosts=("x.com",)
+        )
+        == 0
+    )
 
 
 def test_tuned_firecrawl_wait_for_ms_caps_at_ten_seconds() -> None:
@@ -184,7 +189,7 @@ def test_tuned_firecrawl_wait_for_ms_caps_at_ten_seconds() -> None:
 
 
 def test_browser_providers_constant_matches_expected_set() -> None:
-    assert BROWSER_PROVIDERS == frozenset({"playwright", "crawlee"})
+    assert frozenset({"playwright", "crawlee"}) == BROWSER_PROVIDERS
 
 
 # ---------------------------------------------------------------------------

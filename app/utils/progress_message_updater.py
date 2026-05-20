@@ -117,7 +117,9 @@ class ProgressMessageUpdater:
         """Context manager entry."""
         return self
 
-    async def __aexit__(self, exc_type: type[BaseException] | None, exc_val: BaseException | None, exc_tb: object) -> None:
+    async def __aexit__(
+        self, exc_type: type[BaseException] | None, exc_val: BaseException | None, exc_tb: object
+    ) -> None:
         """Context manager exit."""
         # Stop updates on exit (but don't finalize - caller should do that)
         self._stop_event.set()

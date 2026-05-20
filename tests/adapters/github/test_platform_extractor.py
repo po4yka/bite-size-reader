@@ -6,7 +6,7 @@ import json
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -170,7 +170,9 @@ class TestExtractIntegrationErrors:
 
 @pytest.mark.asyncio
 class TestExtractHappyPath:
-    async def test_inserts_repository_and_calls_analyze(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    async def test_inserts_repository_and_calls_analyze(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         repo_dto = _make_repo_dto()
         languages = {"Python": 123456, "Shell": 1234}
         ig = _make_integration()
@@ -190,9 +192,7 @@ class TestExtractHappyPath:
         # monkeypatch the attribute there so we get a stub without poking
         # sys.modules (which leaks state into later tests that hold cached
         # bindings to the original module).
-        monkeypatch.setattr(
-            "app.security.token_crypto.decrypt_token", lambda _ct: "stub_token"
-        )
+        monkeypatch.setattr("app.security.token_crypto.decrypt_token", lambda _ct: "stub_token")
 
         result = await ext.extract(_make_request())
 
@@ -207,7 +207,9 @@ class TestExtractHappyPath:
         assert result.metadata["stars"] == 75000
         assert result.metadata["license"] == "MIT"
 
-    async def test_upserts_existing_repository_preserves_analysis(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    async def test_upserts_existing_repository_preserves_analysis(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Second extraction must not overwrite analysis_json (it's in the excluded set_)."""
         repo_dto = _make_repo_dto()
         languages = {"Python": 100}
@@ -224,9 +226,7 @@ class TestExtractHappyPath:
             client_factory=factory,
         )
 
-        monkeypatch.setattr(
-            "app.security.token_crypto.decrypt_token", lambda _ct: "stub_token"
-        )
+        monkeypatch.setattr("app.security.token_crypto.decrypt_token", lambda _ct: "stub_token")
 
         result = await ext.extract(_make_request())
 
@@ -248,7 +248,9 @@ class TestExtractHappyPath:
             "analysis_json must not appear in update_set — it would overwrite existing analysis"
         )
 
-    async def test_readme_404_results_in_empty_excerpt(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    async def test_readme_404_results_in_empty_excerpt(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         repo_dto = _make_repo_dto()
         languages: dict[str, int] = {}
         ig = _make_integration()
@@ -264,9 +266,7 @@ class TestExtractHappyPath:
             client_factory=factory,
         )
 
-        monkeypatch.setattr(
-            "app.security.token_crypto.decrypt_token", lambda _ct: "stub_token"
-        )
+        monkeypatch.setattr("app.security.token_crypto.decrypt_token", lambda _ct: "stub_token")
 
         result = await ext.extract(_make_request())
 

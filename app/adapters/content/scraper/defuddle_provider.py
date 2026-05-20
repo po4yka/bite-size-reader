@@ -4,11 +4,10 @@ from __future__ import annotations
 
 import asyncio
 import time
+from typing import Any
 from urllib.parse import urljoin
 
 import httpx
-
-from typing import Any
 
 from app.adapters.external.firecrawl.models import FirecrawlResult
 from app.core.call_status import CallStatus

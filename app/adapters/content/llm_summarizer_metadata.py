@@ -180,12 +180,15 @@ class LLMSummaryMetadataHelper:
             )
 
         # Enrich with RAG-optimized fields for retrieval
-        return cast("dict[str, Any]", await self._semantic_helper.enrich_with_rag_fields(
-            summary,
-            content_text=content_text,
-            chosen_lang=chosen_lang,
-            req_id=req_id,
-        ))
+        return cast(
+            "dict[str, Any]",
+            await self._semantic_helper.enrich_with_rag_fields(
+                summary,
+                content_text=content_text,
+                chosen_lang=chosen_lang,
+                req_id=req_id,
+            ),
+        )
 
     def _apply_firecrawl_metadata(
         self,

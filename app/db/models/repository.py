@@ -76,7 +76,9 @@ class Repository(Base):
     homepage_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     primary_language: Mapped[str | None] = mapped_column(String(100), nullable=True)
-    languages_json: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True, default=dict)
+    languages_json: Mapped[dict[str, Any] | None] = mapped_column(
+        JSONB, nullable=True, default=dict
+    )
     topics_json: Mapped[list[Any] | None] = mapped_column(JSONB, nullable=True, default=list)
     stars: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     forks: Mapped[int] = mapped_column(Integer, default=0, nullable=False)

@@ -7,14 +7,13 @@ during long-running operations.
 from __future__ import annotations
 
 import asyncio
-from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from typing import TYPE_CHECKING, Any
 
 from app.core.logging_utils import get_logger
 
 if TYPE_CHECKING:
-    from collections.abc import Awaitable, Callable
+    from collections.abc import AsyncGenerator, Awaitable, Callable
 
     from app.adapters.external.formatting.protocols import (
         ResponseFormatterFacade as ResponseFormatter,
@@ -143,7 +142,7 @@ async def typing_indicator(
     message: Any,
     action: str = "typing",
     interval: float | None = None,
-) -> AsyncGenerator[TypingIndicator | None, None]:
+) -> AsyncGenerator[TypingIndicator | None]:
     """Context manager for typing indicators.
 
     Args:

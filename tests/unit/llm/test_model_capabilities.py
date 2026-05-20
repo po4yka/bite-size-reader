@@ -63,7 +63,7 @@ def test_detect_provider_returns_unknown_for_strange_id() -> None:
 
 
 def test_explicit_caching_providers_constant_matches_documented_set() -> None:
-    assert EXPLICIT_CACHING_PROVIDERS == frozenset({"anthropic", "google"})
+    assert frozenset({"anthropic", "google"}) == EXPLICIT_CACHING_PROVIDERS
 
 
 def test_automatic_caching_providers_constant_matches_documented_set() -> None:
@@ -82,9 +82,7 @@ def test_supports_explicit_caching_false_for_automatic_providers(model: str) -> 
     assert supports_explicit_caching(model) is False
 
 
-@pytest.mark.parametrize(
-    "model", ["openai/gpt-4o", "deepseek/deepseek-v4-flash", "qwen/qwen3-max"]
-)
+@pytest.mark.parametrize("model", ["openai/gpt-4o", "deepseek/deepseek-v4-flash", "qwen/qwen3-max"])
 def test_supports_automatic_caching_true_for_automatic_providers(model: str) -> None:
     assert supports_automatic_caching(model) is True
 

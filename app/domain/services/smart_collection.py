@@ -44,7 +44,9 @@ def validate_smart_conditions(
     return True, None
 
 
-def evaluate_summary(conditions: list[dict[str, Any]], context: dict[str, Any], match_mode: str = "all") -> bool:
+def evaluate_summary(
+    conditions: list[dict[str, Any]], context: dict[str, Any], match_mode: str = "all"
+) -> bool:
     """Evaluate a summary context against smart collection conditions.
 
     Returns True if the summary matches.

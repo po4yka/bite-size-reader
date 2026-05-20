@@ -26,7 +26,7 @@ def repair_repo_analysis(raw: str) -> dict[str, Any]:
         return repaired
     # repair_json may return a non-dict for severely malformed input
     if isinstance(repaired, str):
-        return cast(dict[str, Any], json.loads(repaired))
+        return cast("dict[str, Any]", json.loads(repaired))
     return {}
 
 

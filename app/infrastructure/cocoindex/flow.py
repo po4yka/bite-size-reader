@@ -246,7 +246,7 @@ def build_summaries_flow(
     def summaries_to_qdrant(flow_builder: Any, data_scope: Any) -> None:
         """CocoIndex flow: incrementally sync summaries -> Qdrant."""
         data_scope["summaries"] = flow_builder.add_source(
-            cocoindex.sources.Postgres(  # type: ignore[attr-defined]
+            cocoindex.sources.Postgres(
                 table_name="summaries",
                 ordinal_field="updated_at",
                 primary_key_fields=["id", "request_id"],
@@ -284,7 +284,7 @@ def build_summaries_flow(
 
         qdrant_sink.export(
             "qdrant_points",
-            cocoindex.targets.Qdrant(  # type: ignore[attr-defined]
+            cocoindex.targets.Qdrant(
                 collection_name=_collection_name,
                 url=_qdrant_url,
                 api_key=_qdrant_api_key,
@@ -321,7 +321,7 @@ def build_repositories_flow(
     def repositories_to_qdrant(flow_builder: Any, data_scope: Any) -> None:
         """CocoIndex flow: incrementally sync analyzed repositories -> Qdrant."""
         data_scope["repositories"] = flow_builder.add_source(
-            cocoindex.sources.Postgres(  # type: ignore[attr-defined]
+            cocoindex.sources.Postgres(
                 table_name="repositories",
                 ordinal_field="updated_at",
                 primary_key_fields=["id"],
@@ -371,7 +371,7 @@ def build_repositories_flow(
 
         qdrant_sink.export(
             "qdrant_repository_points",
-            cocoindex.targets.Qdrant(  # type: ignore[attr-defined]
+            cocoindex.targets.Qdrant(
                 collection_name=_collection_name,
                 url=_qdrant_url,
                 api_key=_qdrant_api_key,

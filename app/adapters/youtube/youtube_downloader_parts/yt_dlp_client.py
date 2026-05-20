@@ -245,7 +245,7 @@ def _load_metadata_file(*, metadata_file: Path, fallback: dict[str, Any]) -> dic
     if not metadata_file.exists():
         return fallback
     try:
-        return cast(dict[str, Any], json.loads(metadata_file.read_text(encoding="utf-8")))
+        return cast("dict[str, Any]", json.loads(metadata_file.read_text(encoding="utf-8")))
     except (json.JSONDecodeError, OSError) as exc:
         logger.warning(
             "youtube_metadata_file_corrupt",

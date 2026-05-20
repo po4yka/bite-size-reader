@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-from typing import Any
 
 from app.core.logging_utils import get_logger, log_exception
 from app.di.api import get_current_api_runtime

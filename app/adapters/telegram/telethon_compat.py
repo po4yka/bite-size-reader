@@ -441,7 +441,10 @@ class TelethonMessageAdapter:
 
     @property
     def text(self) -> str | None:
-        return cast("str | None", getattr(self._message, "raw_text", None) or getattr(self._message, "text", None))
+        return cast(
+            "str | None",
+            getattr(self._message, "raw_text", None) or getattr(self._message, "text", None),
+        )
 
     @property
     def caption(self) -> str | None:
@@ -495,12 +498,16 @@ class TelethonMessageAdapter:
     def forward_sender_name(self) -> str | None:
         """Origin name for forwards where the sender hid their account."""
         header = self._fwd_header
-        return cast("str | None", getattr(header, "from_name", None)) if header is not None else None
+        return (
+            cast("str | None", getattr(header, "from_name", None)) if header is not None else None
+        )
 
     @property
     def forward_signature(self) -> str | None:
         header = self._fwd_header
-        return cast("str | None", getattr(header, "post_author", None)) if header is not None else None
+        return (
+            cast("str | None", getattr(header, "post_author", None)) if header is not None else None
+        )
 
     @property
     def forward_from_message_id(self) -> int | None:

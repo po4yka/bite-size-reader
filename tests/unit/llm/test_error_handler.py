@@ -13,8 +13,6 @@ Every assertion is offline.
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock
-
 import pytest
 
 from app.adapters.openrouter.error_handler import ErrorHandler
@@ -142,9 +140,12 @@ def test_is_schema_construct_rejection_true_for_known_construct_complaints(
 
 
 def test_is_schema_construct_rejection_false_for_unrelated_400() -> None:
-    assert _make_handler().is_schema_construct_rejection(
-        {"error": {"message": "missing required field"}}
-    ) is False
+    assert (
+        _make_handler().is_schema_construct_rejection(
+            {"error": {"message": "missing required field"}}
+        )
+        is False
+    )
 
 
 def test_is_schema_construct_rejection_false_for_non_dict_payload() -> None:
@@ -260,7 +261,8 @@ async def test_handle_rate_limit_swallows_invalid_header(
 ) -> None:
     slept: list[float] = []
     monkeypatch.setattr(
-        "asyncio.sleep", lambda s: slept.append(s)  # type: ignore[arg-type, unused-ignore]
+        "asyncio.sleep",
+        lambda s: slept.append(s),  # type: ignore[arg-type, unused-ignore]
     )
     h = _make_handler()
     # Non-numeric retry-after must not crash.
@@ -286,8 +288,12 @@ def test_audit_callbacks_route_events_to_provided_function() -> None:
     h = ErrorHandler(audit=audit)
     h.log_attempt(attempt=1, model="m1", request_id=11)
     h.log_success(
-        attempt=1, model="m1", status_code=200, latency=12,
-        structured_output_used=True, structured_output_mode="json_schema",
+        attempt=1,
+        model="m1",
+        status_code=200,
+        latency=12,
+        structured_output_used=True,
+        structured_output_mode="json_schema",
     )
     h.log_error(attempt=2, model="m1", status_code=500, error_message="boom")
     h.log_fallback(from_model="m1", to_model="m2")
@@ -310,9 +316,7 @@ def test_audit_no_op_without_callback() -> None:
     h = _make_handler()
     # All logging methods should be no-ops without an audit callback.
     h.log_attempt(1, "m")
-    h.log_success(
-        1, "m", 200, 10, structured_output_used=False, structured_output_mode=None
-    )
+    h.log_success(1, "m", 200, 10, structured_output_used=False, structured_output_mode=None)
     h.log_error(1, "m", 500, "boom")
     h.log_fallback("m1", "m2")
 

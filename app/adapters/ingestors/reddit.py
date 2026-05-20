@@ -2,10 +2,9 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
 from datetime import UTC, datetime
 from time import monotonic
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import httpx
 
@@ -19,13 +18,18 @@ from app.application.ports.source_ingestors import (
 )
 from app.core.url_utils import normalize_url
 
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
 _LISTINGS = {"hot", "new", "top", "rising"}
 
 
 class RequestRateBudget:
     """Small in-process request budget for source pollers."""
 
-    def __init__(self, *, max_requests_per_minute: int, now: Callable[[], float] = monotonic) -> None:
+    def __init__(
+        self, *, max_requests_per_minute: int, now: Callable[[], float] = monotonic
+    ) -> None:
         self.max_requests_per_minute = max(1, min(int(max_requests_per_minute), 100))
         self._now = now
         self._timestamps: list[float] = []

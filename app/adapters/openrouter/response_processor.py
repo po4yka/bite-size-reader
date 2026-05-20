@@ -38,7 +38,9 @@ class ResponseProcessor:
     def __init__(self, enable_stats: bool = False) -> None:
         self._enable_stats = enable_stats
 
-    def extract_structured_content(self, message_obj: dict[str, Any], rf_included: bool) -> str | None:
+    def extract_structured_content(
+        self, message_obj: dict[str, Any], rf_included: bool
+    ) -> str | None:
         """Extract structured content from response message."""
         text = None
 
@@ -324,7 +326,9 @@ class ResponseProcessor:
         # Invalid JSON with structured outputs
         return False, text_str
 
-    def inspect_completion_truncation(self, data: dict[str, Any]) -> tuple[bool, str | None, str | None]:
+    def inspect_completion_truncation(
+        self, data: dict[str, Any]
+    ) -> tuple[bool, str | None, str | None]:
         """Inspect response metadata and determine if the completion was truncated."""
         try:
             choices = data.get("choices") or []

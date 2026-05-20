@@ -2804,20 +2804,6 @@ paths:
           $ref: '#/components/responses/InternalServerError'
       security:
       - HTTPBearer: []
-  /:
-    get:
-      summary: Root
-      description: API root endpoint.
-      operationId: root__get
-      responses:
-        '200':
-          description: Root ping
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/RootResponseEnvelope'
-        '500':
-          $ref: '#/components/responses/InternalServerError'
   /health:
     get:
       summary: Health Check
