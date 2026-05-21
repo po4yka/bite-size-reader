@@ -186,25 +186,15 @@ jobs:
 
       - name: Validate OpenAPI spec
         run: |
-          uv pip install --system openapi-spec-validator
-          openapi-spec-validator docs/openapi/mobile_api.yaml
-          openapi-spec-validator docs/openapi/mobile_api.json
+          uv run --frozen --extra api openapi-spec-validator docs/openapi/mobile_api.yaml
+          uv run --frozen --extra api openapi-spec-validator docs/openapi/mobile_api.json
 
-      - name: Check JSON/YAML OpenAPI drift
-        run: |
-          python3 -c "
-          import json, yaml
-          spec = yaml.safe_load(open('docs/openapi/mobile_api.yaml'))
-          f = open('docs/openapi/mobile_api.json', 'w')
-          json.dump(spec, f, indent=2, ensure_ascii=False)
-          f.write('\n')
-          "
-          git diff --exit-code docs/openapi/mobile_api.json || \
-            (echo "mobile_api.json is out of sync with mobile_api.yaml — run 'make sync-openapi' and commit the result" && exit 1)
+      - name: Check generated OpenAPI drift
+        run: uv run --frozen --extra api python tools/scripts/generate_openapi.py --check
 
       - name: Check OpenAPI spec sync with code
         run: |
-          pytest tests/api/test_openapi_sync.py tests/api/test_openapi_security.py \
+          uv run --frozen --extra api pytest tests/api/test_openapi_sync.py tests/api/test_openapi_security.py tests/api/test_runtime_openapi_drift.py tests/tools/test_generate_openapi.py \
             -v --tb=short
 
       - name: Lint (ruff) - comprehensive

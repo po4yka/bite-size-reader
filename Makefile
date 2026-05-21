@@ -1,4 +1,4 @@
-.PHONY: format lint type test test-unit test-integration test-all all setup-dev venv pre-commit-install pre-commit-run check-lock check-openapi check-openapi-validate check-file-loc check-layout clean-generated security static-checks
+.PHONY: format lint type test test-unit test-integration test-all all setup-dev venv pre-commit-install pre-commit-run check-lock generate-openapi check-openapi check-openapi-validate check-openapi-drift check-file-loc check-layout clean-generated security static-checks
 
 COMPOSE_FILE := ops/docker/docker-compose.yml
 DOCKERFILE_BOT := ops/docker/Dockerfile
@@ -86,20 +86,22 @@ check-lock:
 	uv export --only-group dev --no-hashes --format requirements-txt -p 3.13 -o requirements-dev.txt
 	@git diff --exit-code uv.lock requirements.txt requirements-dev.txt || (echo "Lockfiles are out of date. Run 'make lock-uv' and commit changes." && exit 1)
 
-sync-openapi: ## Regenerate mobile_api.json from mobile_api.yaml (YAML is source of truth)
-	python3 -c "import json, yaml; spec = yaml.safe_load(open('docs/openapi/mobile_api.yaml')); f = open('docs/openapi/mobile_api.json', 'w'); json.dump(spec, f, indent=2, ensure_ascii=False); f.write('\n')"
-	@echo "Regenerated docs/openapi/mobile_api.json from mobile_api.yaml"
+generate-openapi: ## Generate docs/openapi/mobile_api.yaml/json from app.api.main:app
+	uv run --frozen --extra api python tools/scripts/generate_openapi.py
 
-check-openapi: ## Run OpenAPI spec sync checks (includes JSON/YAML equivalence)
-	pytest tests/api/test_openapi_sync.py -v
+sync-openapi: generate-openapi ## Backward-compatible alias for generate-openapi
+
+check-openapi: ## Run OpenAPI spec sync checks (includes generated drift check)
+	uv run --frozen --extra api pytest tests/api/test_openapi_sync.py tests/api/test_openapi_security.py tests/api/test_runtime_openapi_drift.py tests/tools/test_generate_openapi.py -v
 
 check-openapi-validate: ## Validate OpenAPI spec syntax
-	openapi-spec-validator docs/openapi/mobile_api.yaml
-	openapi-spec-validator docs/openapi/mobile_api.json
+	uv run --frozen --extra api openapi-spec-validator docs/openapi/mobile_api.yaml
+	uv run --frozen --extra api openapi-spec-validator docs/openapi/mobile_api.json
 
-check-openapi-json-sync: ## Fail if mobile_api.json is stale relative to mobile_api.yaml
-	$(MAKE) sync-openapi
-	git diff --exit-code docs/openapi/mobile_api.json || (echo "mobile_api.json is out of sync — run 'make sync-openapi' and commit the result" && exit 1)
+check-openapi-drift: ## Fail if committed OpenAPI docs differ from app.api.main:app
+	uv run --frozen --extra api python tools/scripts/generate_openapi.py --check
+
+check-openapi-json-sync: check-openapi-drift ## Backward-compatible alias for generated spec drift check
 
 # ==============================================================================
 # Docker targets

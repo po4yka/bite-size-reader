@@ -1,6 +1,6 @@
 """
-Tests that ensure the OpenAPI spec (docs/openapi/mobile_api.yaml) stays in sync
-with the FastAPI implementation.
+Tests that ensure the generated OpenAPI spec stays in sync with the FastAPI
+implementation and client-facing contract conventions.
 
 Two test groups:
   1. Route coverage -- every FastAPI route has a matching path+method in the spec.
@@ -47,14 +47,6 @@ IGNORED_APP_ROUTES = frozenset(
         ("GET", "/privacy.html"),
         ("GET", "/terms.html"),
         ("GET", "/manifest.webmanifest"),
-        # Bulk summary helpers are internal client acceleration routes until
-        # the mobile contract is expanded for bulk article operations.
-        ("POST", "/v1/articles/bulk/delete"),
-        ("POST", "/v1/articles/bulk/favorite"),
-        ("POST", "/v1/articles/bulk/mark-read"),
-        ("POST", "/v1/summaries/bulk/delete"),
-        ("POST", "/v1/summaries/bulk/favorite"),
-        ("POST", "/v1/summaries/bulk/mark-read"),
     }
 )
 
@@ -602,11 +594,7 @@ def _build_alias_map(model_cls: type) -> dict[str, str]:
 
 
 class TestJsonYamlSync:
-    """Verify that mobile_api.json is a faithful representation of mobile_api.yaml.
-
-    JSON is a derived format regenerated via `make sync-openapi`. This class
-    catches drift introduced by editing one file without updating the other.
-    """
+    """Verify that mobile_api.json is the same generated contract as YAML."""
 
     def _load_yaml(self) -> dict[str, Any]:
 
@@ -622,7 +610,7 @@ class TestJsonYamlSync:
     def test_json_spec_exists(self) -> None:
         assert JSON_SPEC_PATH.exists(), (
             f"mobile_api.json not found at {JSON_SPEC_PATH}. "
-            "Run `make sync-openapi` to generate it."
+            "Run `make generate-openapi` to generate it."
         )
 
     def test_json_path_count_matches_yaml(self) -> None:
@@ -636,7 +624,7 @@ class TestJsonYamlSync:
             f"Path mismatch between mobile_api.yaml and mobile_api.json.\n"
             f"Only in YAML ({len(only_in_yaml)}): {sorted(only_in_yaml)}\n"
             f"Only in JSON ({len(only_in_json)}): {sorted(only_in_json)}\n"
-            "Run `make sync-openapi` to regenerate mobile_api.json from the YAML source."
+            "Run `make generate-openapi` to regenerate both files from the FastAPI app."
         )
 
     def test_json_top_level_keys_match_yaml(self) -> None:
@@ -648,7 +636,7 @@ class TestJsonYamlSync:
             f"Top-level key mismatch.\n"
             f"Only in YAML: {yaml_keys - json_keys}\n"
             f"Only in JSON: {json_keys - yaml_keys}\n"
-            "Run `make sync-openapi` to regenerate mobile_api.json from the YAML source."
+            "Run `make generate-openapi` to regenerate both files from the FastAPI app."
         )
 
     def test_json_info_matches_yaml(self) -> None:
@@ -656,5 +644,5 @@ class TestJsonYamlSync:
         json_spec = self._load_json()
         assert yaml_spec.get("info") == json_spec.get("info"), (
             "info block differs between YAML and JSON. "
-            "Run `make sync-openapi` to regenerate mobile_api.json."
+            "Run `make generate-openapi` to regenerate both files."
         )

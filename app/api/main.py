@@ -19,6 +19,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import ValidationError as PydanticValidationError
 from sqlalchemy.exc import SQLAlchemyError
 
+from app.api.models.responses.common import API_CONTRACT_VERSION
 from app.api.error_handlers import (
     api_exception_handler,
     database_exception_handler,
@@ -188,7 +189,12 @@ _docs_enabled = os.getenv("API_DOCS_ENABLED", "").lower() in ("1", "true")
 app = FastAPI(
     title="Ratatoskr Mobile API",
     description="RESTful API for Android/iOS mobile clients",
-    version="1.0.0",
+    version=API_CONTRACT_VERSION,
+    servers=[
+        {"url": "https://ratatoskrapi.po4yka.com", "description": "Production"},
+        {"url": "https://staging-ratatoskrapi.po4yka.com", "description": "Staging"},
+        {"url": "http://localhost:8000", "description": "Local development"},
+    ],
     docs_url="/docs" if _docs_enabled else None,
     redoc_url="/redoc" if _docs_enabled else None,
     lifespan=lifespan,
@@ -289,7 +295,7 @@ def _serve_web_index() -> FileResponse:
     return FileResponse(str(_web_index))
 
 
-@app.get("/manifest.webmanifest")
+@app.get("/manifest.webmanifest", include_in_schema=False)
 def web_manifest() -> FileResponse:
     """Serve PWA manifest at the SPA's scope root."""
     _manifest = _static_dir / "web" / "manifest.webmanifest"
@@ -298,7 +304,7 @@ def web_manifest() -> FileResponse:
     return FileResponse(str(_manifest), media_type="application/manifest+json")
 
 
-@app.get("/privacy.html")
+@app.get("/privacy.html", include_in_schema=False)
 def privacy_policy() -> FileResponse:
     """Serve Privacy Policy static page."""
     _privacy = _static_dir / "web" / "privacy.html"
@@ -307,7 +313,7 @@ def privacy_policy() -> FileResponse:
     return FileResponse(str(_privacy))
 
 
-@app.get("/terms.html")
+@app.get("/terms.html", include_in_schema=False)
 def terms_of_service() -> FileResponse:
     """Serve Terms of Service static page."""
     _terms = _static_dir / "web" / "terms.html"
@@ -316,7 +322,7 @@ def terms_of_service() -> FileResponse:
     return FileResponse(str(_terms))
 
 
-@app.get("/api")
+@app.get("/api", include_in_schema=False)
 def api_root(request: Request) -> dict[str, Any]:
     """Mobile API root endpoint."""
     return success_response(
@@ -361,8 +367,8 @@ async def metrics(user: dict[str, Any] = Depends(get_current_user)) -> Any:
 
 
 # SPA catch-all — MUST be registered last so explicit API routes win.
-@app.get("/")
-@app.get("/{path:path}")
+@app.get("/", include_in_schema=False)
+@app.get("/{path:path}", include_in_schema=False)
 def web_interface(path: str = "") -> FileResponse:
     """Serve web SPA entrypoint for any non-API path."""
     del path

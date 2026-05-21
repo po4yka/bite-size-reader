@@ -13,7 +13,8 @@ This document is a developer-facing summary of the mobile API implemented by the
 - Envelope contract: all JSON business responses use `success`, `data`, `meta`, and standardized `error`
 - Mixed-source aggregation surface: `/v1/aggregations`
 - Phase 3 signal/source triage surface: `/v1/signals`
-- OpenAPI source of truth: `docs/openapi/mobile_api.yaml`
+- OpenAPI source of truth: `app.api.main:app`, generated into `docs/openapi/mobile_api.yaml` and `docs/openapi/mobile_api.json` with `make generate-openapi`
+- Cross-repo regeneration workflow: [`docs/reference/openapi-contract-workflow.md`](openapi-contract-workflow.md)
 
 The same FastAPI host also serves the web SPA:
 
@@ -51,9 +52,10 @@ Setting `ALLOWED_USER_IDS=""` in production is supported only as a deliberate "l
 
 ## API Surface Freeze Policy
 
-The mobile API surface is contract-locked against `docs/openapi/mobile_api.yaml`. Changes are gated by:
+The mobile API surface is contract-locked against the generated `docs/openapi/mobile_api.yaml` / `docs/openapi/mobile_api.json` pair. Changes are gated by:
 
-- **CI snapshot test** — `tests/api/test_openapi_sync.py` rejects PRs that add or rename a route without a matching YAML entry (`test_all_routes_documented`), introduce orphan YAML routes (`test_no_orphan_spec_routes`), or shift response shapes / required fields (`test_property_names_match`, `test_required_fields_match`). The job runs on every PR via the `test` CI job.
+- **Generated spec drift check** — `tools/scripts/generate_openapi.py --check` fails when committed OpenAPI docs differ from `app.api.main:app`. Run `make generate-openapi` after API model, router, response envelope, or contract-version changes.
+- **CI contract tests** — `tests/api/test_openapi_sync.py`, `tests/api/test_openapi_security.py`, `tests/api/test_runtime_openapi_drift.py`, and `tests/tools/test_generate_openapi.py` reject route drift, schema drift, missing security/error declarations, and stale generated docs. The job runs on every PR via the `test` CI job.
 - **Contract semver in the envelope** — every success response carries `meta.api_version` (sourced from `app.api.models.responses.common.API_CONTRACT_VERSION`). The constant is independent of `meta.version` (which tracks app/build deploys).
 
 ### When to bump `api_version`
