@@ -53,6 +53,43 @@ def _user_ctx(user) -> dict:
     }
 
 
+class _FakeRequest:
+    headers: dict = {}
+
+
+class _FakeResponse:
+    headers: dict = {}
+
+
+_OLD_SYNC_CAMEL_KEYS = {
+    "sessionId",
+    "expiresAt",
+    "defaultLimit",
+    "maxLimit",
+    "lastIssuedSince",
+    "entityType",
+    "serverVersion",
+    "updatedAt",
+    "deletedAt",
+    "hasMore",
+    "nextSince",
+    "serverSnapshot",
+    "errorCode",
+}
+
+
+def _assert_sync_data_uses_snake_case(value: object) -> None:
+    if isinstance(value, dict):
+        assert not (_OLD_SYNC_CAMEL_KEYS & set(value)), value
+        for key, nested in value.items():
+            if key == "pagination":
+                continue
+            _assert_sync_data_uses_snake_case(nested)
+    elif isinstance(value, list):
+        for nested in value:
+            _assert_sync_data_uses_snake_case(nested)
+
+
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
@@ -69,7 +106,7 @@ async def sync_summary(summary_factory, sync_user):
 
 
 # ---------------------------------------------------------------------------
-# Scenario 1: Create session returns sessionId + meta envelope
+# Scenario 1: Create session returns session_id + meta envelope
 # ---------------------------------------------------------------------------
 
 
@@ -82,9 +119,91 @@ async def test_create_session_returns_session_id(db, sync_user):
 
     assert result["success"] is True
     data = result["data"]
-    assert "sessionId" in data, f"sessionId missing from data: {data.keys()}"
-    assert data["sessionId"].startswith("sync-")
+    assert "session_id" in data, f"session_id missing from data: {data.keys()}"
+    assert data["session_id"].startswith("sync-")
     assert "meta" in result
+
+
+@pytest.mark.asyncio
+async def test_sync_endpoints_emit_snake_case_raw_json_keys(db, sync_user, summary_factory):
+    summary = await summary_factory(user=sync_user)
+
+    svc = _make_svc(db)
+    user_ctx = _user_ctx(sync_user)
+
+    session_result = await create_sync_session(
+        body=SyncSessionRequest(limit=50), user=user_ctx, svc=svc
+    )
+    session_data = session_result["data"]
+    _assert_sync_data_uses_snake_case(session_data)
+    assert {"session_id", "expires_at", "default_limit", "max_limit", "last_issued_since"}.issubset(
+        session_data
+    )
+    session_id = session_data["session_id"]
+
+    full_result = await full_sync(session_id=session_id, limit=500, user=user_ctx, svc=svc)
+    full_data = full_result["data"]
+    _assert_sync_data_uses_snake_case(full_data)
+    assert {"session_id", "has_more", "next_since", "items", "pagination"}.issubset(full_data)
+    full_summary = next(
+        item
+        for item in full_data["items"]
+        if item["entity_type"] == "summary" and item["id"] == str(summary.id)
+    )
+    assert isinstance(full_summary["id"], str)
+    assert {"entity_type", "id", "server_version", "updated_at", "summary"}.issubset(full_summary)
+    assert {"request_id", "is_read", "json_payload", "created_at"}.issubset(full_summary["summary"])
+
+    delta_result = await delta_sync(
+        request=_FakeRequest(),
+        response=_FakeResponse(),
+        session_id=session_id,
+        since=0,
+        limit=500,
+        user=user_ctx,
+        svc=svc,
+    )
+    assert isinstance(delta_result, dict)
+    delta_data = delta_result["data"]
+    _assert_sync_data_uses_snake_case(delta_data)
+    assert {
+        "session_id",
+        "since",
+        "has_more",
+        "next_since",
+        "created",
+        "updated",
+        "deleted",
+    }.issubset(delta_data)
+    assert any(item["id"] == str(summary.id) for item in delta_data["created"])
+
+    apply_payload = SyncApplyRequest(
+        session_id=session_id,
+        changes=[
+            SyncApplyItem(
+                entity_type="summary",
+                id=summary.id,
+                action="update",
+                last_seen_version=0,
+                payload={"is_read": False},
+            )
+        ],
+    )
+    apply_result = await apply_changes(payload=apply_payload, user=user_ctx, svc=svc)
+    apply_data = apply_result["data"]
+    _assert_sync_data_uses_snake_case(apply_data)
+    assert {"session_id", "results", "conflicts"}.issubset(apply_data)
+    conflict = apply_data["results"][0]
+    assert conflict["id"] == str(summary.id)
+    assert {
+        "entity_type",
+        "id",
+        "status",
+        "server_version",
+        "server_snapshot",
+        "error_code",
+    }.issubset(conflict)
+    assert conflict["server_snapshot"]["id"] == str(summary.id)
 
 
 # ---------------------------------------------------------------------------
@@ -103,9 +222,9 @@ async def test_full_sync_pagination(db, sync_user, summary_factory):
 
     # Create a session first.
     session_result = await create_sync_session(body=None, user=user_ctx, svc=svc)
-    session_id = session_result["data"]["sessionId"]
+    session_id = session_result["data"]["session_id"]
 
-    # Fetch with limit=2 - should get a page and hasMore=True.
+    # Fetch with limit=2 - should get a page and has_more=True.
     page1 = await full_sync(
         session_id=session_id,
         limit=2,
@@ -115,9 +234,9 @@ async def test_full_sync_pagination(db, sync_user, summary_factory):
     assert page1["success"] is True
     data1 = page1["data"]
     assert len(data1["items"]) == 2
-    assert data1["hasMore"] is True
+    assert data1["has_more"] is True
 
-    # Fetch remaining records with a large limit - hasMore should be False.
+    # Fetch remaining records with a large limit - has_more should be False.
     page2 = await full_sync(
         session_id=session_id,
         limit=500,
@@ -126,7 +245,7 @@ async def test_full_sync_pagination(db, sync_user, summary_factory):
     )
     assert page2["success"] is True
     data2 = page2["data"]
-    assert data2["hasMore"] is False
+    assert data2["has_more"] is False
 
 
 # ---------------------------------------------------------------------------
@@ -143,7 +262,7 @@ async def test_delta_sync_returns_changed_items(db, sync_user, summary_factory):
 
     # Start session.
     session_result = await create_sync_session(body=None, user=user_ctx, svc=svc)
-    session_id = session_result["data"]["sessionId"]
+    session_id = session_result["data"]["session_id"]
 
     # Full sync to capture baseline server_version.
     full_result = await full_sync(
@@ -155,9 +274,9 @@ async def test_delta_sync_returns_changed_items(db, sync_user, summary_factory):
     assert full_result["success"] is True
     items_before = full_result["data"]["items"]
     # Find our summary's server_version as the cursor.
-    summary_items = [it for it in items_before if it.get("entityType") == "summary"]
+    summary_items = [it for it in items_before if it.get("entity_type") == "summary"]
     assert summary_items, "Expected at least one summary in full sync output"
-    baseline_version = max(it["serverVersion"] for it in summary_items)
+    baseline_version = max(it["server_version"] for it in summary_items)
 
     # Mutate the summary (flip is_read) via apply to bump its server_version.
     apply_payload = SyncApplyRequest(
@@ -186,7 +305,7 @@ async def test_delta_sync_returns_changed_items(db, sync_user, summary_factory):
     assert apply_data["results"][0]["status"] == "applied"
 
     # Note: server_version is set once at INSERT (not bumped by apply_sync_change),
-    # so the returned serverVersion equals baseline_version.  The important thing is
+    # so the returned server_version equals baseline_version.  The important thing is
     # apply succeeded and is_read was toggled.
 
     # Delta from cursor=0 should include all records for the user (including our summary).
@@ -208,7 +327,7 @@ async def test_delta_sync_returns_changed_items(db, sync_user, summary_factory):
     delta_data = delta_result["data"]
     # The summary should appear in created (server_version > 0).
     all_ids = [it["id"] for it in delta_data.get("created", [])]
-    assert summary.id in all_ids, f"Summary {summary.id} not found in delta created={all_ids}"
+    assert str(summary.id) in all_ids, f"Summary {summary.id} not found in delta created={all_ids}"
 
 
 # ---------------------------------------------------------------------------
@@ -226,7 +345,7 @@ async def test_apply_idempotent_reapply_returns_cached_response(db, sync_user, s
 
     # Bootstrap a session.
     session_resp = await create_sync_session(SyncSessionRequest(), user=user_ctx, svc=svc)
-    session_id = session_resp["data"]["sessionId"]
+    session_id = session_resp["data"]["session_id"]
 
     # Capture the row's pre-apply server_version so we can assert no
     # double-bump after the second (idempotent) call.
@@ -247,7 +366,7 @@ async def test_apply_idempotent_reapply_returns_cached_response(db, sync_user, s
     first = await apply_changes(payload=apply_payload, user=user_ctx, svc=svc)
     second = await apply_changes(payload=apply_payload, user=user_ctx, svc=svc)
 
-    # The data payload (camelCase wire shape) must be identical on the
+    # The data payload (snake_case wire shape) must be identical on the
     # idempotent retry. The meta envelope intentionally diverges per-call
     # (correlation_id and timestamp are per-request observability, not part
     # of the apply contract).
@@ -266,7 +385,7 @@ async def test_apply_idempotent_reapply_returns_cached_response(db, sync_user, s
     assert row is not None
     assert row.is_read is True
     first_result = first["data"]["results"][0]
-    assert row.server_version == first_result["serverVersion"], (
+    assert row.server_version == first_result["server_version"], (
         "second idempotent call must not advance server_version"
     )
 
@@ -285,7 +404,7 @@ async def test_apply_conflict_stale_version(db, sync_user, summary_factory):
 
     # Create session.
     session_result = await create_sync_session(body=None, user=user_ctx, svc=svc)
-    session_id = session_result["data"]["sessionId"]
+    session_id = session_result["data"]["session_id"]
 
     # server_version is set at INSERT (epoch millis) and now ALSO advances on
     # every successful sync-apply mutation. A stale last_seen_version is any
@@ -338,7 +457,7 @@ async def test_apply_advances_server_version_on_mutation(db, sync_user, sync_sum
     user_ctx = _user_ctx(sync_user)
 
     session_resp = await create_sync_session(SyncSessionRequest(), user=user_ctx, svc=svc)
-    session_id = session_resp["data"]["sessionId"]
+    session_id = session_resp["data"]["session_id"]
 
     initial_version = sync_summary.server_version
 
@@ -358,8 +477,8 @@ async def test_apply_advances_server_version_on_mutation(db, sync_user, sync_sum
 
     item = result["data"]["results"][0]
     assert item["status"] == "applied"
-    assert item["serverVersion"] > initial_version, (
-        f"server_version must advance after apply; got {item['serverVersion']} "
+    assert item["server_version"] > initial_version, (
+        f"server_version must advance after apply; got {item['server_version']} "
         f"<= initial {initial_version}"
     )
 
@@ -372,4 +491,4 @@ async def test_apply_advances_server_version_on_mutation(db, sync_user, sync_sum
         row = await session.scalar(_select(Summary).where(Summary.id == sync_summary.id))
     assert row is not None
     assert row.server_version > initial_version
-    assert row.server_version == item["serverVersion"]
+    assert row.server_version == item["server_version"]

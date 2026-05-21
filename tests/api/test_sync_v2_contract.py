@@ -73,13 +73,13 @@ async def contract_user(user_factory):
 
 
 # ---------------------------------------------------------------------------
-# Scenario 1: items strictly ordered by serverVersion (ascending)
+# Scenario 1: items strictly ordered by server_version (ascending)
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
 async def test_full_sync_items_ordered_by_server_version(db, contract_user, summary_factory):
-    """Full-sync items list must be sorted ascending by serverVersion."""
+    """Full-sync items list must be sorted ascending by server_version."""
     for _ in range(4):
         await summary_factory(user=contract_user)
 
@@ -87,20 +87,20 @@ async def test_full_sync_items_ordered_by_server_version(db, contract_user, summ
     user_ctx = _user_ctx(contract_user)
 
     session_result = await create_sync_session(body=None, user=user_ctx, svc=svc)
-    session_id = session_result["data"]["sessionId"]
+    session_id = session_result["data"]["session_id"]
 
     page = await full_sync(session_id=session_id, limit=500, user=user_ctx, svc=svc)
     assert page["success"] is True
     items = page["data"]["items"]
     assert len(items) >= 4
 
-    versions = [it["serverVersion"] for it in items]
-    assert versions == sorted(versions), f"items not sorted ascending by serverVersion: {versions}"
+    versions = [it["server_version"] for it in items]
+    assert versions == sorted(versions), f"items not sorted ascending by server_version: {versions}"
 
 
 @pytest.mark.asyncio
 async def test_delta_sync_items_ordered_by_server_version(db, contract_user, summary_factory):
-    """Delta-sync created list must be sorted ascending by serverVersion."""
+    """Delta-sync created list must be sorted ascending by server_version."""
     for _ in range(3):
         await summary_factory(user=contract_user)
 
@@ -108,7 +108,7 @@ async def test_delta_sync_items_ordered_by_server_version(db, contract_user, sum
     user_ctx = _user_ctx(contract_user)
 
     session_result = await create_sync_session(body=None, user=user_ctx, svc=svc)
-    session_id = session_result["data"]["sessionId"]
+    session_id = session_result["data"]["session_id"]
 
     delta = await delta_sync(
         request=_FakeRequest(),
@@ -123,9 +123,9 @@ async def test_delta_sync_items_ordered_by_server_version(db, contract_user, sum
     created = delta["data"]["created"]
     assert len(created) >= 3
 
-    versions = [it["serverVersion"] for it in created]
+    versions = [it["server_version"] for it in created]
     assert versions == sorted(versions), (
-        f"delta created items not sorted ascending by serverVersion: {versions}"
+        f"delta created items not sorted ascending by server_version: {versions}"
     )
 
 
@@ -147,9 +147,9 @@ async def test_delta_pagination_covers_all_entities_without_duplicates(
     user_ctx = _user_ctx(contract_user)
 
     session_result = await create_sync_session(body=None, user=user_ctx, svc=svc)
-    session_id = session_result["data"]["sessionId"]
+    session_id = session_result["data"]["session_id"]
 
-    # Key by (entityType, id) — bare integer IDs are NOT unique across entity types
+    # Key by (entity_type, id) — bare integer IDs are NOT unique across entity types
     # (e.g. a request and a summary can both have id=1).
     all_keys: list[tuple] = []
     since = 0
@@ -172,10 +172,10 @@ async def test_delta_pagination_covers_all_entities_without_duplicates(
         page_count += 1
 
         for it in data["created"] + data["deleted"]:
-            all_keys.append((it["entityType"], it["id"]))
+            all_keys.append((it["entity_type"], it["id"]))
 
-        has_more = data["hasMore"]
-        next_since = data["nextSince"]
+        has_more = data["has_more"]
+        next_since = data["next_since"]
 
         if not has_more:
             break
@@ -186,9 +186,9 @@ async def test_delta_pagination_covers_all_entities_without_duplicates(
         prev_since = next_since
         since = next_since
 
-    # No duplicate (entityType, id) keys across pages
+    # No duplicate (entity_type, id) keys across pages
     assert len(all_keys) == len(set(all_keys)), (
-        f"duplicate (entityType, id) keys found across pages: {all_keys}"
+        f"duplicate (entity_type, id) keys found across pages: {all_keys}"
     )
     # We seeded at least 5 summaries; union should contain at least that many items
     assert len(all_keys) >= 5
@@ -215,7 +215,7 @@ async def test_full_sync_rejects_limit_above_500(db, contract_user):
     user_ctx = _user_ctx(contract_user)
 
     session_result = await create_sync_session(body=None, user=user_ctx, svc=svc)
-    session_id = session_result["data"]["sessionId"]
+    session_id = session_result["data"]["session_id"]
 
     # Verify the FastAPI query boundary via pydantic: SyncSessionRequest
     # validates limit in [1, 500].
@@ -241,7 +241,7 @@ async def test_full_sync_uses_default_limit_when_none(db, contract_user, summary
     session_result = await create_sync_session(
         body=SyncSessionRequest(limit=None), user=user_ctx, svc=svc
     )
-    session_id = session_result["data"]["sessionId"]
+    session_id = session_result["data"]["session_id"]
 
     page = await full_sync(session_id=session_id, limit=None, user=user_ctx, svc=svc)
     assert page["success"] is True
@@ -264,7 +264,7 @@ async def test_expired_session_raises_410(db, contract_user):
     user_ctx = _user_ctx(contract_user)
 
     session_result = await create_sync_session(body=None, user=user_ctx, svc=svc)
-    session_id = session_result["data"]["sessionId"]
+    session_id = session_result["data"]["session_id"]
 
     # Directly mutate the in-memory fallback store's expires_at to the past.
     svc._fallback_store._sessions[session_id]["expires_at"] = "2000-01-01T00:00:00Z"
@@ -287,14 +287,14 @@ async def test_expired_session_raises_410(db, contract_user):
 @pytest.mark.asyncio
 async def test_apply_unknown_field_returns_invalid_fields(db, contract_user, summary_factory):
     """Payload with an unrecognised field must produce status=invalid,
-    errorCode=INVALID_FIELDS. Tests actual code behaviour (allowed_fields={'is_read'})."""
+    error_code=INVALID_FIELDS. Tests actual code behaviour (allowed_fields={'is_read'})."""
     summary = await summary_factory(user=contract_user)
 
     svc = _make_svc(db)
     user_ctx = _user_ctx(contract_user)
 
     session_result = await create_sync_session(body=None, user=user_ctx, svc=svc)
-    session_id = session_result["data"]["sessionId"]
+    session_id = session_result["data"]["session_id"]
 
     payload = SyncApplyRequest(
         session_id=session_id,
@@ -313,8 +313,8 @@ async def test_apply_unknown_field_returns_invalid_fields(db, contract_user, sum
     assert result["success"] is True
     item = result["data"]["results"][0]
     assert item["status"] == "invalid", f"expected invalid, got: {item['status']}"
-    assert item["errorCode"] == "INVALID_FIELDS", (
-        f"expected INVALID_FIELDS, got: {item['errorCode']}"
+    assert item["error_code"] == "INVALID_FIELDS", (
+        f"expected INVALID_FIELDS, got: {item['error_code']}"
     )
 
 
@@ -332,7 +332,7 @@ async def test_apply_is_read_field_succeeds(db, contract_user, summary_factory):
     user_ctx = _user_ctx(contract_user)
 
     session_result = await create_sync_session(body=None, user=user_ctx, svc=svc)
-    session_id = session_result["data"]["sessionId"]
+    session_id = session_result["data"]["session_id"]
 
     payload = SyncApplyRequest(
         session_id=session_id,
@@ -365,7 +365,7 @@ async def test_apply_non_summary_entity_returns_unsupported_entity(db, contract_
     user_ctx = _user_ctx(contract_user)
 
     session_result = await create_sync_session(body=None, user=user_ctx, svc=svc)
-    session_id = session_result["data"]["sessionId"]
+    session_id = session_result["data"]["session_id"]
 
     payload = SyncApplyRequest(
         session_id=session_id,
@@ -384,17 +384,17 @@ async def test_apply_non_summary_entity_returns_unsupported_entity(db, contract_
     assert result["success"] is True
     item = result["data"]["results"][0]
     assert item["status"] == "invalid"
-    assert item["errorCode"] == "UNSUPPORTED_ENTITY"
+    assert item["error_code"] == "UNSUPPORTED_ENTITY"
 
 
 # ---------------------------------------------------------------------------
-# Scenario 6: conflict envelope shape — conflicts[] non-null + serverSnapshot
+# Scenario 6: conflict envelope shape — conflicts[] non-null + server_snapshot
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
 async def test_apply_conflict_envelope_contains_server_snapshot(db, contract_user, summary_factory):
-    """A stale apply must include conflicts[] with serverSnapshot so the client
+    """A stale apply must include conflicts[] with server_snapshot so the client
     can resolve the conflict. This is the *contract* angle complementing the
     stale-version test in test_sync.py."""
     summary = await summary_factory(user=contract_user)
@@ -403,7 +403,7 @@ async def test_apply_conflict_envelope_contains_server_snapshot(db, contract_use
     user_ctx = _user_ctx(contract_user)
 
     session_result = await create_sync_session(body=None, user=user_ctx, svc=svc)
-    session_id = session_result["data"]["sessionId"]
+    session_id = session_result["data"]["session_id"]
 
     payload = SyncApplyRequest(
         session_id=session_id,
@@ -427,13 +427,13 @@ async def test_apply_conflict_envelope_contains_server_snapshot(db, contract_use
     assert conflicts, f"Expected non-empty conflicts list, got: {conflicts!r}"
 
     conflict_item = conflicts[0]
-    # serverSnapshot must be present so the client can resolve
-    assert conflict_item.get("serverSnapshot") is not None, (
-        f"serverSnapshot missing from conflict item: {conflict_item}"
+    # server_snapshot must be present so the client can resolve
+    assert conflict_item.get("server_snapshot") is not None, (
+        f"server_snapshot missing from conflict item: {conflict_item}"
     )
-    # results[0] must also carry serverSnapshot
+    # results[0] must also carry server_snapshot
     result_item = data["results"][0]
-    assert result_item.get("serverSnapshot") is not None, (
-        f"serverSnapshot missing from results[0]: {result_item}"
+    assert result_item.get("server_snapshot") is not None, (
+        f"server_snapshot missing from results[0]: {result_item}"
     )
     assert result_item["status"] == "conflict"

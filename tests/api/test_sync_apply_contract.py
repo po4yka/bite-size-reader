@@ -2,18 +2,30 @@
 
 Locks the JSON shape that ratatoskr-client (and the KMP client behind
 [[map-ratatoskr-mobile-api-contract-to-kmp-readiness]]) consume:
-sessionId / results[] / conflicts[]? / hasMore?, with camelCase aliases on
-every nested envelope. Failures here mean a backend change has shifted
-the wire format and the client needs to re-validate.
+session_id / results[] / conflicts[]? / has_more?, with snake_case sync keys
+on every nested envelope. Failures here mean a backend change has shifted the
+wire format and the client needs to re-validate.
 """
 
 from __future__ import annotations
 
+from types import SimpleNamespace
+from typing import Any, cast
+
+import pytest
+
+from app.api.models.requests import SyncApplyRequest, SyncSessionRequest
 from app.api.models.responses import (
+    DeltaSyncResponseData,
+    FullSyncResponseData,
+    PaginationInfo,
     SyncApplyItemResult,
     SyncApplyResponseData,
+    SyncEntityEnvelope,
+    SyncSessionData,
     success_response,
 )
+from app.api.routers.sync import apply_changes, create_sync_session, delta_sync, full_sync
 
 
 def _success_item(entity_type: str, id_: int | str, server_version: int) -> SyncApplyItemResult:
@@ -29,7 +41,7 @@ def _conflict_item(
     entity_type: str,
     id_: int | str,
     server_version: int,
-    server_snapshot: dict,
+    server_snapshot: SyncEntityEnvelope,
     error_code: str = "version_mismatch",
 ) -> SyncApplyItemResult:
     return SyncApplyItemResult(
@@ -42,19 +54,19 @@ def _conflict_item(
     )
 
 
-def test_apply_response_serializes_camelcase_top_level() -> None:
+def test_apply_response_serializes_snake_case_top_level() -> None:
     response = SyncApplyResponseData(
         session_id="sync-session-abc",
         results=[_success_item("summary", 42, 7)],
     )
     payload = response.model_dump(by_alias=True, exclude_none=True)
 
-    # Top-level keys are camelCase aliases, not snake_case attribute names.
-    assert set(payload.keys()) == {"sessionId", "results"}
-    assert payload["sessionId"] == "sync-session-abc"
+    # Top-level keys are the public snake_case sync contract.
+    assert set(payload.keys()) == {"session_id", "results"}
+    assert payload["session_id"] == "sync-session-abc"
 
 
-def test_apply_response_item_uses_camelcase_aliases() -> None:
+def test_apply_response_item_uses_snake_case_keys_and_string_id() -> None:
     response = SyncApplyResponseData(
         session_id="sync-session-abc",
         results=[_success_item("summary", 42, 7)],
@@ -62,14 +74,29 @@ def test_apply_response_item_uses_camelcase_aliases() -> None:
     item = response.model_dump(by_alias=True, exclude_none=True)["results"][0]
 
     assert item == {
-        "entityType": "summary",
-        "id": 42,
+        "entity_type": "summary",
+        "id": "42",
         "status": "applied",
-        "serverVersion": 7,
+        "server_version": 7,
     }
 
 
 def test_apply_response_includes_conflict_with_full_aliases() -> None:
+    snapshot = SyncEntityEnvelope(
+        entity_type="summary",
+        id=43,
+        server_version=12,
+        updated_at="2026-05-21T00:00:00Z",
+        summary={
+            "id": 43,
+            "request_id": 5,
+            "lang": "en",
+            "is_read": False,
+            "version": 1,
+            "json_payload": {},
+            "created_at": "2026-05-21T00:00:00Z",
+        },
+    )
     response = SyncApplyResponseData(
         session_id="sync-session-abc",
         results=[
@@ -78,7 +105,7 @@ def test_apply_response_includes_conflict_with_full_aliases() -> None:
                 entity_type="summary",
                 id_=43,
                 server_version=12,
-                server_snapshot={"id": 43, "title": "server-side title"},
+                server_snapshot=snapshot,
             ),
         ],
         conflicts=[
@@ -86,38 +113,52 @@ def test_apply_response_includes_conflict_with_full_aliases() -> None:
                 entity_type="summary",
                 id_=43,
                 server_version=12,
-                server_snapshot={"id": 43, "title": "server-side title"},
+                server_snapshot=snapshot,
             )
         ],
     )
     payload = response.model_dump(by_alias=True, exclude_none=True)
 
     assert payload["conflicts"][0] == {
-        "entityType": "summary",
-        "id": 43,
+        "entity_type": "summary",
+        "id": "43",
         "status": "conflict",
-        "serverVersion": 12,
-        "serverSnapshot": {"id": 43, "title": "server-side title"},
-        "errorCode": "version_mismatch",
+        "server_version": 12,
+        "server_snapshot": {
+            "entity_type": "summary",
+            "id": "43",
+            "server_version": 12,
+            "updated_at": "2026-05-21T00:00:00Z",
+            "summary": {
+                "id": 43,
+                "request_id": 5,
+                "lang": "en",
+                "is_read": False,
+                "version": 1,
+                "json_payload": {},
+                "created_at": "2026-05-21T00:00:00Z",
+            },
+        },
+        "error_code": "version_mismatch",
     }
 
 
-def test_apply_response_has_more_round_trips_as_camelcase() -> None:
+def test_apply_response_has_more_round_trips_as_snake_case() -> None:
     truthy = SyncApplyResponseData(
         session_id="sync-session-abc",
         results=[_success_item("summary", 1, 1)],
         has_more=True,
     )
     payload_truthy = truthy.model_dump(by_alias=True, exclude_none=True)
-    assert payload_truthy["hasMore"] is True
-    assert "has_more" not in payload_truthy
+    assert payload_truthy["has_more"] is True
+    assert "hasMore" not in payload_truthy
 
     # Default (None): omitted under exclude_none — matches the OpenAPI optional.
     omitted = SyncApplyResponseData(
         session_id="sync-session-abc",
         results=[_success_item("summary", 1, 1)],
     )
-    assert "hasMore" not in omitted.model_dump(by_alias=True, exclude_none=True)
+    assert "has_more" not in omitted.model_dump(by_alias=True, exclude_none=True)
 
 
 def test_apply_response_envelope_via_success_response_helper() -> None:
@@ -127,11 +168,207 @@ def test_apply_response_envelope_via_success_response_helper() -> None:
     )
     envelope = success_response(response)
 
-    # Outer envelope shape: success / data / meta. data is the camelCase apply
+    # Outer envelope shape: success / data / meta. data is the snake_case apply
     # payload — this is what the client actually parses.
     assert envelope["success"] is True
     assert "data" in envelope
-    assert envelope["data"]["sessionId"] == "sync-session-abc"
-    assert envelope["data"]["results"][0]["entityType"] == "summary"
-    assert envelope["data"]["results"][0]["serverVersion"] == 7
+    assert envelope["data"]["session_id"] == "sync-session-abc"
+    assert envelope["data"]["results"][0]["entity_type"] == "summary"
+    assert envelope["data"]["results"][0]["server_version"] == 7
     assert "meta" in envelope
+
+
+def test_sync_response_envelopes_use_snake_case_wire_keys() -> None:
+    item = SyncEntityEnvelope(
+        entity_type="summary",
+        id=42,
+        server_version=7,
+        updated_at="2026-05-21T00:00:00Z",
+        summary={
+            "id": 42,
+            "request_id": 5,
+            "lang": "en",
+            "is_read": False,
+            "version": 1,
+            "json_payload": {},
+            "created_at": "2026-05-21T00:00:00Z",
+        },
+    )
+    session = success_response(
+        SyncSessionData(
+            session_id="sync-session-abc",
+            expires_at="2026-05-21T01:00:00Z",
+            default_limit=100,
+            max_limit=500,
+            last_issued_since=0,
+        )
+    )
+    full = success_response(
+        FullSyncResponseData(
+            session_id="sync-session-abc",
+            has_more=False,
+            next_since=7,
+            items=[item],
+            pagination=PaginationInfo(total=1, limit=100, offset=0, has_more=False),
+        )
+    )
+    delta = success_response(
+        DeltaSyncResponseData(
+            session_id="sync-session-abc",
+            since=0,
+            has_more=False,
+            next_since=7,
+            created=[item],
+            updated=[],
+            deleted=[],
+        )
+    )
+    apply = success_response(
+        SyncApplyResponseData(
+            session_id="sync-session-abc",
+            results=[_success_item("summary", 42, 7)],
+        )
+    )
+
+    assert session["data"]["session_id"] == "sync-session-abc"
+    assert session["data"]["expires_at"] == "2026-05-21T01:00:00Z"
+    assert full["data"]["has_more"] is False
+    assert full["data"]["next_since"] == 7
+    assert full["data"]["items"][0]["entity_type"] == "summary"
+    assert full["data"]["items"][0]["id"] == "42"
+    assert delta["data"]["created"][0]["server_version"] == 7
+    assert apply["data"]["results"][0]["error_code"] is None
+
+    old_keys = {
+        "sessionId",
+        "expiresAt",
+        "defaultLimit",
+        "maxLimit",
+        "entityType",
+        "serverVersion",
+        "updatedAt",
+        "hasMore",
+        "nextSince",
+        "errorCode",
+    }
+    for envelope in (session, full, delta, apply):
+        assert not _contains_any_key(envelope["data"], old_keys)
+
+
+@pytest.mark.asyncio
+async def test_sync_router_handlers_emit_snake_case_wire_keys() -> None:
+    item = SyncEntityEnvelope(
+        entity_type="summary",
+        id=42,
+        server_version=7,
+        updated_at="2026-05-21T00:00:00Z",
+    )
+    svc = _FakeSyncService(item)
+    user = {"user_id": 123, "client_id": "test-client"}
+
+    session = await create_sync_session(body=SyncSessionRequest(limit=50), user=user, svc=svc)
+    full = await full_sync(session_id="sync-session-abc", limit=50, user=user, svc=svc)
+    delta = await delta_sync(
+        request=cast("Any", SimpleNamespace(headers={})),
+        response=cast("Any", SimpleNamespace(headers={})),
+        session_id="sync-session-abc",
+        since=0,
+        limit=50,
+        user=user,
+        svc=svc,
+    )
+    apply = await apply_changes(
+        payload=SyncApplyRequest(session_id="sync-session-abc", changes=[]),
+        user=user,
+        svc=svc,
+    )
+
+    assert isinstance(delta, dict)
+    assert session["data"]["session_id"] == "sync-session-abc"
+    assert full["data"]["items"][0]["id"] == "42"
+    assert full["data"]["items"][0]["server_version"] == 7
+    assert delta["data"]["created"][0]["entity_type"] == "summary"
+    assert apply["data"]["results"][0]["entity_type"] == "summary"
+    assert apply["data"]["results"][0]["id"] == "42"
+    for envelope in (session, full, delta, apply):
+        assert not _contains_any_key(envelope["data"], {"sessionId", "entityType", "serverVersion"})
+
+
+def _contains_any_key(value: object, keys: set[str]) -> bool:
+    if isinstance(value, dict):
+        nested_values = [nested for key, nested in value.items() if key != "pagination"]
+        return bool(keys & set(value)) or any(
+            _contains_any_key(nested, keys) for nested in nested_values
+        )
+    if isinstance(value, list):
+        return any(_contains_any_key(nested, keys) for nested in value)
+    return False
+
+
+class _FakeSyncService:
+    def __init__(self, item: SyncEntityEnvelope) -> None:
+        self.item = item
+        self.cfg = SimpleNamespace(sync=SimpleNamespace(default_limit=50))
+
+    async def start_session(
+        self, *, user_id: int, client_id: str | None, limit: int | None
+    ) -> SyncSessionData:
+        _ = user_id, client_id, limit
+        return SyncSessionData(
+            session_id="sync-session-abc",
+            expires_at="2026-05-21T01:00:00Z",
+            default_limit=50,
+            max_limit=500,
+            last_issued_since=0,
+        )
+
+    async def get_full(
+        self, *, session_id: str, user_id: int, client_id: str | None, limit: int | None
+    ) -> FullSyncResponseData:
+        _ = user_id, client_id
+        return FullSyncResponseData(
+            session_id=session_id,
+            has_more=False,
+            next_since=7,
+            items=[self.item],
+            pagination=PaginationInfo(total=1, limit=limit or 50, offset=0, has_more=False),
+        )
+
+    async def get_max_server_version(self, user_id: int) -> int:
+        _ = user_id
+        return 7
+
+    async def get_delta(
+        self,
+        *,
+        session_id: str,
+        user_id: int,
+        client_id: str | None,
+        since: int,
+        limit: int | None,
+    ) -> DeltaSyncResponseData:
+        _ = user_id, client_id, limit
+        return DeltaSyncResponseData(
+            session_id=session_id,
+            since=since,
+            has_more=False,
+            next_since=7,
+            created=[self.item],
+            updated=[],
+            deleted=[],
+        )
+
+    async def apply_changes(
+        self,
+        *,
+        session_id: str,
+        user_id: int,
+        client_id: str | None,
+        changes: list[object],
+        idempotency_key: str | None = None,
+    ) -> SyncApplyResponseData:
+        _ = user_id, client_id, changes, idempotency_key
+        return SyncApplyResponseData(
+            session_id=session_id,
+            results=[_success_item("summary", 42, 7)],
+        )
