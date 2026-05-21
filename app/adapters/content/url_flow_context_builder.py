@@ -105,7 +105,7 @@ class URLFlowContextBuilder:
 
             get_stream_hub().publish(
                 str(req_id),
-                StreamEvent.now("phase", {"phase": "extracting"}, request.correlation_id or ""),
+                StreamEvent.now("stage", {"stage": "extracting"}, request.correlation_id or ""),
             )
 
         chosen_lang = choose_language(self._cfg.runtime.preferred_lang, detected)

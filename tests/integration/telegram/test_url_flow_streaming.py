@@ -1,4 +1,4 @@
-"""Integration tests for URL-flow phase + section publishing wired in US-003.
+"""Integration tests for URL-flow stage + section publishing wired in US-003.
 
 These tests focus on the publish call sites in URLProcessor without requiring
 a real scraper or LLM.  They use a RecordingHub to capture published events
@@ -29,7 +29,7 @@ class RecordingHub:
 
     def phases_for(self, request_id: str) -> list[str]:
         return [
-            e.payload["phase"] for rid, e in self.events if rid == request_id and e.kind == "phase"
+            e.payload["stage"] for rid, e in self.events if rid == request_id and e.kind == "stage"
         ]
 
     def sections_for(self, request_id: str) -> list[str]:
@@ -45,12 +45,12 @@ class RecordingHub:
 # ---------------------------------------------------------------------------
 
 
-async def test_url_flow_publishes_phase_events_when_streaming_enabled(
+async def test_url_flow_publishes_stage_events_when_streaming_enabled(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """With streaming enabled, publishing phase events reaches the hub."""
+    """With streaming enabled, publishing stage events reaches the hub."""
     import app.adapters.content.url_processor as up_mod
-    from app.adapters.content.streaming.events import PhasePayload, StreamEvent
+    from app.adapters.content.streaming.events import StagePayload, StreamEvent
 
     recording = RecordingHub()
     # Patch at the url_processor module level where get_stream_hub is used.
@@ -62,19 +62,19 @@ async def test_url_flow_publishes_phase_events_when_streaming_enabled(
     # Exercise the publish call sites directly as url_processor.py does.
     up_mod.get_stream_hub().publish(
         req_id,
-        StreamEvent.now("phase", PhasePayload(phase="summarizing"), corr),
+        StreamEvent.now("stage", StagePayload(stage="summarizing"), corr),
     )
     up_mod.get_stream_hub().publish(
         req_id,
-        StreamEvent.now("phase", PhasePayload(phase="validating"), corr),
+        StreamEvent.now("stage", StagePayload(stage="validating"), corr),
     )
     up_mod.get_stream_hub().publish(
         req_id,
-        StreamEvent.now("phase", PhasePayload(phase="persisting"), corr),
+        StreamEvent.now("stage", StagePayload(stage="persisting"), corr),
     )
     up_mod.get_stream_hub().publish(
         req_id,
-        StreamEvent.now("phase", PhasePayload(phase="done"), corr),
+        StreamEvent.now("stage", StagePayload(stage="done"), corr),
     )
 
     phases = recording.phases_for(req_id)
@@ -140,7 +140,7 @@ async def test_url_processor_publishes_phases_via_get_stream_hub(
 ) -> None:
     """URLProcessor's get_stream_hub() call site is reachable via monkeypatch."""
     import app.adapters.content.url_processor as up_mod
-    from app.adapters.content.streaming.events import PhasePayload, StreamEvent
+    from app.adapters.content.streaming.events import StagePayload, StreamEvent
 
     recording = RecordingHub()
     monkeypatch.setattr(up_mod, "get_stream_hub", lambda: recording)
@@ -152,19 +152,19 @@ async def test_url_processor_publishes_phases_via_get_stream_hub(
     if streaming_enabled:
         up_mod.get_stream_hub().publish(
             req_id,
-            StreamEvent.now("phase", PhasePayload(phase="summarizing"), corr),
+            StreamEvent.now("stage", StagePayload(stage="summarizing"), corr),
         )
         up_mod.get_stream_hub().publish(
             req_id,
-            StreamEvent.now("phase", PhasePayload(phase="validating"), corr),
+            StreamEvent.now("stage", StagePayload(stage="validating"), corr),
         )
         up_mod.get_stream_hub().publish(
             req_id,
-            StreamEvent.now("phase", PhasePayload(phase="persisting"), corr),
+            StreamEvent.now("stage", StagePayload(stage="persisting"), corr),
         )
         up_mod.get_stream_hub().publish(
             req_id,
-            StreamEvent.now("phase", PhasePayload(phase="done"), corr),
+            StreamEvent.now("stage", StagePayload(stage="done"), corr),
         )
 
     phases = recording.phases_for(req_id)

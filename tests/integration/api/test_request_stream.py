@@ -210,21 +210,21 @@ def test_stream_returns_200_with_event_stream_content_type(
 
 
 def test_stream_delivers_events_in_order(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Phase + section + done events arrive in order over the SSE stream.
+    """stage + section + done events arrive in order over the SSE stream.
 
     We drain lines until we see a 'done' event line, then stop.  This avoids
     blocking on the SSE heartbeat that fires after the terminal event.
     """
     from app.adapters.content.streaming.events import (
         DonePayload,
-        PhasePayload,
+        StagePayload,
         SectionPayload,
         StreamEvent,
     )
     from app.api.routers.auth.tokens import create_access_token
 
     request_id = 22222
-    phase_ev = StreamEvent.now("phase", PhasePayload(phase="summarizing"), "cid")
+    stage_ev = StreamEvent.now("stage", StagePayload(stage="summarizing"), "cid")
     section_ev = StreamEvent.now(
         "section",
         SectionPayload(section="tldr", content="Quick summary"),
@@ -236,7 +236,7 @@ def test_stream_delivers_events_in_order(monkeypatch: pytest.MonkeyPatch) -> Non
         "cid",
     )
 
-    hub = _make_hub(phase_ev, section_ev, done_ev, request_id=str(request_id))
+    hub = _make_hub(stage_ev, section_ev, done_ev, request_id=str(request_id))
     _patch_hub(monkeypatch, hub)
 
     token = create_access_token(_OWNER_ID, client_id="test")
@@ -260,12 +260,12 @@ def test_stream_delivers_events_in_order(monkeypatch: pytest.MonkeyPatch) -> Non
 
     event_types = _parse_event_types(raw_lines)
 
-    assert "phase" in event_types
+    assert "stage" in event_types
     assert "section" in event_types
     assert "done" in event_types
 
     # Order must be preserved.
-    assert event_types.index("phase") < event_types.index("section") < event_types.index("done")
+    assert event_types.index("stage") < event_types.index("section") < event_types.index("done")
 
 
 def test_disconnect_mid_stream_does_not_raise(
@@ -273,8 +273,8 @@ def test_disconnect_mid_stream_does_not_raise(
 ) -> None:
     """Client disconnect mid-SSE-stream does not raise or corrupt state.
 
-    We pre-load a phase event followed by a done event.  The test opens the
-    stream, reads until it sees the phase event, then closes immediately
+    We pre-load a stage event followed by a done event.  The test opens the
+    stream, reads until it sees the stage event, then closes immediately
     (before the done event is consumed).  This exercises the
     CancelledError/GeneratorExit path in the event_generator without causing
     the server-side coroutine to block indefinitely waiting for a terminal
@@ -287,16 +287,16 @@ def test_disconnect_mid_stream_does_not_raise(
     """
     from app.adapters.content.streaming.events import (
         DonePayload,
-        PhasePayload,
+        StagePayload,
         StreamEvent,
     )
     from app.api.routers.auth.tokens import create_access_token
 
     request_id = 33333
-    phase_ev = StreamEvent.now("phase", PhasePayload(phase="summarizing"), "c")
+    stage_ev = StreamEvent.now("stage", StagePayload(stage="summarizing"), "c")
     done_ev = StreamEvent.now("done", DonePayload(summary_id=None, request_id=str(request_id)), "c")
 
-    hub = _make_hub(phase_ev, done_ev, request_id=str(request_id))
+    hub = _make_hub(stage_ev, done_ev, request_id=str(request_id))
     _patch_hub(monkeypatch, hub)
 
     token = create_access_token(_OWNER_ID, client_id="test")
@@ -308,9 +308,9 @@ def test_disconnect_mid_stream_does_not_raise(
         headers={"Authorization": f"Bearer {token}"},
     ) as response:
         assert response.status_code == 200
-        # Read until the first phase event line, then disconnect immediately.
+        # Read until the first stage event line, then disconnect immediately.
         for line in response.iter_lines():
-            if line == "event: phase":
+            if line == "event: stage":
                 response.close()
                 break
 

@@ -14401,6 +14401,8 @@
               "$ref": "#/components/schemas/SyncApplyItem"
             },
             "type": "array",
+            "maxItems": 500,
+            "minItems": 1,
             "title": "Changes"
           },
           "idempotency_key": {
@@ -15192,6 +15194,18 @@
         "title": "PaginationInfo",
         "type": "object"
       },
+      "RequestStatus": {
+        "description": "Canonical public request lifecycle statuses.",
+        "enum": [
+          "pending",
+          "running",
+          "succeeded",
+          "failed",
+          "cancelled"
+        ],
+        "title": "RequestStatus",
+        "type": "string"
+      },
       "SubmitRequestResponse": {
         "properties": {
           "requestId": {
@@ -15211,14 +15225,19 @@
             "type": "string"
           },
           "status": {
-            "enum": [
-              "pending",
-              "processing",
-              "complete",
-              "failed"
+            "$ref": "#/components/schemas/RequestStatus"
+          },
+          "legacyStatus": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
             ],
-            "title": "Status",
-            "type": "string"
+            "default": null,
+            "title": "Legacystatus"
           },
           "estimatedWaitSeconds": {
             "title": "Estimatedwaitseconds",
@@ -15257,31 +15276,42 @@
         "title": "SubmitRequestData",
         "type": "object"
       },
-      "RequestStage": {
-        "description": "Processing stages for request status polling.",
+      "ProcessingStage": {
+        "description": "Canonical public processing stages for request status polling and streams.",
         "enum": [
-          "pending",
-          "crawling",
-          "processing",
-          "complete",
-          "failed"
+          "queued",
+          "extracting",
+          "summarizing",
+          "validating",
+          "persisting",
+          "done"
         ],
-        "title": "RequestStage",
+        "title": "ProcessingStage",
         "type": "string"
       },
       "RequestStatusData": {
-        "description": "Status-payload schema referenced separately in the OpenAPI spec.",
         "properties": {
           "requestId": {
             "title": "Requestid",
             "type": "integer"
           },
           "status": {
-            "title": "Status",
-            "type": "string"
+            "$ref": "#/components/schemas/RequestStatus"
+          },
+          "legacyStatus": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Legacystatus"
           },
           "stage": {
-            "$ref": "#/components/schemas/RequestStage"
+            "$ref": "#/components/schemas/ProcessingStage"
           },
           "progress": {
             "anyOf": [
@@ -16350,24 +16380,16 @@
         "title": "CollectionItem",
         "type": "object"
       },
-      "StreamPhasePayload": {
+      "StreamStagePayload": {
         "properties": {
-          "phase": {
-            "enum": [
-              "extracting",
-              "summarizing",
-              "validating",
-              "persisting",
-              "done"
-            ],
-            "title": "Phase",
-            "type": "string"
+          "stage": {
+            "$ref": "#/components/schemas/ProcessingStage"
           }
         },
         "required": [
-          "phase"
+          "stage"
         ],
-        "title": "PhasePayload",
+        "title": "StagePayload",
         "type": "object"
       },
       "StreamSectionPayload": {
@@ -16391,6 +16413,36 @@
           "content"
         ],
         "title": "SectionPayload",
+        "type": "object"
+      },
+      "StreamWarningPayload": {
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "correlation_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Correlation Id"
+          }
+        },
+        "required": [
+          "code",
+          "message"
+        ],
+        "title": "WarningPayload",
         "type": "object"
       },
       "StreamDonePayload": {
@@ -16565,7 +16617,7 @@
           }
         }
       },
-      "StreamPhaseEvent": {
+      "StreamStageEvent": {
         "type": "object",
         "required": [
           "kind",
@@ -16576,10 +16628,10 @@
         "properties": {
           "kind": {
             "type": "string",
-            "const": "phase"
+            "const": "stage"
           },
           "payload": {
-            "$ref": "#/components/schemas/StreamPhasePayload"
+            "$ref": "#/components/schemas/StreamStagePayload"
           },
           "timestamp": {
             "type": "string",
@@ -16605,6 +16657,31 @@
           },
           "payload": {
             "$ref": "#/components/schemas/StreamSectionPayload"
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "correlation_id": {
+            "type": "string"
+          }
+        }
+      },
+      "StreamWarningEvent": {
+        "type": "object",
+        "required": [
+          "kind",
+          "payload",
+          "timestamp",
+          "correlation_id"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "const": "warning"
+          },
+          "payload": {
+            "$ref": "#/components/schemas/StreamWarningPayload"
           },
           "timestamp": {
             "type": "string",

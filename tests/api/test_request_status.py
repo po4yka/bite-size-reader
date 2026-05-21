@@ -5,6 +5,7 @@ from __future__ import annotations
 import datetime as dt
 from typing import TYPE_CHECKING
 
+import pytest
 from sqlalchemy import update
 
 from app.core.time_utils import UTC
@@ -55,7 +56,8 @@ async def test_status_includes_crawl_error(db: Database) -> None:
 
     status_info = await build_request_service(db).get_request_status(1, request_id)
 
-    assert status_info.status == "error"
+    assert status_info.status == "failed"
+    assert status_info.legacy_status == "error"
     assert status_info.error_details is not None
     assert status_info.error_details.stage == "content_extraction"
     assert status_info.error_details.error_type == "EXTRACTION_FAILED"
@@ -80,7 +82,8 @@ async def test_status_prefers_llm_error_when_available(db: Database) -> None:
 
     status_info = await build_request_service(db).get_request_status(2, request_id)
 
-    assert status_info.status == "error"
+    assert status_info.status == "failed"
+    assert status_info.legacy_status == "error"
     assert status_info.error_details is not None
     assert status_info.error_details.stage == "llm_summarization"
     assert status_info.error_details.error_type == "LLM_FAILED"
@@ -122,3 +125,35 @@ async def test_status_uses_request_error_context_snapshot_when_present(
     assert status_info.error_details.error_reason_code == "FIRECRAWL_ERROR"
     assert status_info.error_details.retryable is True
     assert status_info.error_details.debug["component"] == "firecrawl"
+
+
+@pytest.mark.parametrize(
+    ("legacy_status", "public_status", "public_stage"),
+    [
+        ("pending", "pending", "queued"),
+        ("processing", "running", "extracting"),
+        ("success", "succeeded", "done"),
+        ("complete", "succeeded", "done"),
+        ("failed", "failed", "done"),
+        ("error", "failed", "done"),
+    ],
+)
+async def test_status_projects_legacy_db_values_to_public_lifecycle(
+    db: Database,
+    legacy_status: str,
+    public_status: str,
+    public_stage: str,
+) -> None:
+    request_id = await _create_request(
+        db,
+        user_id=4,
+        dedupe_hash=f"hash-{legacy_status}",
+        status=legacy_status,
+        correlation_id=f"cid-{legacy_status}",
+    )
+
+    status_info = await build_request_service(db).get_request_status(4, request_id)
+
+    assert status_info.status == public_status
+    assert status_info.legacy_status == legacy_status
+    assert status_info.stage == public_stage

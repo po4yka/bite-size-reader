@@ -13,13 +13,14 @@ from app.api.exceptions import DuplicateResourceError, ResourceNotFoundError, Va
 from app.api.models.requests import SubmitForwardRequest, SubmitURLRequest
 from app.api.models.responses import (
     DuplicateDetectionResponse,
+    ProcessingStage,
     RequestDetailCrawlResult,
     RequestDetailLlmCall,
     RequestDetailRequest,
     RequestDetailResponse,
     RequestDetailSummary,
-    RequestStage,
-    RequestStatus,
+    RequestStatus as PublicRequestStatus,
+    RequestStatusData,
     RetryRequestResponse,
     SubmitRequestData,
     SubmitRequestResponse,
@@ -36,6 +37,24 @@ from app.domain.exceptions.domain_exceptions import (
 )
 
 router = APIRouter()
+
+_PUBLIC_STATUS_BY_LEGACY: dict[str, PublicRequestStatus] = {
+    "pending": PublicRequestStatus.PENDING,
+    "processing": PublicRequestStatus.RUNNING,
+    "crawling": PublicRequestStatus.RUNNING,
+    "summarizing": PublicRequestStatus.RUNNING,
+    "success": PublicRequestStatus.SUCCEEDED,
+    "complete": PublicRequestStatus.SUCCEEDED,
+    "completed": PublicRequestStatus.SUCCEEDED,
+    "ok": PublicRequestStatus.SUCCEEDED,
+    "error": PublicRequestStatus.FAILED,
+    "failed": PublicRequestStatus.FAILED,
+    "cancelled": PublicRequestStatus.CANCELLED,
+}
+
+
+def _public_status(legacy_status: str | None) -> PublicRequestStatus:
+    return _PUBLIC_STATUS_BY_LEGACY.get((legacy_status or "").lower(), PublicRequestStatus.PENDING)
 
 
 def _get_request_service(request: Request) -> RequestService:
@@ -120,7 +139,8 @@ async def submit_request(
                     request_id=created.id,
                     correlation_id=created.correlation_id,
                     type=cast("Literal['url', 'forward']", created.type),
-                    status="pending",
+                    status=PublicRequestStatus.PENDING,
+                    legacy_status=created.status,
                     estimated_wait_seconds=15,
                     created_at=created.created_at.isoformat().replace("+00:00", "Z"),
                     is_duplicate=False,
@@ -146,7 +166,8 @@ async def submit_request(
                 request_id=created.id,
                 correlation_id=created.correlation_id,
                 type=cast("Literal['url', 'forward']", created.type),
-                status="pending",
+                status=PublicRequestStatus.PENDING,
+                legacy_status=created.status,
                 estimated_wait_seconds=10,
                 created_at=created.created_at.isoformat().replace("+00:00", "Z"),
                 is_duplicate=False,
@@ -172,7 +193,8 @@ async def get_request(
             request=RequestDetailRequest(
                 id=details.request.id,
                 type=details.request.type,
-                status=details.request.status,
+                status=_public_status(details.request.status),
+                legacy_status=details.request.status,
                 correlation_id=details.request.correlation_id,
                 input_url=details.request.input_url,
                 normalized_url=details.request.normalized_url,
@@ -238,10 +260,11 @@ async def get_request_status(
 
     error_details = status_info.error_details
     return success_response(
-        RequestStatus(
+        RequestStatusData(
             request_id=status_info.request_id,
-            status=status_info.status,
-            stage=RequestStage(status_info.stage),
+            status=PublicRequestStatus(status_info.status),
+            legacy_status=status_info.legacy_status,
+            stage=ProcessingStage(status_info.stage),
             progress=status_info.progress,
             estimated_seconds_remaining=status_info.estimated_seconds_remaining,
             queue_position=status_info.queue_position,
@@ -276,7 +299,8 @@ async def retry_request(
         RetryRequestResponse(
             new_request_id=created.id,
             correlation_id=created.correlation_id,
-            status="pending",
+            status=PublicRequestStatus.PENDING,
+            legacy_status=created.status,
             created_at=created.created_at.isoformat().replace("+00:00", "Z"),
         )
     )

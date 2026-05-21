@@ -276,9 +276,7 @@ class URLProcessor:
             if getattr(self.cfg.runtime, "url_flow_streaming_enabled", True):
                 get_stream_hub().publish(
                     str(context.req_id),
-                    StreamEvent.now(
-                        "phase", {"phase": "summarizing"}, request.correlation_id or ""
-                    ),
+                    StreamEvent.now("stage", {"stage": "summarizing"}, request.correlation_id or ""),
                 )
 
             if context.should_chunk and context.chunks:
@@ -338,11 +336,11 @@ class URLProcessor:
             if _streaming_enabled:
                 get_stream_hub().publish(
                     str(context.req_id),
-                    StreamEvent.now("phase", {"phase": "validating"}, request.correlation_id or ""),
+                    StreamEvent.now("stage", {"stage": "validating"}, request.correlation_id or ""),
                 )
                 get_stream_hub().publish(
                     str(context.req_id),
-                    StreamEvent.now("phase", {"phase": "persisting"}, request.correlation_id or ""),
+                    StreamEvent.now("stage", {"stage": "persisting"}, request.correlation_id or ""),
                 )
 
             result = await self.summary_delivery.deliver_summary(
@@ -358,7 +356,7 @@ class URLProcessor:
             if _streaming_enabled:
                 get_stream_hub().publish(
                     str(context.req_id),
-                    StreamEvent.now("phase", {"phase": "done"}, request.correlation_id or ""),
+                    StreamEvent.now("stage", {"stage": "done"}, request.correlation_id or ""),
                 )
 
             if not request.batch_mode:

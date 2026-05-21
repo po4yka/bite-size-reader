@@ -7,13 +7,14 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
-from .common import RequestStage
+from .common import ProcessingStage, RequestStatus
 
 
-class RequestStatus(BaseModel):
+class RequestStatusData(BaseModel):
     request_id: int = Field(serialization_alias="requestId")
-    status: str
-    stage: RequestStage
+    status: RequestStatus
+    legacy_status: str | None = Field(default=None, serialization_alias="legacyStatus")
+    stage: ProcessingStage
     progress: dict[str, Any] | None = None
     estimated_seconds_remaining: int | None = Field(
         default=None, serialization_alias="estimatedSecondsRemaining"
@@ -34,7 +35,8 @@ class SubmitRequestResponse(BaseModel):
     request_id: int = Field(serialization_alias="requestId")
     correlation_id: str = Field(serialization_alias="correlationId")
     type: Literal["url", "forward"]
-    status: Literal["pending", "processing", "complete", "failed"]
+    status: RequestStatus
+    legacy_status: str | None = Field(default=None, serialization_alias="legacyStatus")
     estimated_wait_seconds: int = Field(serialization_alias="estimatedWaitSeconds")
     created_at: str = Field(serialization_alias="createdAt")
     is_duplicate: bool = Field(default=False, serialization_alias="isDuplicate")
@@ -42,10 +44,6 @@ class SubmitRequestResponse(BaseModel):
 
 class SubmitRequestData(BaseModel):
     request: SubmitRequestResponse
-
-
-class RequestStatusData(RequestStatus):
-    """Status-payload schema referenced separately in the OpenAPI spec."""
 
 
 class DuplicateCheckData(BaseModel):
@@ -93,7 +91,8 @@ class RequestDetailSummary(BaseModel):
 class RequestDetailRequest(BaseModel):
     id: int
     type: str
-    status: str
+    status: RequestStatus
+    legacy_status: str | None = Field(default=None, serialization_alias="legacyStatus")
     correlation_id: str = Field(serialization_alias="correlationId")
     input_url: str | None = Field(default=None, serialization_alias="inputUrl")
     normalized_url: str | None = Field(default=None, serialization_alias="normalizedUrl")
@@ -116,5 +115,6 @@ class RequestDetailResponse(BaseModel):
 class RetryRequestResponse(BaseModel):
     new_request_id: int = Field(serialization_alias="newRequestId")
     correlation_id: str = Field(serialization_alias="correlationId")
-    status: str
+    status: RequestStatus
+    legacy_status: str | None = Field(default=None, serialization_alias="legacyStatus")
     created_at: str = Field(serialization_alias="createdAt")

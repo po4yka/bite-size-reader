@@ -7,7 +7,7 @@ from unittest.mock import patch
 
 from app.adapters.content.streaming.events import (
     DonePayload,
-    PhasePayload,
+    StagePayload,
     SectionPayload,
     StreamEvent,
 )
@@ -18,8 +18,8 @@ from app.adapters.content.streaming.stream_hub import _QUEUE_MAXSIZE, StreamHub
 # ---------------------------------------------------------------------------
 
 
-def _phase_event(phase: str = "summarizing", corr: str = "test") -> StreamEvent:
-    return StreamEvent.now("phase", PhasePayload(phase=phase), corr)  # type: ignore[arg-type]
+def _stage_event(stage: str = "summarizing", corr: str = "test") -> StreamEvent:
+    return StreamEvent.now("stage", StagePayload(stage=stage), corr)  # type: ignore[arg-type]
 
 
 def _section_event(section: str = "tldr", content: str = "text", corr: str = "test") -> StreamEvent:
@@ -51,7 +51,7 @@ async def test_single_subscriber_receives_events_in_order() -> None:
     hub = StreamHub()
     rid = "req-order"
 
-    e1 = _phase_event("extracting")
+    e1 = _stage_event("extracting")
     e2 = _section_event("summary_250", "Hello")
     e3 = _done_event()
 
@@ -62,8 +62,8 @@ async def test_single_subscriber_receives_events_in_order() -> None:
     # Subscribe after all publishes — gets backlog replay then terminates on done.
     received = await _drain(hub.subscribe(rid))
 
-    assert [ev.kind for ev in received] == ["phase", "section", "done"]
-    assert received[0].payload["phase"] == "extracting"
+    assert [ev.kind for ev in received] == ["stage", "section", "done"]
+    assert received[0].payload["stage"] == "extracting"
     assert received[1].payload["section"] == "summary_250"
 
 
@@ -72,7 +72,7 @@ async def test_multiple_subscribers_each_receive_every_event() -> None:
     rid = "req-multi"
 
     # Publish before subscribing so both get the backlog.
-    e1 = _phase_event("summarizing")
+    e1 = _stage_event("summarizing")
     e2 = _done_event()
     hub.publish(rid, e1)
     hub.publish(rid, e2)
@@ -82,15 +82,15 @@ async def test_multiple_subscribers_each_receive_every_event() -> None:
 
     assert len(received_a) == 2
     assert len(received_b) == 2
-    assert received_a[0].kind == "phase"
-    assert received_b[0].kind == "phase"
+    assert received_a[0].kind == "stage"
+    assert received_b[0].kind == "stage"
 
 
 async def test_late_subscriber_gets_buffered_backlog() -> None:
     hub = StreamHub()
     rid = "req-backlog"
 
-    e1 = _phase_event("extracting")
+    e1 = _stage_event("extracting")
     e2 = _section_event("tldr", "Short")
 
     hub.publish(rid, e1)
@@ -109,7 +109,7 @@ async def test_late_subscriber_gets_buffered_backlog() -> None:
     await gen.aclose()  # type: ignore[attr-defined]
 
     assert len(queue_events) == 2
-    assert queue_events[0].payload["phase"] == "extracting"
+    assert queue_events[0].payload["stage"] == "extracting"
     assert queue_events[1].payload["section"] == "tldr"
 
 
@@ -219,8 +219,8 @@ async def test_publish_before_any_subscriber_stores_in_buffer() -> None:
     hub = StreamHub()
     rid = "req-buffer"
 
-    hub.publish(rid, _phase_event("extracting"))
-    hub.publish(rid, _phase_event("summarizing"))
+    hub.publish(rid, _stage_event("extracting"))
+    hub.publish(rid, _stage_event("summarizing"))
 
     assert rid in hub._buffers
     assert len(hub._buffers[rid]) == 2
@@ -235,7 +235,7 @@ async def test_error_terminal_also_triggers_cleanup_and_terminates_generator() -
         {"code": "LLM_FAILED", "message": "timeout", "correlation_id": "cid-1"},
         "test",
     )
-    hub.publish(rid, _phase_event("summarizing"))
+    hub.publish(rid, _stage_event("summarizing"))
     hub.publish(rid, error_event)
 
     received = await _drain(hub.subscribe(rid))

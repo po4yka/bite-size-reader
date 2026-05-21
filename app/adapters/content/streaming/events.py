@@ -8,15 +8,18 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import Any, Literal
+from typing import Any
 
 from pydantic import BaseModel
 
-StreamEventKind = Literal["phase", "section", "done", "error"]
+from app.api.models.responses.common import ProcessingStage, ProgressEventKind
 
 
-class PhasePayload(BaseModel):
-    phase: Literal["extracting", "summarizing", "validating", "persisting", "done"]
+StreamEventKind = ProgressEventKind
+
+
+class StagePayload(BaseModel):
+    stage: ProcessingStage
 
 
 class SectionPayload(BaseModel):
@@ -37,9 +40,16 @@ class ErrorPayload(BaseModel):
     correlation_id: str
 
 
+class WarningPayload(BaseModel):
+    code: str
+    message: str
+    correlation_id: str | None = None
+
+
 _PAYLOAD_MODELS: dict[str, type[BaseModel]] = {
-    "phase": PhasePayload,
+    "stage": StagePayload,
     "section": SectionPayload,
+    "warning": WarningPayload,
     "done": DonePayload,
     "error": ErrorPayload,
 }
@@ -55,15 +65,16 @@ class StreamEvent:
     @classmethod
     def now(
         cls,
-        kind: StreamEventKind,
+        kind: StreamEventKind | str,
         payload: BaseModel | dict[str, Any],
         correlation_id: str,
     ) -> StreamEvent:
-        model_cls = _PAYLOAD_MODELS[kind]
+        kind_value = kind.value if isinstance(kind, ProgressEventKind) else kind
+        model_cls = _PAYLOAD_MODELS[kind_value]
         raw = payload.model_dump() if isinstance(payload, BaseModel) else payload
         validated = model_cls.model_validate(raw)
         return cls(
-            kind=kind,
+            kind=ProgressEventKind(kind_value),
             payload=validated.model_dump(),
             timestamp=datetime.now(UTC),
             correlation_id=correlation_id,
@@ -73,8 +84,10 @@ class StreamEvent:
 __all__ = [
     "DonePayload",
     "ErrorPayload",
-    "PhasePayload",
+    "ProgressEventKind",
     "SectionPayload",
+    "StagePayload",
     "StreamEvent",
     "StreamEventKind",
+    "WarningPayload",
 ]

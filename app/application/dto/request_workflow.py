@@ -83,6 +83,7 @@ class RequestErrorDetailsDTO:
 class RequestStatusDTO:
     request_id: int
     status: str | None
+    legacy_status: str | None
     stage: str
     progress: dict[str, Any] | None
     estimated_seconds_remaining: int | None

@@ -33,6 +33,7 @@ def test_status_endpoint_returns_flat_status_payload(client):
     data = payload["data"]
     assert data["requestId"] == request.id
     assert data["status"] == "pending"
-    assert data["stage"] == "pending"
+    assert data["legacyStatus"] == "pending"
+    assert data["stage"] == "queued"
     assert data["canRetry"] is False
     assert not isinstance(data["status"], dict)

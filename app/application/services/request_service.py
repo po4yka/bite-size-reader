@@ -35,6 +35,46 @@ if TYPE_CHECKING:
 
 logger = get_logger(__name__)
 
+_PUBLIC_STATUS_BY_LEGACY: dict[str, str] = {
+    "pending": "pending",
+    "processing": "running",
+    "crawling": "running",
+    "summarizing": "running",
+    "success": "succeeded",
+    "complete": "succeeded",
+    "completed": "succeeded",
+    "ok": "succeeded",
+    "error": "failed",
+    "failed": "failed",
+    "cancelled": "cancelled",
+}
+
+_PUBLIC_STAGE_BY_LEGACY: dict[str, str] = {
+    "pending": "queued",
+    "queued": "queued",
+    "crawling": "extracting",
+    "extracting": "extracting",
+    "processing": "summarizing",
+    "summarizing": "summarizing",
+    "validating": "validating",
+    "persisting": "persisting",
+    "success": "done",
+    "complete": "done",
+    "completed": "done",
+    "ok": "done",
+    "error": "done",
+    "failed": "done",
+    "cancelled": "done",
+}
+
+
+def _public_request_status(status: object) -> str:
+    return _PUBLIC_STATUS_BY_LEGACY.get(str(status or "").lower(), "pending")
+
+
+def _public_processing_stage(stage: object) -> str:
+    return _PUBLIC_STAGE_BY_LEGACY.get(str(stage or "").lower(), "queued")
+
 
 class RequestService:
     """Orchestrates request workflows against application-layer ports."""
@@ -181,14 +221,14 @@ class RequestService:
         if not request or request.get("user_id") != user_id:
             raise ResourceNotFoundError("Request", details={"request_id": request_id})
 
-        status = request.get("status")
-        stage = "pending"
+        legacy_status = str(request.get("status") or "")
+        stage = "queued"
         progress: dict[str, Any] | None = None
         queue_position: int | None = None
         error_details: RequestErrorDetailsDTO | None = None
         can_retry = False
 
-        if status == "processing":
+        if legacy_status == "processing":
             crawl_result = (
                 context.get("crawl_result")
                 if context
@@ -202,25 +242,25 @@ class RequestService:
             llm_call_count = await self._llm_repo.async_count_llm_calls_by_request(request_id)
 
             if not crawl_result:
-                stage = "crawling"
+                stage = "extracting"
                 progress = {"current_step": 1, "total_steps": 3, "percentage": 33}
             elif llm_call_count == 0 or not summary:
-                stage = "processing"
+                stage = "summarizing"
                 progress = {"current_step": 2, "total_steps": 3, "percentage": 66}
             else:
-                stage = "processing"
+                stage = "persisting"
                 progress = {"current_step": 3, "total_steps": 3, "percentage": 90}
-        elif status == "pending":
-            stage = "pending"
+        elif legacy_status == "pending":
+            stage = "queued"
             created_at = self._coerce_datetime(request.get("created_at"))
             if created_at is not None:
                 queue_position = (
                     await self._request_repo.async_count_pending_requests_before(created_at)
                 ) + 1
-        elif status in {"success", "ok", "completed"}:
-            stage = "complete"
-        elif status == "error":
-            stage = "failed"
+        elif legacy_status in {"success", "complete", "ok", "completed"}:
+            stage = "done"
+        elif legacy_status in {"error", "failed"}:
+            stage = "done"
             error_details = await self._derive_error_details(request_id)
             if error_details is None:
                 error_details = RequestErrorDetailsDTO(
@@ -241,8 +281,8 @@ class RequestService:
                     debug=error_details.debug,
                 )
             can_retry = True
-        elif status == "cancelled":
-            stage = "failed"
+        elif legacy_status == "cancelled":
+            stage = "done"
             error_details = RequestErrorDetailsDTO(
                 stage="cancelled",
                 error_type="REQUEST_CANCELLED",
@@ -255,10 +295,11 @@ class RequestService:
 
         return RequestStatusDTO(
             request_id=request_id,
-            status=status,
-            stage=stage,
+            status=_public_request_status(legacy_status),
+            legacy_status=legacy_status or None,
+            stage=_public_processing_stage(stage),
             progress=progress,
-            estimated_seconds_remaining=8 if stage in {"crawling", "processing"} else None,
+            estimated_seconds_remaining=8 if stage in {"extracting", "summarizing", "persisting"} else None,
             queue_position=queue_position,
             error_details=error_details,
             can_retry=can_retry,

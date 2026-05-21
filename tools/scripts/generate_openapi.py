@@ -99,8 +99,9 @@ def _apply_contract_postprocessing(spec: dict[str, Any]) -> None:
     from app.adapters.content.streaming.events import (
         DonePayload,
         ErrorPayload,
-        PhasePayload,
         SectionPayload,
+        StagePayload,
+        WarningPayload,
     )
 
     components = spec.setdefault("components", {})
@@ -125,8 +126,9 @@ def _apply_contract_postprocessing(spec: dict[str, Any]) -> None:
         ("SummaryContent", SummaryContent),
         ("Collection", CollectionResponse),
         ("CollectionItem", CollectionItem),
-        ("StreamPhasePayload", PhasePayload),
+        ("StreamStagePayload", StagePayload),
         ("StreamSectionPayload", SectionPayload),
+        ("StreamWarningPayload", WarningPayload),
         ("StreamDonePayload", DonePayload),
         ("StreamErrorPayload", ErrorPayload),
     ):
@@ -181,11 +183,14 @@ def _apply_contract_postprocessing(spec: dict[str, Any]) -> None:
                     "meta": {"$ref": "#/components/schemas/Meta"},
                 },
             },
-            "StreamPhaseEvent": _stream_event_schema(
-                "phase", "#/components/schemas/StreamPhasePayload"
+            "StreamStageEvent": _stream_event_schema(
+                "stage", "#/components/schemas/StreamStagePayload"
             ),
             "StreamSectionEvent": _stream_event_schema(
                 "section", "#/components/schemas/StreamSectionPayload"
+            ),
+            "StreamWarningEvent": _stream_event_schema(
+                "warning", "#/components/schemas/StreamWarningPayload"
             ),
             "StreamDoneEvent": _stream_event_schema(
                 "done", "#/components/schemas/StreamDonePayload"

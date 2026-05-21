@@ -9131,6 +9131,8 @@ components:
           items:
             $ref: '#/components/schemas/SyncApplyItem'
           type: array
+          maxItems: 500
+          minItems: 1
           title: Changes
         idempotency_key:
           anyOf:
@@ -9599,6 +9601,16 @@ components:
       - hasMore
       title: PaginationInfo
       type: object
+    RequestStatus:
+      description: Canonical public request lifecycle statuses.
+      enum:
+      - pending
+      - running
+      - succeeded
+      - failed
+      - cancelled
+      title: RequestStatus
+      type: string
     SubmitRequestResponse:
       properties:
         requestId:
@@ -9614,13 +9626,13 @@ components:
           title: Type
           type: string
         status:
-          enum:
-          - pending
-          - processing
-          - complete
-          - failed
-          title: Status
-          type: string
+          $ref: '#/components/schemas/RequestStatus'
+        legacyStatus:
+          anyOf:
+          - type: string
+          - type: 'null'
+          default: null
+          title: Legacystatus
         estimatedWaitSeconds:
           title: Estimatedwaitseconds
           type: integer
@@ -9648,27 +9660,32 @@ components:
       - request
       title: SubmitRequestData
       type: object
-    RequestStage:
-      description: Processing stages for request status polling.
+    ProcessingStage:
+      description: Canonical public processing stages for request status polling and streams.
       enum:
-      - pending
-      - crawling
-      - processing
-      - complete
-      - failed
-      title: RequestStage
+      - queued
+      - extracting
+      - summarizing
+      - validating
+      - persisting
+      - done
+      title: ProcessingStage
       type: string
     RequestStatusData:
-      description: Status-payload schema referenced separately in the OpenAPI spec.
       properties:
         requestId:
           title: Requestid
           type: integer
         status:
-          title: Status
-          type: string
+          $ref: '#/components/schemas/RequestStatus'
+        legacyStatus:
+          anyOf:
+          - type: string
+          - type: 'null'
+          default: null
+          title: Legacystatus
         stage:
-          $ref: '#/components/schemas/RequestStage'
+          $ref: '#/components/schemas/ProcessingStage'
         progress:
           anyOf:
           - additionalProperties: true
@@ -10282,20 +10299,13 @@ components:
       - createdAt
       title: CollectionItem
       type: object
-    StreamPhasePayload:
+    StreamStagePayload:
       properties:
-        phase:
-          enum:
-          - extracting
-          - summarizing
-          - validating
-          - persisting
-          - done
-          title: Phase
-          type: string
+        stage:
+          $ref: '#/components/schemas/ProcessingStage'
       required:
-      - phase
-      title: PhasePayload
+      - stage
+      title: StagePayload
       type: object
     StreamSectionPayload:
       properties:
@@ -10313,6 +10323,25 @@ components:
       - section
       - content
       title: SectionPayload
+      type: object
+    StreamWarningPayload:
+      properties:
+        code:
+          title: Code
+          type: string
+        message:
+          title: Message
+          type: string
+        correlation_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          default: null
+          title: Correlation Id
+      required:
+      - code
+      - message
+      title: WarningPayload
       type: object
     StreamDonePayload:
       properties:
@@ -10440,7 +10469,7 @@ components:
           $ref: '#/components/schemas/ErrorObject'
         meta:
           $ref: '#/components/schemas/Meta'
-    StreamPhaseEvent:
+    StreamStageEvent:
       type: object
       required:
       - kind
@@ -10450,9 +10479,9 @@ components:
       properties:
         kind:
           type: string
-          const: phase
+          const: stage
         payload:
-          $ref: '#/components/schemas/StreamPhasePayload'
+          $ref: '#/components/schemas/StreamStagePayload'
         timestamp:
           type: string
           format: date-time
@@ -10471,6 +10500,24 @@ components:
           const: section
         payload:
           $ref: '#/components/schemas/StreamSectionPayload'
+        timestamp:
+          type: string
+          format: date-time
+        correlation_id:
+          type: string
+    StreamWarningEvent:
+      type: object
+      required:
+      - kind
+      - payload
+      - timestamp
+      - correlation_id
+      properties:
+        kind:
+          type: string
+          const: warning
+        payload:
+          $ref: '#/components/schemas/StreamWarningPayload'
         timestamp:
           type: string
           format: date-time

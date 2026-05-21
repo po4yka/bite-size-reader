@@ -67,14 +67,35 @@ class ErrorCode(StrEnum):
     SYNC_ENTITY_NOT_FOUND = "SYNC_ENTITY_NOT_FOUND"
 
 
-class RequestStage(StrEnum):
-    """Processing stages for request status polling."""
+class RequestStatus(StrEnum):
+    """Canonical public request lifecycle statuses."""
 
     PENDING = "pending"
-    CRAWLING = "crawling"
-    PROCESSING = "processing"
-    COMPLETE = "complete"
+    RUNNING = "running"
+    SUCCEEDED = "succeeded"
     FAILED = "failed"
+    CANCELLED = "cancelled"
+
+
+class ProcessingStage(StrEnum):
+    """Canonical public processing stages for request status polling and streams."""
+
+    QUEUED = "queued"
+    EXTRACTING = "extracting"
+    SUMMARIZING = "summarizing"
+    VALIDATING = "validating"
+    PERSISTING = "persisting"
+    DONE = "done"
+
+
+class ProgressEventKind(StrEnum):
+    """Canonical public SSE progress event kinds."""
+
+    STAGE = "stage"
+    SECTION = "section"
+    WARNING = "warning"
+    DONE = "done"
+    ERROR = "error"
 
 
 class PaginationInfo(BaseModel):

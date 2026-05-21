@@ -4,17 +4,18 @@ Public API re-exported from sub-modules:
 
 - ``StreamHub`` / ``get_stream_hub`` — process-wide pub/sub hub
 - ``StreamEvent`` / ``StreamEventKind`` — event envelope and kind discriminator
-- ``PhasePayload`` / ``SectionPayload`` / ``DonePayload`` / ``ErrorPayload`` — payload models
+- ``StagePayload`` / ``SectionPayload`` / ``DonePayload`` / ``ErrorPayload`` — payload models
 - ``SummarySectionSnapshot`` / ``SummarySectionStreamAssembler`` — incremental section assembler
 """
 
 from app.adapters.content.streaming.events import (
     DonePayload,
     ErrorPayload,
-    PhasePayload,
     SectionPayload,
+    StagePayload,
     StreamEvent,
     StreamEventKind,
+    WarningPayload,
 )
 from app.adapters.content.streaming.section_assembler import (
     SummarySectionSnapshot,
@@ -28,12 +29,13 @@ from app.adapters.content.streaming.stream_hub import (
 __all__ = [
     "DonePayload",
     "ErrorPayload",
-    "PhasePayload",
     "SectionPayload",
+    "StagePayload",
     "StreamEvent",
     "StreamEventKind",
     "StreamHub",
     "SummarySectionSnapshot",
     "SummarySectionStreamAssembler",
+    "WarningPayload",
     "get_stream_hub",
 ]
