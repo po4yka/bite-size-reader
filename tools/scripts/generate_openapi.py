@@ -83,13 +83,52 @@ def _stream_event_schema(kind: str, payload_ref: str) -> dict[str, Any]:
     }
 
 
+def _success_envelope_schema(data_ref: str) -> dict[str, Any]:
+    return {
+        "allOf": [
+            {"$ref": "#/components/schemas/BaseSuccessResponse"},
+            {
+                "type": "object",
+                "required": ["data"],
+                "properties": {"data": {"$ref": data_ref}},
+            },
+        ]
+    }
+
+
+def _set_json_response(
+    spec: dict[str, Any],
+    *,
+    method: str,
+    path: str,
+    schema_ref: str,
+    description: str = "Successful Response",
+) -> None:
+    operation = spec.get("paths", {}).get(path, {}).get(method.lower())
+    if operation is None:
+        return
+    operation.setdefault("responses", {})["200"] = {
+        "description": description,
+        "content": {
+            "application/json": {
+                "schema": {"$ref": schema_ref},
+            }
+        },
+    }
+
+
 def _apply_contract_postprocessing(spec: dict[str, Any]) -> None:
     """Add contract metadata FastAPI cannot infer from raw-dict handlers yet."""
     from app.api.exceptions import ErrorCode, ErrorType
     from app.api.models.responses.auth import UserInfo
     from app.api.models.responses.collections import CollectionItem, CollectionResponse
     from app.api.models.responses.common import MetaInfo, PaginationInfo
-    from app.api.models.responses.requests import RequestStatusData, SubmitRequestData
+    from app.api.models.responses.requests import (
+        RequestDetailResponse,
+        RequestStatusData,
+        RetryRequestResponse,
+        SubmitRequestData,
+    )
     from app.api.models.responses.summaries import (
         SummaryContent,
         SummaryCompact,
@@ -119,6 +158,8 @@ def _apply_contract_postprocessing(spec: dict[str, Any]) -> None:
         ("Pagination", PaginationInfo),
         ("SubmitRequestData", SubmitRequestData),
         ("RequestStatusData", RequestStatusData),
+        ("RequestDetailResponse", RequestDetailResponse),
+        ("RetryRequestResponse", RetryRequestResponse),
         ("User", UserInfo),
         ("UserStats", UserStatsData),
         ("SummaryListItem", SummaryCompact),
@@ -183,6 +224,18 @@ def _apply_contract_postprocessing(spec: dict[str, Any]) -> None:
                     "meta": {"$ref": "#/components/schemas/Meta"},
                 },
             },
+            "SubmitRequestSuccessResponse": _success_envelope_schema(
+                "#/components/schemas/SubmitRequestData"
+            ),
+            "RequestStatusSuccessResponse": _success_envelope_schema(
+                "#/components/schemas/RequestStatusData"
+            ),
+            "RequestDetailSuccessResponse": _success_envelope_schema(
+                "#/components/schemas/RequestDetailResponse"
+            ),
+            "RetryRequestSuccessResponse": _success_envelope_schema(
+                "#/components/schemas/RetryRequestResponse"
+            ),
             "StreamStageEvent": _stream_event_schema(
                 "stage", "#/components/schemas/StreamStagePayload"
             ),
@@ -218,6 +271,31 @@ def _apply_contract_postprocessing(spec: dict[str, Any]) -> None:
                 },
             },
         )
+
+    _set_json_response(
+        spec,
+        method="POST",
+        path="/v1/requests",
+        schema_ref="#/components/schemas/SubmitRequestSuccessResponse",
+    )
+    _set_json_response(
+        spec,
+        method="GET",
+        path="/v1/requests/{request_id}",
+        schema_ref="#/components/schemas/RequestDetailSuccessResponse",
+    )
+    _set_json_response(
+        spec,
+        method="GET",
+        path="/v1/requests/{request_id}/status",
+        schema_ref="#/components/schemas/RequestStatusSuccessResponse",
+    )
+    _set_json_response(
+        spec,
+        method="POST",
+        path="/v1/requests/{request_id}/retry",
+        schema_ref="#/components/schemas/RetryRequestSuccessResponse",
+    )
 
     public_routes = {
         ("GET", "/health"),

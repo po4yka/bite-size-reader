@@ -3021,9 +3021,7 @@ paths:
           content:
             application/json:
               schema:
-                additionalProperties: true
-                type: object
-                title: Response Submit Request V1 Requests Post
+                $ref: '#/components/schemas/SubmitRequestSuccessResponse'
         '422':
           description: Validation Error
           content:
@@ -3058,9 +3056,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                additionalProperties: true
-                title: Response Get Request V1 Requests  Request Id  Get
+                $ref: '#/components/schemas/RequestDetailSuccessResponse'
         '422':
           description: Validation Error
           content:
@@ -3093,9 +3089,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                additionalProperties: true
-                title: Response Get Request Status V1 Requests  Request Id  Status Get
+                $ref: '#/components/schemas/RequestStatusSuccessResponse'
         '422':
           description: Validation Error
           content:
@@ -3128,9 +3122,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                additionalProperties: true
-                title: Response Retry Request V1 Requests  Request Id  Retry Post
+                $ref: '#/components/schemas/RetryRequestSuccessResponse'
         '422':
           description: Validation Error
           content:
@@ -9763,6 +9755,203 @@ components:
       - canRetry
       title: RequestStatusData
       type: object
+    RequestDetailCrawlResult:
+      properties:
+        status:
+          anyOf:
+          - type: string
+          - type: 'null'
+          default: null
+          title: Status
+        httpStatus:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          default: null
+          title: Httpstatus
+        latencyMs:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          default: null
+          title: Latencyms
+        error:
+          anyOf:
+          - type: string
+          - type: 'null'
+          default: null
+          title: Error
+      title: RequestDetailCrawlResult
+      type: object
+    RequestDetailLlmCall:
+      properties:
+        id:
+          title: Id
+          type: integer
+        model:
+          anyOf:
+          - type: string
+          - type: 'null'
+          default: null
+          title: Model
+        status:
+          anyOf:
+          - type: string
+          - type: 'null'
+          default: null
+          title: Status
+        tokensPrompt:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          default: null
+          title: Tokensprompt
+        tokensCompletion:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          default: null
+          title: Tokenscompletion
+        costUsd:
+          anyOf:
+          - type: number
+          - type: 'null'
+          default: null
+          title: Costusd
+        latencyMs:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          default: null
+          title: Latencyms
+        createdAt:
+          title: Createdat
+          type: string
+      required:
+      - id
+      - createdAt
+      title: RequestDetailLlmCall
+      type: object
+    RequestDetailRequest:
+      properties:
+        id:
+          title: Id
+          type: integer
+        type:
+          title: Type
+          type: string
+        status:
+          $ref: '#/components/schemas/RequestStatus'
+        legacyStatus:
+          anyOf:
+          - type: string
+          - type: 'null'
+          default: null
+          title: Legacystatus
+        correlationId:
+          title: Correlationid
+          type: string
+        inputUrl:
+          anyOf:
+          - type: string
+          - type: 'null'
+          default: null
+          title: Inputurl
+        normalizedUrl:
+          anyOf:
+          - type: string
+          - type: 'null'
+          default: null
+          title: Normalizedurl
+        dedupeHash:
+          anyOf:
+          - type: string
+          - type: 'null'
+          default: null
+          title: Dedupehash
+        createdAt:
+          title: Createdat
+          type: string
+        langDetected:
+          anyOf:
+          - type: string
+          - type: 'null'
+          default: null
+          title: Langdetected
+      required:
+      - id
+      - type
+      - status
+      - correlationId
+      - createdAt
+      title: RequestDetailRequest
+      type: object
+    RequestDetailSummary:
+      properties:
+        id:
+          title: Id
+          type: integer
+        status:
+          title: Status
+          type: string
+        createdAt:
+          title: Createdat
+          type: string
+      required:
+      - id
+      - status
+      - createdAt
+      title: RequestDetailSummary
+      type: object
+    RequestDetailResponse:
+      properties:
+        request:
+          $ref: '#/components/schemas/RequestDetailRequest'
+        crawlResult:
+          anyOf:
+          - $ref: '#/components/schemas/RequestDetailCrawlResult'
+          - type: 'null'
+          default: null
+        llmCalls:
+          items:
+            $ref: '#/components/schemas/RequestDetailLlmCall'
+          title: Llmcalls
+          type: array
+        summary:
+          anyOf:
+          - $ref: '#/components/schemas/RequestDetailSummary'
+          - type: 'null'
+          default: null
+      required:
+      - request
+      title: RequestDetailResponse
+      type: object
+    RetryRequestResponse:
+      properties:
+        newRequestId:
+          title: Newrequestid
+          type: integer
+        correlationId:
+          title: Correlationid
+          type: string
+        status:
+          $ref: '#/components/schemas/RequestStatus'
+        legacyStatus:
+          anyOf:
+          - type: string
+          - type: 'null'
+          default: null
+          title: Legacystatus
+        createdAt:
+          title: Createdat
+          type: string
+      required:
+      - newRequestId
+      - correlationId
+      - status
+      - createdAt
+      title: RetryRequestResponse
+      type: object
     User:
       properties:
         userId:
@@ -10469,6 +10658,42 @@ components:
           $ref: '#/components/schemas/ErrorObject'
         meta:
           $ref: '#/components/schemas/Meta'
+    SubmitRequestSuccessResponse:
+      allOf:
+      - $ref: '#/components/schemas/BaseSuccessResponse'
+      - type: object
+        required:
+        - data
+        properties:
+          data:
+            $ref: '#/components/schemas/SubmitRequestData'
+    RequestStatusSuccessResponse:
+      allOf:
+      - $ref: '#/components/schemas/BaseSuccessResponse'
+      - type: object
+        required:
+        - data
+        properties:
+          data:
+            $ref: '#/components/schemas/RequestStatusData'
+    RequestDetailSuccessResponse:
+      allOf:
+      - $ref: '#/components/schemas/BaseSuccessResponse'
+      - type: object
+        required:
+        - data
+        properties:
+          data:
+            $ref: '#/components/schemas/RequestDetailResponse'
+    RetryRequestSuccessResponse:
+      allOf:
+      - $ref: '#/components/schemas/BaseSuccessResponse'
+      - type: object
+        required:
+        - data
+        properties:
+          data:
+            $ref: '#/components/schemas/RetryRequestResponse'
     StreamStageEvent:
       type: object
       required:
