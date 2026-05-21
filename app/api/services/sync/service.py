@@ -63,6 +63,11 @@ class SyncFacade:
         )
         return cast("int", max((v for v in versions if v is not None), default=0))
 
+    async def validate_session(
+        self, session_id: str, user_id: int, client_id: str | None
+    ) -> dict[str, Any]:
+        return await self._load_session(session_id, user_id, client_id)
+
     def _resolve_limit(self, requested: int | None) -> int:
         return cast(
             "int",

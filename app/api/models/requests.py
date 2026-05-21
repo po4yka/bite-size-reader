@@ -77,7 +77,7 @@ class SyncApplyRequest(BaseModel):
     """Request body for applying local changes."""
 
     session_id: str
-    changes: list[SyncApplyItem]
+    changes: list[SyncApplyItem] = Field(min_length=1, max_length=500)
     idempotency_key: str | None = Field(
         default=None,
         min_length=1,

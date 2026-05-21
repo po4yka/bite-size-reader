@@ -14,6 +14,7 @@ from __future__ import annotations
 import pytest
 import pytest_asyncio
 
+from app.api.exceptions import SyncSessionExpiredError, SyncSessionForbiddenError
 from app.api.models.requests import SyncApplyItem, SyncApplyRequest, SyncSessionRequest
 from app.api.routers.sync import apply_changes, create_sync_session, delta_sync, full_sync
 from app.api.services.sync_service import SyncService
@@ -54,11 +55,13 @@ def _user_ctx(user) -> dict:
 
 
 class _FakeRequest:
-    headers: dict = {}
+    def __init__(self, headers: dict[str, str] | None = None) -> None:
+        self.headers = headers or {}
 
 
 class _FakeResponse:
-    headers: dict = {}
+    def __init__(self) -> None:
+        self.headers: dict[str, str] = {}
 
 
 _OLD_SYNC_CAMEL_KEYS = {
@@ -492,3 +495,117 @@ async def test_apply_advances_server_version_on_mutation(db, sync_user, sync_sum
     assert row is not None
     assert row.server_version > initial_version
     assert row.server_version == item["server_version"]
+
+
+@pytest.mark.asyncio
+async def test_delta_valid_session_with_matching_etag_returns_304(
+    db, sync_user, summary_factory
+):
+    await summary_factory(user=sync_user)
+
+    svc = _make_svc(db)
+    user_ctx = _user_ctx(sync_user)
+    session_result = await create_sync_session(body=None, user=user_ctx, svc=svc)
+    session_id = session_result["data"]["session_id"]
+
+    first_response = _FakeResponse()
+    first = await delta_sync(
+        request=_FakeRequest(),
+        response=first_response,
+        session_id=session_id,
+        since=0,
+        limit=500,
+        user=user_ctx,
+        svc=svc,
+    )
+    assert isinstance(first, dict)
+    etag = first_response.headers["ETag"]
+    assert etag.startswith('W/"sync-')
+    assert session_id not in etag
+
+    second = await delta_sync(
+        request=_FakeRequest(headers={"if-none-match": etag}),
+        response=_FakeResponse(),
+        session_id=session_id,
+        since=0,
+        limit=500,
+        user=user_ctx,
+        svc=svc,
+    )
+
+    assert getattr(second, "status_code", None) == 304
+    assert second.headers["ETag"] == etag
+
+
+@pytest.mark.asyncio
+async def test_delta_expired_session_with_matching_etag_does_not_return_304(
+    db, sync_user, summary_factory
+):
+    await summary_factory(user=sync_user)
+
+    svc = _make_svc(db)
+    user_ctx = _user_ctx(sync_user)
+    session_result = await create_sync_session(body=None, user=user_ctx, svc=svc)
+    session_id = session_result["data"]["session_id"]
+
+    first_response = _FakeResponse()
+    first = await delta_sync(
+        request=_FakeRequest(),
+        response=first_response,
+        session_id=session_id,
+        since=0,
+        limit=500,
+        user=user_ctx,
+        svc=svc,
+    )
+    assert isinstance(first, dict)
+    etag = first_response.headers["ETag"]
+
+    svc._fallback_store._sessions[session_id]["expires_at"] = "2000-01-01T00:00:00Z"
+
+    with pytest.raises(SyncSessionExpiredError):
+        await delta_sync(
+            request=_FakeRequest(headers={"if-none-match": etag}),
+            response=_FakeResponse(),
+            session_id=session_id,
+            since=0,
+            limit=500,
+            user=user_ctx,
+            svc=svc,
+        )
+
+
+@pytest.mark.asyncio
+async def test_delta_wrong_client_with_matching_etag_does_not_return_304(
+    db, sync_user, summary_factory
+):
+    await summary_factory(user=sync_user)
+
+    svc = _make_svc(db)
+    user_ctx = _user_ctx(sync_user)
+    session_result = await create_sync_session(body=None, user=user_ctx, svc=svc)
+    session_id = session_result["data"]["session_id"]
+
+    first_response = _FakeResponse()
+    first = await delta_sync(
+        request=_FakeRequest(),
+        response=first_response,
+        session_id=session_id,
+        since=0,
+        limit=500,
+        user=user_ctx,
+        svc=svc,
+    )
+    assert isinstance(first, dict)
+    etag = first_response.headers["ETag"]
+
+    with pytest.raises(SyncSessionForbiddenError):
+        await delta_sync(
+            request=_FakeRequest(headers={"if-none-match": etag}),
+            response=_FakeResponse(),
+            session_id=session_id,
+            since=0,
+            limit=500,
+            user={**user_ctx, "client_id": "other-client"},
+            svc=svc,
+        )

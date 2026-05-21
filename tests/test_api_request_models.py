@@ -12,6 +12,8 @@ from app.api.models.requests import (
     ImportOptionsRequest,
     MergeTagsRequest,
     QuickSaveRequest,
+    SyncApplyItem,
+    SyncApplyRequest,
     TestRuleRequest,
     UpdateRuleRequest,
     UpdateTagRequest,
@@ -207,6 +209,37 @@ class TestQuickSaveRequest:
         assert req.selected_text is None
         assert req.tag_names == []
         assert req.summarize is True
+
+
+class TestSyncApplyRequest:
+    def test_empty_changes_rejected(self):
+        with pytest.raises(ValidationError):
+            SyncApplyRequest(session_id="sync-test", changes=[])
+
+    def test_oversized_changes_rejected(self):
+        change = SyncApplyItem(
+            entity_type="summary",
+            id=1,
+            action="update",
+            last_seen_version=0,
+            payload={"is_read": True},
+        )
+
+        with pytest.raises(ValidationError):
+            SyncApplyRequest(session_id="sync-test", changes=[change] * 501)
+
+    def test_changes_accepts_maximum_batch_size(self):
+        change = SyncApplyItem(
+            entity_type="summary",
+            id=1,
+            action="update",
+            last_seen_version=0,
+            payload={"is_read": True},
+        )
+
+        req = SyncApplyRequest(session_id="sync-test", changes=[change] * 500)
+
+        assert len(req.changes) == 500
 
 
 class TestCreateGoalRequest:

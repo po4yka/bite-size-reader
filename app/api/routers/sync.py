@@ -1,5 +1,6 @@
 """Database synchronization endpoints for offline mobile support."""
 
+import hashlib
 from typing import Any
 
 from fastapi import APIRouter, Depends, Query, Request, Response
@@ -22,6 +23,11 @@ router = APIRouter()
 def _get_sync_service(request: Request) -> Any:
     """Resolve the shared sync service from the API runtime."""
     return resolve_api_runtime(request).sync_service
+
+
+def _build_delta_etag(session_id: str, max_server_version: int) -> str:
+    digest = hashlib.sha256(f"{session_id}:{max_server_version}".encode()).hexdigest()[:16]
+    return f'W/"sync-{digest}-{max_server_version}"'
 
 
 @router.post("/sessions")
@@ -74,11 +80,15 @@ async def delta_sync(
     svc: Any = Depends(_get_sync_service),
 ) -> dict[str, Any] | Response:
     """Fetch delta sync (created/updated/deleted) since a cursor."""
-    # Compute ETag from max server_version
-    max_sv = await svc.get_max_server_version(user["user_id"])
-    etag = f'W/"sv-{max_sv}"'
+    await svc.validate_session(
+        session_id=session_id,
+        user_id=user["user_id"],
+        client_id=user.get("client_id"),
+    )
 
-    # Check If-None-Match
+    max_sv = await svc.get_max_server_version(user["user_id"])
+    etag = _build_delta_etag(session_id, max_sv)
+
     if_none_match = request.headers.get("if-none-match")
     if if_none_match and if_none_match == etag:
         return Response(status_code=304, headers={"ETag": etag})

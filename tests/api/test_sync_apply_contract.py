@@ -14,7 +14,8 @@ from typing import Any, cast
 
 import pytest
 
-from app.api.models.requests import SyncApplyRequest, SyncSessionRequest
+from app.api.exceptions import SyncSessionExpiredError, SyncSessionForbiddenError
+from app.api.models.requests import SyncApplyItem, SyncApplyRequest, SyncSessionRequest
 from app.api.models.responses import (
     DeltaSyncResponseData,
     FullSyncResponseData,
@@ -25,7 +26,13 @@ from app.api.models.responses import (
     SyncSessionData,
     success_response,
 )
-from app.api.routers.sync import apply_changes, create_sync_session, delta_sync, full_sync
+from app.api.routers.sync import (
+    _build_delta_etag,
+    apply_changes,
+    create_sync_session,
+    delta_sync,
+    full_sync,
+)
 
 
 def _success_item(entity_type: str, id_: int | str, server_version: int) -> SyncApplyItemResult:
@@ -278,7 +285,18 @@ async def test_sync_router_handlers_emit_snake_case_wire_keys() -> None:
         svc=svc,
     )
     apply = await apply_changes(
-        payload=SyncApplyRequest(session_id="sync-session-abc", changes=[]),
+        payload=SyncApplyRequest(
+            session_id="sync-session-abc",
+            changes=[
+                SyncApplyItem(
+                    entity_type="summary",
+                    id=42,
+                    action="update",
+                    last_seen_version=7,
+                    payload={"is_read": True},
+                )
+            ],
+        ),
         user=user,
         svc=svc,
     )
@@ -292,6 +310,86 @@ async def test_sync_router_handlers_emit_snake_case_wire_keys() -> None:
     assert apply["data"]["results"][0]["id"] == "42"
     for envelope in (session, full, delta, apply):
         assert not _contains_any_key(envelope["data"], {"sessionId", "entityType", "serverVersion"})
+
+
+@pytest.mark.asyncio
+async def test_delta_valid_session_with_matching_etag_returns_304_without_db() -> None:
+    item = SyncEntityEnvelope(
+        entity_type="summary",
+        id=42,
+        server_version=7,
+        updated_at="2026-05-21T00:00:00Z",
+    )
+    svc = _FakeSyncService(item)
+    user = {"user_id": 123, "client_id": "test-client"}
+
+    first_response = SimpleNamespace(headers={})
+    first = await delta_sync(
+        request=cast("Any", SimpleNamespace(headers={})),
+        response=cast("Any", first_response),
+        session_id="sync-session-abc",
+        since=0,
+        limit=50,
+        user=user,
+        svc=svc,
+    )
+    assert isinstance(first, dict)
+    etag = first_response.headers["ETag"]
+    assert etag == _build_delta_etag("sync-session-abc", 7)
+    assert "sync-session-abc" not in etag
+
+    second = await delta_sync(
+        request=cast("Any", SimpleNamespace(headers={"if-none-match": etag})),
+        response=cast("Any", SimpleNamespace(headers={})),
+        session_id="sync-session-abc",
+        since=0,
+        limit=50,
+        user=user,
+        svc=svc,
+    )
+
+    assert getattr(second, "status_code", None) == 304
+    assert second.headers["ETag"] == etag
+
+
+@pytest.mark.asyncio
+async def test_delta_expired_session_with_matching_etag_does_not_return_304_without_db() -> None:
+    svc = _RejectingSyncService(SyncSessionExpiredError("sync-session-abc"))
+    etag = _build_delta_etag("sync-session-abc", 7)
+
+    with pytest.raises(SyncSessionExpiredError):
+        await delta_sync(
+            request=cast("Any", SimpleNamespace(headers={"if-none-match": etag})),
+            response=cast("Any", SimpleNamespace(headers={})),
+            session_id="sync-session-abc",
+            since=0,
+            limit=50,
+            user={"user_id": 123, "client_id": "test-client"},
+            svc=svc,
+        )
+
+    assert svc.max_version_calls == 0
+    assert svc.delta_calls == 0
+
+
+@pytest.mark.asyncio
+async def test_delta_forbidden_session_with_matching_etag_does_not_return_304_without_db() -> None:
+    svc = _RejectingSyncService(SyncSessionForbiddenError())
+    etag = _build_delta_etag("sync-session-abc", 7)
+
+    with pytest.raises(SyncSessionForbiddenError):
+        await delta_sync(
+            request=cast("Any", SimpleNamespace(headers={"if-none-match": etag})),
+            response=cast("Any", SimpleNamespace(headers={})),
+            session_id="sync-session-abc",
+            since=0,
+            limit=50,
+            user={"user_id": 123, "client_id": "other-client"},
+            svc=svc,
+        )
+
+    assert svc.max_version_calls == 0
+    assert svc.delta_calls == 0
 
 
 def _contains_any_key(value: object, keys: set[str]) -> bool:
@@ -338,6 +436,12 @@ class _FakeSyncService:
         _ = user_id
         return 7
 
+    async def validate_session(
+        self, session_id: str, user_id: int, client_id: str | None
+    ) -> dict[str, object]:
+        _ = session_id, user_id, client_id
+        return {}
+
     async def get_delta(
         self,
         *,
@@ -371,4 +475,44 @@ class _FakeSyncService:
         return SyncApplyResponseData(
             session_id=session_id,
             results=[_success_item("summary", 42, 7)],
+        )
+
+
+class _RejectingSyncService:
+    def __init__(self, error: Exception) -> None:
+        self.error = error
+        self.max_version_calls = 0
+        self.delta_calls = 0
+        self.cfg = SimpleNamespace(sync=SimpleNamespace(default_limit=50))
+
+    async def validate_session(
+        self, session_id: str, user_id: int, client_id: str | None
+    ) -> dict[str, object]:
+        _ = session_id, user_id, client_id
+        raise self.error
+
+    async def get_max_server_version(self, user_id: int) -> int:
+        _ = user_id
+        self.max_version_calls += 1
+        return 7
+
+    async def get_delta(
+        self,
+        *,
+        session_id: str,
+        user_id: int,
+        client_id: str | None,
+        since: int,
+        limit: int | None,
+    ) -> DeltaSyncResponseData:
+        _ = session_id, user_id, client_id, since, limit
+        self.delta_calls += 1
+        return DeltaSyncResponseData(
+            session_id="sync-session-abc",
+            since=0,
+            has_more=False,
+            next_since=7,
+            created=[],
+            updated=[],
+            deleted=[],
         )

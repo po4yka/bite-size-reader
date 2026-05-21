@@ -175,6 +175,11 @@ class SyncService:
     ) -> dict[str, Any]:
         return await self._facade._load_session(session_id, user_id, client_id)
 
+    async def validate_session(
+        self, session_id: str, user_id: int, client_id: str | None
+    ) -> dict[str, Any]:
+        return await self._facade.validate_session(session_id, user_id, client_id)
+
     async def start_session(
         self, *, user_id: int, client_id: str | None, limit: int | None
     ) -> SyncSessionData:
