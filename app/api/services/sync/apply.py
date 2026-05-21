@@ -39,7 +39,7 @@ class SyncApplyService:
 
         current_version = int(summary.get("server_version") or 0)
         if change.last_seen_version < current_version:
-            snapshot = self._serializer.serialize_summary(summary).model_dump()
+            snapshot = self._serializer.serialize_summary(summary)
             return SyncApplyItemResult(
                 entity_type=change.entity_type,
                 id=change.id,

@@ -13,6 +13,18 @@ logger = get_logger(__name__)
 
 
 class SyncEnvelopeSerializer:
+    _REQUEST_STATUS_MAP = {
+        "pending": "pending",
+        "crawling": "processing",
+        "summarizing": "processing",
+        "processing": "processing",
+        "ok": "success",
+        "completed": "success",
+        "success": "success",
+        "error": "error",
+        "cancelled": "error",
+    }
+
     def _deleted_at(self, record: dict[str, Any]) -> str | None:
         raw = record.get("deleted_at")
         return self._coerce_iso(raw) if raw else None
@@ -37,16 +49,33 @@ class SyncEnvelopeSerializer:
                 return datetime.now(UTC).isoformat() + "Z"
         return datetime.now(UTC).isoformat() + "Z"
 
+    @staticmethod
+    def _summary_payload(raw_payload: Any) -> dict[str, Any]:
+        payload = raw_payload if isinstance(raw_payload, dict) else {}
+        return {
+            **payload,
+            "summary_250": payload.get("summary_250") or payload.get("tldr") or "",
+            "summary_1000": payload.get("summary_1000") or payload.get("summary_250") or "",
+            "tldr": payload.get("tldr") or payload.get("summary_250") or "",
+            "key_ideas": payload.get("key_ideas") or [],
+            "topic_tags": payload.get("topic_tags") or [],
+            "entities": payload.get("entities")
+            or {"people": [], "organizations": [], "locations": []},
+            "estimated_reading_time_min": int(payload.get("estimated_reading_time_min") or 0),
+        }
+
     def serialize_request(self, request: dict[str, Any]) -> SyncEntityEnvelope:
         payload = None
         if not request.get("is_deleted"):
             payload = {
                 "id": request.get("id"),
                 "type": request.get("type"),
-                "status": request.get("status"),
+                "status": self._REQUEST_STATUS_MAP.get(str(request.get("status")), "pending"),
+                "correlation_id": request.get("correlation_id") or "",
                 "input_url": request.get("input_url"),
                 "normalized_url": request.get("normalized_url"),
-                "correlation_id": request.get("correlation_id"),
+                "dedupe_hash": request.get("dedupe_hash"),
+                "lang_detected": request.get("lang_detected"),
                 "created_at": self._coerce_iso(request.get("created_at")),
             }
         return SyncEntityEnvelope(
@@ -64,9 +93,11 @@ class SyncEnvelopeSerializer:
             payload = {
                 "id": summary.get("id"),
                 "request_id": self._resolve_request_id(summary),
-                "lang": summary.get("lang"),
+                "lang": summary.get("lang") or "auto",
                 "is_read": summary.get("is_read"),
-                "json_payload": summary.get("json_payload"),
+                "version": int(summary.get("version") or 1),
+                "json_payload": self._summary_payload(summary.get("json_payload")),
+                "is_favorited": summary.get("is_favorited"),
                 "created_at": self._coerce_iso(summary.get("created_at")),
             }
         return SyncEntityEnvelope(
